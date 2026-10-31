@@ -1,94 +1,98 @@
-# RHU Inventory
+# RHU Inventory System
 
-Laravel 12 application for PHO and RHU stock, dispensing, transfers, patient registration, maternal care, immunization, disease reports, and exports.
+**Manage medicine supplies, monitor stock movements, and plan for future demand.**
 
-## Requirements
+RHU Inventory System is a web application for Provincial Health Office (PHO) and Rural Health Unit (RHU) operations. It brings batch inventory, dispensing, supply allocations, transfers, patient services, disease reporting, and statistical forecasting into one system, with separate public and management access.
 
-- PHP 8.2 or newer with PDO MySQL (PDO SQLite for the fast test suite).
-- Composer, Node.js, and npm.
-- MariaDB/MySQL for an existing installation. A clean SQLite database is supported by migrations and regression tests.
-- The web server document root must point to `public`, not the repository root.
+## The problem it solves
 
-## New installation
+Keeping an inventory count does not always show which batches should be used first, where supplies are needed, or how long available stock may last. Receipts, dispensing, allocations, and transfers must remain consistent so that one transaction does not produce duplicate credits, unexplained deductions, or incorrect balances.
 
-1. Run `composer install` and `npm install`.
-2. Copy `.env.example` to `.env`, configure the database, and run `php artisan key:generate`.
-3. Run `php artisan migrate` on the empty database. The May 1 baseline creates the core tables previously supplied by a manual database import.
-4. Run `php artisan db:seed` to install the application's reference immunization schedules, programs, and disease mappings.
-5. Provision the initial PHO administrator through your trusted administration process. A PHO account has `role=admin`, `health_unit_id=NULL`, an active flag, and a password hashed with Laravel Hash. RHU administrators and staff require a facility; midwives require an RHU and patient assignments.
-6. Run `npm run build` and serve the `public` directory. `php artisan serve` is available for local development.
+Health personnel also need to coordinate patient services, immunization, maternal care, and disease reports. Incomplete reporting can distort trends, while mixing different reporting periods can make comparisons misleading.
 
-The default application timezone is Asia/Manila; override it with `APP_TIMEZONE` if necessary. Keep `.env`, credentials, uploaded prescriptions, and session files private.
+RHU Inventory System connects these records to practical decisions: identify stock priorities, track each movement, coordinate supplies, review reporting completeness, and estimate future demand from recorded usage.
 
-## Upgrade an existing imported database
+## How the system helps
 
-The existing installation has several legacy tables whose original creation migrations are not recorded. Use these explicit upgrade paths for the October 31 repair release:
+| Health service need | System support |
+| --- | --- |
+| Check medicine availability before visiting | Public medicine search with RHU selection and stock availability, without a staff account. |
+| Keep batch inventory organized | Record medicines, quantities, batches, expiry dates, packaging, and storage locations. |
+| Use stock before it expires | Dispense from unexpired batches using **First Expiry, First Out (FEFO)**. |
+| Explain changes in stock balances | Maintain stock logs and exact batch movements, with transactional reversals for supported edits and deletions. |
+| Coordinate supplies between facilities | Reserve accepted transfers, record receipt once, and restore reservations when cancelled. |
+| Support RHU and midwife supply workflows | Record allocations, supply requests, review outcomes, and recipient confirmation where applicable. |
+| Coordinate patient services | Maintain patient registration, immunization, prenatal, postpartum, and family-planning records within permitted access. |
+| Identify stock requiring attention | Review low-stock, expiry, activity, and forecasting information on role-specific dashboards. |
+| Estimate future medicine demand | Analyze recorded medicine releases and calculate projected need, stock coverage, shortages, and reorder points. |
+| Understand disease case trends | Separate weekly and monthly reports, review completeness, and display OLS trends and Holt case projections. |
+| Prepare operational reports | View and export permitted inventory, movement, clinical, and service reports. |
+| Separate citizens from management | Serve public search and private management on distinct configurable hostnames with separate session cookies. |
 
-```powershell
-php artisan migrate --path=database/migrations/2026_10_31_000000_complete_legacy_columns.php --path=database/migrations/2026_10_31_000001_create_stock_movements.php --force
-npm run build
-```
+## Who it is for
 
-These two upgrades were applied to the local installation during this repair. They add the exact stock movement ledger, transfer reservation flag, stock-log history fields, and missing legacy columns (including medicine `unit`, copied from `base_unit` when necessary). They preserve existing patient and stock rows. Do not replay unrecorded legacy creation migrations against existing tables. Reconcile that installation's historical migration records before switching it to unrestricted future `migrate` commands.
+The system supports public visitors and authorized health personnel, including PHO and RHU operations in Antique.
 
-The guarded baseline and legacy-column migrations intentionally retain imported tables/columns on rollback. Reverting application code after recording new ledger movements requires a coordinated schema/data rollback; do not drop the ledger as a routine recovery action.
+| User | Main purpose |
+| --- | --- |
+| **Public visitor** | Search medicines and vaccines and check availability at a selected RHU. No staff login is required. |
+| **PHO administrator** | Monitor provincial operations, receive DOH supplies, coordinate distribution, and manage permitted reference records and accounts. |
+| **RHU administrator** | Manage facility inventory, service operations, supply workflows, and permitted administrative functions. |
+| **RHU staff** | Record stock intake and dispensing, support RHU services, and review permitted reports and forecasts. |
+| **Midwife** | Access assigned patients, record supported clinical services, dispense within permitted scope, and manage own supply requests and allocation receipts. |
 
-## Stock workflows and historical records
+Permissions depend on role, assigned facility, patient assignments, and record ownership. Public access does not grant inventory-editing or patient-record access. The public RHU map has been removed; administrative GIS remains protected.
 
-For varied, reconciled stock demonstration records, use the dedicated [sample stock history generator](docs/SAMPLE_DATA.md). It creates clearly labeled demo batches and linked receipts, dispensing, and stock movements without deleting existing transactions.
+## How it works
 
-For the disease reporting and analysis upgrade, apply only its additional migration to an existing imported database:
+Public visitors open the public domain, search for a medicine or vaccine, select an RHU, and review availability before visiting.
 
-```powershell
-php artisan migrate --path=database/migrations/2026_10_31_000002_add_disease_reporting_periods.php --force
-```
+For authorized health personnel:
 
-Existing disease reports require review before inclusion in analysis. Confirm the reporting period and complete case total through Review/edit; missing reports remain gaps and confirmed zeros remain actual observations. See [DISEASE_ANALYSIS.md](docs/DISEASE_ANALYSIS.md) for the reporting rules, OLS trend equations, Holt forecasting equations, and validation method.
+1. Sign in through the management domain and open the appropriate role dashboard.
+2. Receive supplies and record the correct medicine, facility, batch, expiry, and quantity.
+3. Dispense medicines or process permitted allocations, with stock deductions recorded against the actual batches used.
+4. Coordinate transfers through request, acceptance, reservation, receipt, or cancellation.
+5. Record permitted patient, immunization, maternal-care, and family-planning activities.
+6. Submit disease totals for weekly or monthly periods and confirm completeness after each period ends.
+7. Review stock priorities, medicine forecasts, disease trends, notifications, and operational reports.
 
-- Dispensing and allocations deduct unexpired batches in FEFO order and record each batch's exact deltas.
-- Edits/deletions reverse those deltas transactionally. Original stock-log entries remain available with `voided_at`; demand calculations exclude superseded entries.
-- Pending/rejected supply requests have no stock movement to reverse.
-- Transfer acceptance moves quantity from available to reserved stock. Completion releases the reservation and credits the matching destination batch once. Cancellation returns a reservation to availability.
-- Transfers accepted before this release reserve their stock under a row lock when received. Insufficient or expired historical stock requires cancellation/reconciliation.
-- Historical dispensing/allocation reversals resolve their per-batch stock logs only when the original batch can be identified uniquely and quantities agree. Ambiguous/missing history is rejected with a reconciliation message. The repair does not invent balances or automatically correct prior corruption.
-- Source batch IDs and quantities are kept in `stock_movements`; backup this table with the inventory and transaction tables.
+The [overall flowchart](docs/diagrams/overall-system-flowchart.drawio), [use case diagram](docs/diagrams/overall-use-case-diagram.drawio), and [database ERD](docs/diagrams/database-erd.drawio) provide editable views of these workflows and relationships.
 
-## Authorization and attachments
+## The role of mathematical models
 
-For Vercel, use the Container preset and follow [VERCEL_DEPLOYMENT.md](docs/VERCEL_DEPLOYMENT.md). The repository includes a PHP/FrankenPHP Docker build, separate public/management environment templates, durable session/storage integration and an authenticated scheduler endpoint. Hosted MySQL, shared Redis and private object storage must be provisioned before deployment.
+Medicine forecasting uses **ordinary least squares (OLS) linear regression** on recorded weekly medicine releases. The model fits `y = a + bt`, where `y` is released units and `t` is the period number. Short histories use a labeled weekly-average fallback. By default, the system reviews up to 12 completed rolling seven-day periods and projects 90 days of demand to calculate coverage, shortages, and reorder quantities.
 
-Public and management access use distinct, configurable hostnames by default. The public root opens medicine search; the management root redirects to login or the user's role dashboard. Private routes are unavailable on the public host. See [DOMAIN_SPLIT.md](docs/DOMAIN_SPLIT.md) for the required XAMPP hosts/virtual-host setup and separate production deployments. Public views use `layouts.public`, while management uses the internal layout. The public RHU map and its `/map/*` endpoints were removed; the protected administrative GIS remains available. Legacy single-host mode is available only outside production.
+Disease analysis uses **OLS regression** for case trends and **Holt's additive level-and-trend exponential smoothing** for case projections. Weekly and monthly reports remain separate. Missing or unconfirmed reports stay unknown, while confirmed zero-case reports remain observations. Projections require sufficient confirmed history; Holt requires consecutive recent observations.
 
-Protected requests reload the active user and current role/facility. RHU exports are facility-scoped; midwife clinical access is limited to assigned patients. Account creation and password changes share a password policy; login verifies existing credentials without imposing a new registration pattern.
+These are statistical estimates based on recorded activity. Historical R? describes model fit, not guaranteed forecast accuracy. Disease case projections do not automatically declare outbreaks or calculate medicine quantities. See the [medicine forecasting model](docs/FORECAST_MODEL.md) and [disease analysis model](docs/DISEASE_ANALYSIS.md) for equations, validation, and limitations.
 
-Prescription uploads use the configured private `PRESCRIPTION_DISK` (`local` by default, `s3` on Vercel). Downloads stream from that same disk after authorization. Replacements delete the old file only after the database update succeeds. Existing attachments must be copied to the chosen remote disk before changing production storage.
+## Project status
 
-## Scheduled jobs
+The project includes an implemented Laravel application, public medicine search, role-specific management workflows, dashboards, stock movement tracking, clinical services, and statistical forecasting. The latest recorded development verification passed **75 tests with 1,278 assertions** on SQLite and disposable MariaDB, including competing transfer receipt checks. The production asset build and route caching also passed.
 
-Run the Laravel scheduler once per minute through Windows Task Scheduler or the deployment host's scheduler:
+Vercel deployment configuration is included for separate public and management projects. Hosted MySQL/MariaDB, shared Redis, private S3-compatible storage, and an authenticated scheduler must be configured before going live. These external services have not yet been provisioned, and the Docker image and live Vercel deployment remain unverified in the hosting environment.
 
-```powershell
-php artisan schedule:run
-```
+The stack uses **Laravel 12**, **PHP**, **Blade**, **Vite**, **Tailwind CSS**, **Chart.js**, and **MySQL/MariaDB**. The Vercel container configuration uses **PHP 8.4 with FrankenPHP**, with Redis for shared sessions/cache and private object storage for prescription attachments. Public and midwife interfaces support mobile layouts; management pages prioritize desktop use.
 
-Use `php artisan schedule:list` to inspect the four registered tasks: daily log pruning, hourly inventory alerts, a daily notification digest scan, and daily transfer processing. Schedules live in `routes/console.php`; the old `app/Console/kernel.php` is not the active schedule registration point. Use a shared cache and run a single scheduler instance, or configure a suitable distributed scheduler lock before running multiple hosts.
+## Getting started
 
-## Verification
+Follow the [installation and verification guide](docs/INSTALLATION.md) for local requirements, fresh installation, imported-database upgrades, account provisioning, and test commands.
 
-Medicine forecasting now uses a mathematical weekly stock-release trend model. See [FORECAST_MODEL.md](docs/FORECAST_MODEL.md) for the regression equations, accepted movement types, short-history fallback, and stock/reorder calculations. The forecasting page shows the observed and projected weekly trend for each medicine/facility; the dashboard uses the same forecast service.
+For deployment, follow the [Vercel deployment guide](docs/VERCEL_DEPLOYMENT.md) and [domain separation guide](docs/DOMAIN_SPLIT.md). Environment examples contain placeholders; actual credentials and private records must stay out of the repository.
 
-```powershell
-php artisan test
-php tools/verify-database.php
-npm run build
-```
+## Project documentation
 
-`php artisan test` uses SQLite in memory. `phpunit.xml.dist` is the standard fallback test configuration. During repair verification the original `phpunit.xml` became unavailable and the OS denied restoring that filename, including with elevated access; the equivalent `.dist` configuration keeps tests runnable.
-
-The database verification script creates a uniquely named `rhu_repair_test_*` database using the configured MySQL credentials, runs the same regression suite, and starts two competing receipt processes. It drops only the database it created in a `finally` block. It requires database create/drop privileges. The test base rejects MySQL databases without that disposable prefix before migrations run.
-
-Compiled test views go to `storage/framework/testing-views`, keeping tests separate from the application's compiled views. Read `REPAIR_NOTES.md` for verification results and `CODE_REVIEW.md` for the original findings.
-
-## Source maintenance
-
-The executable inventory template is `resources/views/inventory/index.blade.php`; `.bak` copies are backups. Existing backup files and tracked compiled views were retained. No Git operations were performed during these repairs, as required by `AGENTS.md`.
+- [Installation and verification](docs/INSTALLATION.md)
+- [Medicine forecasting model](docs/FORECAST_MODEL.md)
+- [Disease reporting and analysis](docs/DISEASE_ANALYSIS.md)
+- [Public and management domain separation](docs/DOMAIN_SPLIT.md)
+- [Vercel deployment guide](docs/VERCEL_DEPLOYMENT.md)
+- [Consistent sample stock data](docs/SAMPLE_DATA.md)
+- [Diagram guide](docs/diagrams/README.md)
+- [Overall system flowchart](docs/diagrams/overall-system-flowchart.drawio)
+- [Overall use case diagram](docs/diagrams/overall-use-case-diagram.drawio)
+- [Detailed role use cases](docs/diagrams/system-use-cases.drawio)
+- [Database ERD](docs/diagrams/database-erd.drawio)
+- [Original code review](CODE_REVIEW.md)
+- [Repair and verification notes](REPAIR_NOTES.md)
