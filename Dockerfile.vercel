@@ -1,0 +1,38 @@
+FROM dunglas/frankenphp:1-php8.4-alpine AS php-base
+WORKDIR /app
+RUN install-php-extensions bcmath curl dom intl mbstring pcntl pdo_mysql redis simplexml xml zip opcache \
+    && cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
+    && printf 'upload_max_filesize=6M\npost_max_size=8M\n' > "$PHP_INI_DIR/conf.d/uploads.ini"
+
+FROM php-base AS dependencies
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --no-interaction --no-progress --prefer-dist --no-scripts --no-autoloader
+COPY . .
+RUN composer dump-autoload --no-dev --classmap-authoritative --no-scripts
+
+FROM node:24-alpine AS assets
+WORKDIR /build
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY resources ./resources
+COPY vite.config.js ./
+# Tailwind scans Laravel's pagination templates as well as the application views.
+COPY --from=dependencies /app/vendor/laravel/framework/src/Illuminate/Pagination/resources/views ./vendor/laravel/framework/src/Illuminate/Pagination/resources/views
+RUN npm run build
+
+FROM php-base AS runtime
+COPY --from=dependencies /app /app
+COPY --from=assets /build/public/build /app/public/build
+COPY Caddyfile /etc/caddy/Caddyfile
+ENV APP_ENV=production APP_DEBUG=false PORT=80 \
+    PORTAL_DOMAIN_SPLIT=true PORTAL_HTTPS_ONLY=true \
+    SESSION_DRIVER=redis CACHE_STORE=redis LOG_CHANNEL=stderr QUEUE_CONNECTION=sync \
+    PRESCRIPTION_DISK=s3 LARAVEL_STORAGE_PATH=/tmp/rhu-storage \
+    APP_CONFIG_CACHE=/tmp/rhu-bootstrap/config.php \
+    APP_PACKAGES_CACHE=/tmp/rhu-bootstrap/packages.php \
+    APP_SERVICES_CACHE=/tmp/rhu-bootstrap/services.php \
+    APP_ROUTES_CACHE=/tmp/rhu-bootstrap/routes.php
+EXPOSE 80
+ENTRYPOINT ["sh", "/app/deployment/vercel-entrypoint.sh"]
+CMD ["frankenphp", "run", "--config", "/etc/caddy/Caddyfile"]

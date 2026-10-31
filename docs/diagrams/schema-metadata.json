@@ -1,0 +1,2654 @@
+{
+    "source": "Local MySQL/MariaDB schema; metadata only, no row data",
+    "snapshot_date": "2026-10-31",
+    "tables": {
+        "activity_logs": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "user_id",
+                    "type": "int(11)",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "module",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "action",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "description",
+                    "type": "text",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "NO",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "column_name": "user_id",
+                    "parent_table": "users",
+                    "parent_column": "id"
+                }
+            ]
+        },
+        "aefi_reports": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "public_user_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "immunization_record_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "antigen",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "date_onset",
+                    "type": "date",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "symptoms",
+                    "type": "text",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "severity",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "reported_at",
+                    "type": "date",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "reported_by",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "outcome",
+                    "type": "text",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "column_name": "health_unit_id",
+                    "parent_table": "health_units",
+                    "parent_column": "id"
+                },
+                {
+                    "column_name": "immunization_record_id",
+                    "parent_table": "immunization_records",
+                    "parent_column": "id"
+                },
+                {
+                    "column_name": "public_user_id",
+                    "parent_table": "public_users",
+                    "parent_column": "id"
+                }
+            ]
+        },
+        "allocations": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "medicine_id",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "inventory_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "destination",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "quantity_allocated",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "date_allocated",
+                    "type": "datetime",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "allocated_by",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "recipient_user_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "deleted_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "destination_health_unit_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "status",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "column_name": "allocated_by",
+                    "parent_table": "users",
+                    "parent_column": "id"
+                },
+                {
+                    "column_name": "health_unit_id",
+                    "parent_table": "health_units",
+                    "parent_column": "id"
+                },
+                {
+                    "column_name": "medicine_id",
+                    "parent_table": "medicines",
+                    "parent_column": "id"
+                }
+            ]
+        },
+        "calendar_events": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "title",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "description",
+                    "type": "text",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "event_date",
+                    "type": "date",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "start_time",
+                    "type": "time",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "end_time",
+                    "type": "time",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "type",
+                    "type": "varchar(30)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "priority",
+                    "type": "varchar(20)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "area_label",
+                    "type": "varchar(120)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_by",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "deleted_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "cold_chain_logs": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "logged_at",
+                    "type": "datetime",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "temperature_c",
+                    "type": "decimal(5,2)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "equipment",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "vvm_status",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "notes",
+                    "type": "text",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "logged_by",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "column_name": "health_unit_id",
+                    "parent_table": "health_units",
+                    "parent_column": "id"
+                }
+            ]
+        },
+        "diseases": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "code",
+                    "type": "varchar(50)",
+                    "nullable": "NO",
+                    "key_type": "UNI"
+                },
+                {
+                    "name": "name",
+                    "type": "varchar(150)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "category",
+                    "type": "varchar(50)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "description",
+                    "type": "text",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "is_reportable",
+                    "type": "tinyint(1)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "is_active",
+                    "type": "tinyint(1)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "disease_medicine_map": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "disease_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "medicine_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "priority",
+                    "type": "tinyint(3) unsigned",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "doses_per_case",
+                    "type": "int(10) unsigned",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "notes",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "disease_reports": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "disease_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "report_date",
+                    "type": "date",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "period_type",
+                    "type": "enum('weekly','monthly')",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "case_count",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "is_outbreak",
+                    "type": "tinyint(1)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "remarks",
+                    "type": "text",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "reported_by",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "period_start",
+                    "type": "date",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "period_end",
+                    "type": "date",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "is_complete",
+                    "type": "tinyint(1)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "outbreak_closed_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "outbreak_closed_by",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "outbreak_closing_note",
+                    "type": "varchar(500)",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "column_name": "disease_id",
+                    "parent_table": "diseases",
+                    "parent_column": "id"
+                },
+                {
+                    "column_name": "health_unit_id",
+                    "parent_table": "health_units",
+                    "parent_column": "id"
+                }
+            ]
+        },
+        "dispensing_records": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "medicine_id",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "patient_name",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "quantity_dispensed",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "batch_no",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "doctor_name",
+                    "type": "varchar(150)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "prescription_image",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "date_dispensed",
+                    "type": "date",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "dispensed_by",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "deleted_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "column_name": "dispensed_by",
+                    "parent_table": "users",
+                    "parent_column": "id"
+                },
+                {
+                    "column_name": "health_unit_id",
+                    "parent_table": "health_units",
+                    "parent_column": "id"
+                },
+                {
+                    "column_name": "medicine_id",
+                    "parent_table": "medicines",
+                    "parent_column": "id"
+                }
+            ]
+        },
+        "doh_programs": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "name",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "description",
+                    "type": "text",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "color",
+                    "type": "varchar(20)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "recurrence",
+                    "type": "varchar(20)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "month",
+                    "type": "tinyint(3) unsigned",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "day",
+                    "type": "tinyint(3) unsigned",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "weekday",
+                    "type": "tinyint(3) unsigned",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "duration_days",
+                    "type": "tinyint(3) unsigned",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "is_active",
+                    "type": "tinyint(1)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "doh_shipments": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20)",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "shipment_no",
+                    "type": "varchar(50)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "reference_no",
+                    "type": "varchar(100)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "supplier",
+                    "type": "varchar(150)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "received_date",
+                    "type": "date",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "received_by",
+                    "type": "bigint(20)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "remarks",
+                    "type": "text",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "NO",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "doh_shipment_items": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20)",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "shipment_id",
+                    "type": "bigint(20)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "medicine_id",
+                    "type": "bigint(20)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "quantity",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "batch_no",
+                    "type": "varchar(100)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "expiration_date",
+                    "type": "date",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "storage_location",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "unit_cost",
+                    "type": "decimal(10,2)",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "column_name": "shipment_id",
+                    "parent_table": "doh_shipments",
+                    "parent_column": "id"
+                }
+            ]
+        },
+        "epi_schedule": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "vaccine",
+                    "type": "varchar(50)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "age_weeks",
+                    "type": "int(11)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "age_months",
+                    "type": "int(11)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "dose_number",
+                    "type": "int(11)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "is_fic_requirement",
+                    "type": "tinyint(1)",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "family_planning": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20)",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "patient_id",
+                    "type": "bigint(20)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "bigint(20)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "method",
+                    "type": "varchar(50)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "date_accepted",
+                    "type": "date",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "next_supply_date",
+                    "type": "date",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "remarks",
+                    "type": "text",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "NO",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "health_units": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "name",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "municipality",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "facility_type",
+                    "type": "varchar(100)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "immunization_pattern",
+                    "type": "varchar(30)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "immunization_weekday",
+                    "type": "tinyint(4)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "immunization_week_number",
+                    "type": "tinyint(4)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "address",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "latitude",
+                    "type": "decimal(10,7)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "longitude",
+                    "type": "decimal(10,7)",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "households": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20)",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "family_serial_no",
+                    "type": "varchar(50)",
+                    "nullable": "YES",
+                    "key_type": "UNI"
+                },
+                {
+                    "name": "address",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "barangay",
+                    "type": "varchar(100)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "bigint(20)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "NO",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "immunizations": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20)",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "patient_id",
+                    "type": "bigint(20)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "bigint(20)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "vaccine",
+                    "type": "varchar(50)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "dose_number",
+                    "type": "int(11)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "date_given",
+                    "type": "date",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "given_by",
+                    "type": "varchar(100)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "batch_no",
+                    "type": "varchar(50)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "remarks",
+                    "type": "text",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "NO",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "immunization_records": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "public_user_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "antigen",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "dose_number",
+                    "type": "tinyint(3) unsigned",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "date_given",
+                    "type": "date",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "inventory_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "batch_no",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "administered_by",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "site",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "route",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "remarks",
+                    "type": "text",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "column_name": "health_unit_id",
+                    "parent_table": "health_units",
+                    "parent_column": "id"
+                },
+                {
+                    "column_name": "public_user_id",
+                    "parent_table": "public_users",
+                    "parent_column": "id"
+                }
+            ]
+        },
+        "immunization_schedule": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "antigen",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "antigen_label",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "dose_number",
+                    "type": "tinyint(3) unsigned",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "min_age_days",
+                    "type": "int(10) unsigned",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "max_age_days",
+                    "type": "int(10) unsigned",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "recommended_age_label",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "interval_days",
+                    "type": "int(10) unsigned",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "is_required_for_fic",
+                    "type": "tinyint(1)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "is_required_for_cbi",
+                    "type": "tinyint(1)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "sort_order",
+                    "type": "smallint(5) unsigned",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "is_active",
+                    "type": "tinyint(1)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "inventory": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "medicine_id",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "available_stock",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "allocated_stock",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "batch_no",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "storage_location",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "pack_type",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "pieces_per_pack",
+                    "type": "int(10) unsigned",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "expiration_date",
+                    "type": "date",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "deleted_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "column_name": "health_unit_id",
+                    "parent_table": "health_units",
+                    "parent_column": "id"
+                },
+                {
+                    "column_name": "medicine_id",
+                    "parent_table": "medicines",
+                    "parent_column": "id"
+                }
+            ]
+        },
+        "medicines": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "medicine_name",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "dosage",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "category",
+                    "type": "varchar(64)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "dosage_form",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "base_unit",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "pack_type",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "pieces_per_pack",
+                    "type": "int(11)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "description",
+                    "type": "text",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "requires_prescription",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "is_dispensable",
+                    "type": "tinyint(1)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "min_stock",
+                    "type": "int(11)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "max_stock",
+                    "type": "int(11)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "deleted_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "unit",
+                    "type": "varchar(50)",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "midwife_barangay": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "migrations": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int(10) unsigned",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "migration",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "batch",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "monthly_reports": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20)",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "bigint(20)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "report_month",
+                    "type": "date",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "submitted_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "submitted_by",
+                    "type": "bigint(20)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "status",
+                    "type": "enum('draft','submitted','received')",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "data",
+                    "type": "longtext",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "notifications": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "user_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "inventory_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "transfer_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "allocation_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "type",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "link",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "title",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "message",
+                    "type": "text",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "severity",
+                    "type": "varchar(50)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "is_read",
+                    "type": "tinyint(1)",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "archived_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "postpartum_visits": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20)",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "patient_id",
+                    "type": "bigint(20)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "bigint(20)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "delivery_date",
+                    "type": "date",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "place_of_delivery",
+                    "type": "varchar(100)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "attended_by",
+                    "type": "varchar(100)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "visit_date",
+                    "type": "date",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "next_visit_date",
+                    "type": "date",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "visit_number",
+                    "type": "int(11)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "remarks",
+                    "type": "text",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "NO",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "prenatal_visits": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20)",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "patient_id",
+                    "type": "bigint(20)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "bigint(20)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "visit_date",
+                    "type": "date",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "next_visit_date",
+                    "type": "date",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "trimester",
+                    "type": "enum('1st','2nd','3rd')",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "blood_pressure",
+                    "type": "varchar(20)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "weight",
+                    "type": "decimal(5,2)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "fundal_height",
+                    "type": "decimal(5,2)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "fetal_heart_tone",
+                    "type": "varchar(20)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "tt_dose",
+                    "type": "enum('TT1','TT2','TT3','TT4','TT5','TTL')",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "remarks",
+                    "type": "text",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "NO",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "public_users": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "household_id",
+                    "type": "bigint(20)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "mother_id",
+                    "type": "bigint(20)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "family_serial_no",
+                    "type": "varchar(50)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "barangay",
+                    "type": "varchar(100)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "is_pregnant",
+                    "type": "tinyint(1)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "lmp",
+                    "type": "date",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "gravida",
+                    "type": "int(11)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "para",
+                    "type": "int(11)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "risk_codes",
+                    "type": "varchar(10)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "assigned_midwife_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "registered_by",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "philhealth_id",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": "UNI"
+                },
+                {
+                    "name": "first_name",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "last_name",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "address",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "contact_number",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "birth_date",
+                    "type": "date",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "rhu_immunization_schedules": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "area_label",
+                    "type": "varchar(120)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "pattern",
+                    "type": "varchar(30)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "weekday",
+                    "type": "tinyint(3) unsigned",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "week_number",
+                    "type": "tinyint(3) unsigned",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "is_active",
+                    "type": "tinyint(1)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "stock_logs": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "medicine_id",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "quantity_added",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "batch_no",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "storage_location",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "date_added",
+                    "type": "date",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "added_by",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "dispensing_record_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "transfer_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "allocation_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "remarks",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "inventory_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "movement_type",
+                    "type": "varchar(30)",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "voided_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": [
+                {
+                    "column_name": "added_by",
+                    "parent_table": "users",
+                    "parent_column": "id"
+                },
+                {
+                    "column_name": "health_unit_id",
+                    "parent_table": "health_units",
+                    "parent_column": "id"
+                },
+                {
+                    "column_name": "medicine_id",
+                    "parent_table": "medicines",
+                    "parent_column": "id"
+                }
+            ]
+        },
+        "stock_movements": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "owner_type",
+                    "type": "varchar(50)",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "owner_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "inventory_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "available_delta",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "allocated_delta",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "reverses_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": "UNI"
+                },
+                {
+                    "name": "reversed_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "NO",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "supply_requests": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "medicine_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "quantity",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "reason",
+                    "type": "text",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "status",
+                    "type": "varchar(20)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "requested_by",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "reviewed_by",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "reviewed_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "remarks",
+                    "type": "text",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "transfer_requests": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "initiator_type",
+                    "type": "enum('rhu_request','pho_directive')",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "from_health_unit_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "to_health_unit_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "medicine_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "inventory_id",
+                    "type": "int(11)",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "batch_no",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "dosage",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "dosage_form",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "unit",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "category",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "pack_type",
+                    "type": "varchar(255)",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "pieces_per_pack",
+                    "type": "int(10) unsigned",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "quantity",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "notes",
+                    "type": "text",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "status",
+                    "type": "enum('pending','accepted','approved','rejected','received','completed','cancelled')",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "requested_by",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "approved_by",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "rejected_by",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "approved_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "rejected_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "completed_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "received_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "received_by",
+                    "type": "int(11)",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "reminder_sent_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "auto_completed",
+                    "type": "tinyint(1)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "rejection_reason",
+                    "type": "text",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "stock_reserved",
+                    "type": "tinyint(1)",
+                    "nullable": "NO",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        },
+        "users": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "int(11)",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "name",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "username",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "password",
+                    "type": "varchar(255)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "role",
+                    "type": "enum('admin','staff','midwife')",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "is_active",
+                    "type": "tinyint(1)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "is_emergency",
+                    "type": "tinyint(1)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "int(10) unsigned",
+                    "nullable": "YES",
+                    "key_type": "MUL"
+                }
+            ],
+            "foreign_keys": []
+        },
+        "vaccination_schedules": {
+            "columns": [
+                {
+                    "name": "id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "PRI"
+                },
+                {
+                    "name": "health_unit_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "public_user_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "NO",
+                    "key_type": "MUL"
+                },
+                {
+                    "name": "vaccine_name",
+                    "type": "varchar(50)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "dose_number",
+                    "type": "tinyint(3) unsigned",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "due_date",
+                    "type": "date",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "given_date",
+                    "type": "date",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "status",
+                    "type": "varchar(20)",
+                    "nullable": "NO",
+                    "key_type": ""
+                },
+                {
+                    "name": "immunization_record_id",
+                    "type": "bigint(20) unsigned",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "notes",
+                    "type": "text",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "created_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                },
+                {
+                    "name": "updated_at",
+                    "type": "timestamp",
+                    "nullable": "YES",
+                    "key_type": ""
+                }
+            ],
+            "foreign_keys": []
+        }
+    }
+}

@@ -1,0 +1,21 @@
+# LOCAL DEVELOPMENT ONLY: add hosts-file entries, include this configuration, restart Apache.
+# Public and management share one working copy locally; production uses separate instances and TLS.
+<VirtualHost *:80>
+    ServerName rhu-inventory.test
+    DocumentRoot "C:/xampp/htdocs/rhu-inventory/public"
+    <Directory "C:/xampp/htdocs/rhu-inventory/public">
+        AllowOverride All
+        Require all granted
+        Options -Indexes +FollowSymLinks
+    </Directory>
+</VirtualHost>
+
+<VirtualHost *:80>
+    ServerName management.rhu-inventory.test
+    DocumentRoot "C:/xampp/htdocs/rhu-inventory/public"
+    <Directory "C:/xampp/htdocs/rhu-inventory/public">
+        AllowOverride All
+        Require all granted
+        Options -Indexes +FollowSymLinks
+    </Directory>
+</VirtualHost>
