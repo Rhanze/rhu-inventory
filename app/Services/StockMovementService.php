@@ -12,17 +12,30 @@ use Illuminate\Validation\ValidationException;
 /** Exact, append-only batch movements. Call within the owner's transaction. */
 class StockMovementService
 {
-    public function record(Model $owner, Inventory $batch, int $availableDelta, int $allocatedDelta = 0): void
+    public function record(Model $owner, Inventory $batch, int $availableDelta, int $allocatedDelta = 0, ?string $method = null): int
     {
-        DB::table('stock_movements')->insert([
+        return DB::table('stock_movements')->insertGetId([
             'owner_type' => $owner->getTable(), 'owner_id' => $owner->getKey(),
             'inventory_id' => $batch->id, 'available_delta' => $availableDelta,
             'allocated_delta' => $allocatedDelta, 'created_at' => now(),
+            'performed_by' => session('user_id'),
+            'method' => $method ?? ($availableDelta < 0 || ($owner->getTable() === 'dispensing_records' && $allocatedDelta < 0)
+                ? 'FEFO with FIFO receipt-date ties' : 'Exact batch movement'),
         ]);
     }
 
-    public function reverse(Model $owner): void
+    public function reverse(Model $owner, string $reason = 'Stock record corrected or cancelled'): void
     {
+        if ($owner->getTable() === 'allocations') {
+            DB::table('allocations')->where('id', $owner->id)->lockForUpdate()->first();
+            if (DB::table('allocation_consumptions')->where('allocation_id', $owner->id)->whereNull('reversed_at')->exists()) {
+                throw ValidationException::withMessages(['stock' => 'This allocation has been dispensed. Reverse its dispensing records before changing or returning the allocation.']);
+            }
+        } elseif ($owner->getTable() === 'dispensing_records' && $owner->stock_source === 'allocation') {
+            $allocationIds = DB::table('allocation_consumptions')->where('dispensing_record_id', $owner->id)
+                ->whereNull('reversed_at')->pluck('allocation_id')->unique()->sort()->values();
+            DB::table('allocations')->whereIn('id', $allocationIds)->orderBy('id')->lockForUpdate()->get();
+        }
         $query = DB::table('stock_movements')->where('owner_type', $owner->getTable())->where('owner_id', $owner->id);
         $movements = (clone $query)->whereNull('reversed_at')->whereNull('reverses_id')->orderBy('inventory_id')->lockForUpdate()->get();
         if ($movements->isEmpty()) {
@@ -44,7 +57,12 @@ class StockMovementService
                 'owner_type' => $owner->getTable(), 'owner_id' => $owner->id, 'inventory_id' => $batch->id,
                 'available_delta' => -$movement->available_delta, 'allocated_delta' => -$movement->allocated_delta,
                 'reverses_id' => $movement->id, 'created_at' => now(),
+                'performed_by' => session('user_id'), 'reason' => $reason, 'method' => 'Exact original batch reversal',
             ]);
+        }
+        if ($owner->getTable() === 'dispensing_records') {
+            DB::table('allocation_consumptions')->where('dispensing_record_id', $owner->id)->whereNull('reversed_at')
+                ->update(['reversed_at' => now(), 'updated_at' => now()]);
         }
         $foreignKey = match ($owner->getTable()) {
             'allocations' => 'allocation_id', 'transfer_requests' => 'transfer_id', default => 'dispensing_record_id'
@@ -75,7 +93,10 @@ class StockMovementService
                 throw ValidationException::withMessages(['stock' => 'Historical batch details are ambiguous. Reconcile the original movement before reversing this record.']);
             }
             $quantity = (int) $log->quantity_added;
-            $this->record($owner, $batches->first(), $isSource ? -$quantity : $quantity, $allocation && ! $owner->destination_health_unit_id ? $quantity : 0);
+            $movementId = $this->record($owner, $batches->first(), $isSource ? -$quantity : $quantity, $allocation && ! $owner->destination_health_unit_id ? $quantity : 0);
+            DB::table('stock_movements')->where('id', $movementId)->update([
+                'performed_by' => $log->added_by, 'reason' => $log->remarks, 'method' => null,
+            ]);
             if ($isSource) {
                 $sourceQuantity += $quantity;
             }

@@ -163,6 +163,16 @@
                 @enderror
             </div>
 
+            <div>
+                <label for="stock-entry-reason" style="display:block; margin-bottom:6px; font-size:1rem; font-weight:600; color:#0f172a;">Reason for stock addition (optional)</label>
+                <textarea id="stock-entry-reason" name="remarks" rows="3" maxlength="1000"
+                          placeholder="Record the purpose or source of this receipt"
+                          style="width:100%; min-width:0; padding:12px 16px; font:inherit; border:2px solid #bec6cf; border-radius:14px; background:white; color:#0f172a; box-sizing:border-box;">{{ old('remarks') }}</textarea>
+                @error('remarks')
+                    <p style="margin-top:4px; font-size:.875rem; color:#dc2626;">{{ $message }}</p>
+                @enderror
+            </div>
+
             {{-- Buttons --}}
             <div style="display:flex; gap:12px; margin-top:8px;">
                 <button type="submit" style="

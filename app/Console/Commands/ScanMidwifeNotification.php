@@ -11,7 +11,7 @@ class ScanMidwifeNotification extends Command
                             {--lookback=14 : Days back for overdue doses}
                             {--stock-threshold=10 : Inventory count for low-stock alert}';
 
-    protected $description = 'Nightly scan: inventory, overdue doses, low stock, EPI reminders';
+    protected $description = 'Nightly scan: inventory, overdue doses, low stock, EPI and DoH preparation reminders';
 
     public function handle(NotificationService $service): int
     {
@@ -28,6 +28,9 @@ class ScanMidwifeNotification extends Command
 
         $epi = $service->scanEpiReminders();
         $this->line("  EPI reminders:                    {$epi}");
+
+        $programs = $service->scanDohPreparationReminders();
+        $this->line("  DoH preparation reminders:        {$programs}");
 
         $this->info('Done.');
         return self::SUCCESS;

@@ -7,17 +7,29 @@ use App\Models\Allocation;
 use App\Models\HealthUnit;
 use App\Models\Inventory;
 use App\Models\Medicine;
+use App\Models\MidwifeBarangay;
 use App\Models\Notification;
 use App\Models\StockLog;
 use App\Models\User;
 use App\Services\NotificationService;
 use App\Services\StockMovementService;
+use App\Support\BarangayDemandScope;
+use App\Support\HistoricalDateRange;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class AllocationController extends Controller
 {
+    private function destinationSuggestions(int $healthUnitId)
+    {
+        return Allocation::where('health_unit_id', $healthUnitId)->whereNotNull('destination')
+            ->orderByDesc('id')->limit(50)->pluck('destination')
+            ->merge(BarangayDemandScope::options($healthUnitId))
+            ->map(fn ($destination) => trim($destination))->filter()
+            ->unique(fn ($destination) => mb_strtolower($destination))->values();
+    }
+
     private function checkAccess()
     {
         if (! session()->has('user_id')) {
@@ -36,6 +48,7 @@ class AllocationController extends Controller
             return $redirect;
         }
 
+        $historyRange = HistoricalDateRange::fromRequest($request);
         $search = $request->search;
         $rhuFilter = $request->rhu_filter;
         $category = $request->category;
@@ -45,10 +58,14 @@ class AllocationController extends Controller
 
         $allocations = Allocation::with(['medicine', 'allocatedBy', 'recipient', 'healthUnit', 'destinationHealthUnit', 'inventory'])
             ->when($healthUnitId, function ($q) use ($healthUnitId) {
-                $q->where('health_unit_id', $healthUnitId);
+                $q->where(fn ($units) => $units->where('health_unit_id', $healthUnitId)->orWhere('destination_health_unit_id', $healthUnitId));
             })
             ->when(is_null($healthUnitId) && $rhuFilter, function ($q) use ($rhuFilter) {
-                $q->where('health_unit_id', $rhuFilter);
+                if ($rhuFilter === 'pho') {
+                    $q->where('health_unit_id', HealthUnit::phoId());
+                } else {
+                    $q->where(fn ($units) => $units->where('health_unit_id', $rhuFilter)->orWhere('destination_health_unit_id', $rhuFilter));
+                }
             })
             ->when($search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
@@ -68,10 +85,15 @@ class AllocationController extends Controller
             ->when($category, function ($q) use ($category) {
                 $q->whereHas('medicine', fn ($mq) => $mq->where('category', $category));
             })
+            ->when($historyRange->isFiltered(), fn ($q) => $historyRange->apply($q, 'date_allocated'))
+            ->orderByDesc('date_allocated')
             ->orderByDesc('id')
             ->paginate(config('pagination.inventory', 20))
             ->appends([
                 'search' => $search,
+                'year' => $request->year,
+                'date_from' => $request->date_from,
+                'date_to' => $request->date_to,
                 'rhu_filter' => $rhuFilter,
                 'category' => $category,
                 'batch_input' => $batchInput,
@@ -80,7 +102,7 @@ class AllocationController extends Controller
 
         $healthUnits = HealthUnit::rhuOnly()->orderBy('name')->get();
 
-        return view('allocation.index', compact('allocations', 'healthUnits'));
+        return view('allocation.index', compact('allocations', 'healthUnits', 'historyRange'));
     }
 
     public function create()
@@ -89,13 +111,18 @@ class AllocationController extends Controller
             return $redirect;
         }
 
-        if (is_null(session('health_unit_id'))) {
+        $healthUnitId = session('health_unit_id');
+        if (is_null($healthUnitId)) {
+            if (session('role') === 'admin') {
+                return redirect()->route('allocation.province');
+            }
+
             return redirect()->route('allocation.index')
                 ->with('error', 'Allocation creation is only available at the RHU level.');
         }
 
         $inventories = Inventory::with('medicine')
-            ->where('health_unit_id', session('health_unit_id'))
+            ->where('health_unit_id', $healthUnitId)
             ->where('available_stock', '>', 0)
             ->where(function ($q) {
                 $q->whereNull('expiration_date')
@@ -106,20 +133,17 @@ class AllocationController extends Controller
             ->orderBy('id')
             ->get();
 
-        $priorDestinations = Allocation::where('health_unit_id', session('health_unit_id'))
-            ->whereNotNull('destination')
-            ->where('destination', '!=', '')
-            ->orderByDesc('id')
-            ->limit(50)
-            ->pluck('destination')
-            ->unique()
-            ->values();
+        $assignedBarangays = MidwifeBarangay::whereHas('user', fn ($query) => $query
+            ->where('health_unit_id', $healthUnitId)->midwives()->active())
+            ->whereNotNull('barangay')->orderBy('barangay')->pluck('barangay')
+            ->map(fn ($barangay) => trim($barangay))->filter(fn ($barangay) => $barangay !== '')
+            ->unique(fn ($barangay) => mb_strtolower($barangay));
 
-        $recipients = User::where('health_unit_id', session('health_unit_id'))
+        $recipients = User::where('health_unit_id', $healthUnitId)->midwives()->active()
             ->orderBy('name')
             ->get();
 
-        return view('allocation.create', compact('inventories', 'priorDestinations', 'recipients'));
+        return view('allocation.create', compact('inventories', 'assignedBarangays', 'recipients'));
     }
 
     public function store(Request $request)
@@ -138,7 +162,7 @@ class AllocationController extends Controller
             'destination' => 'required|string|max:255',
             'quantity_allocated' => 'required|integer|min:1',
             'date_allocated' => 'required|date',
-            'recipient_user_id' => ['nullable', Rule::exists('users', 'id')->where('health_unit_id', session('health_unit_id'))->where('is_active', true)],
+            'recipient_user_id' => ['nullable', Rule::exists('users', 'id')->where('health_unit_id', session('health_unit_id'))->where('is_active', true)->where('role', 'midwife')],
         ]);
 
         // Identify the medicine via the chosen row — actual batches used come
@@ -169,7 +193,7 @@ class AllocationController extends Controller
                 $totalAvailable = $batches->sum('available_stock');
 
                 if ($totalAvailable < $request->quantity_allocated) {
-                    throw new \Exception(
+                    throw new \DomainException(
                         'Insufficient stock. Available across all unexpired batches: '.
                         $totalAvailable.' unit(s). Requested: '.$request->quantity_allocated.'.'
                     );
@@ -210,6 +234,7 @@ class AllocationController extends Controller
                     'date_allocated' => $request->date_allocated,
                     'allocated_by' => session('user_id'),
                     'recipient_user_id' => $recipientId,
+                    'dispensing_enabled' => $recipientId !== null,
                     'status' => $status,
                 ]);
 
@@ -244,7 +269,7 @@ class AllocationController extends Controller
                 }
             });
         } catch (\Throwable $e) {
-            return back()->withInput()->with('error', $e->getMessage());
+            return back()->withInput()->with('error', $this->operationErrorMessage($e, 'Unable to save the allocation. Please try again.'));
         }
 
         if ($recipientId) {
@@ -294,16 +319,9 @@ class AllocationController extends Controller
             ->orderByDesc('id')
             ->get();
 
-        $priorDestinations = Allocation::where('health_unit_id', $allocation->health_unit_id)
-            ->whereNotNull('destination')
-            ->where('destination', '!=', '')
-            ->orderByDesc('id')
-            ->limit(50)
-            ->pluck('destination')
-            ->unique()
-            ->values();
+        $priorDestinations = $this->destinationSuggestions((int) $allocation->health_unit_id);
 
-        $recipients = User::where('health_unit_id', $allocation->health_unit_id)
+        $recipients = User::where('health_unit_id', $allocation->health_unit_id)->where('role', 'midwife')->where('is_active', true)
             ->orderBy('name')
             ->get();
 
@@ -321,7 +339,7 @@ class AllocationController extends Controller
             'destination' => 'required|string|max:255',
             'quantity_allocated' => 'required|integer|min:1',
             'date_allocated' => 'required|date',
-            'recipient_user_id' => ['nullable', Rule::exists('users', 'id')->where('health_unit_id', session('health_unit_id'))->where('is_active', true)],
+            'recipient_user_id' => ['nullable', Rule::exists('users', 'id')->where('health_unit_id', session('health_unit_id'))->where('is_active', true)->where('role', 'midwife')],
         ]);
 
         $allocation = $this->findAllocationForCurrentUser($id);
@@ -339,9 +357,15 @@ class AllocationController extends Controller
             DB::transaction(function () use ($request, $allocation, $medicine) {
                 $allocation = Allocation::whereKey($allocation->id)->lockForUpdate()->firstOrFail();
                 if ($allocation->destination_health_unit_id || in_array($allocation->status, ['pending', 'rejected'])) {
-                    throw new \RuntimeException('Reverse a provincial allocation before replacing it; approve a supply request before editing its stock.');
+                    throw new \DomainException('Reverse a provincial allocation before replacing it; approve a supply request before editing its stock.');
                 }
-                app(StockMovementService::class)->reverse($allocation);
+                $isSupplyRequest = in_array($allocation->status, ['approved', 'received']);
+                if ($isSupplyRequest && $request->filled('recipient_user_id') && (int) $request->recipient_user_id !== (int) $allocation->recipient_user_id) {
+                    throw new \DomainException('A supply request must retain its requester as recipient. Create a separate allocation for a different recipient.');
+                }
+                $recipientId = $isSupplyRequest ? $allocation->recipient_user_id
+                    : ($request->filled('recipient_user_id') ? (int) $request->recipient_user_id : null);
+                app(StockMovementService::class)->reverse($allocation, 'Allocation record corrected');
 
                 $batches = Inventory::availableFefo(
                     $allocation->health_unit_id,
@@ -351,7 +375,7 @@ class AllocationController extends Controller
                 $totalAvailable = $batches->sum('available_stock');
 
                 if ($totalAvailable < $request->quantity_allocated) {
-                    throw new \Exception(
+                    throw new \DomainException(
                         'Insufficient stock. Available across all unexpired batches: '.
                         $totalAvailable.' unit(s). Requested: '.$request->quantity_allocated.'.'
                     );
@@ -389,9 +413,16 @@ class AllocationController extends Controller
                     'destination' => $request->destination,
                     'quantity_allocated' => $request->quantity_allocated,
                     'date_allocated' => $request->date_allocated,
-                    'allocated_by' => session('user_id'),
-                    'recipient_user_id' => $request->filled('recipient_user_id') ? (int) $request->recipient_user_id : null,
+                    'allocated_by' => $isSupplyRequest ? $allocation->allocated_by : session('user_id'),
+                    'recipient_user_id' => $recipientId,
+                    // The old issue has just been reversed; these fresh batch movements are traceable.
+                    'dispensing_enabled' => $recipientId !== null,
+                    'status' => $recipientId
+                        ? ($isSupplyRequest ? 'approved' : 'awaiting_receipt')
+                        : 'completed',
                 ]);
+
+                Notification::where('allocation_id', $allocation->id)->where('type', 'allocation_to_user')->update(['is_read' => true]);
 
                 StockLog::where('allocation_id', $allocation->id)->whereNull('voided_at')->update(['voided_at' => now()]);
 
@@ -423,8 +454,18 @@ class AllocationController extends Controller
                     ]);
                 }
             });
-        } catch (\Exception $e) {
-            return back()->withInput()->with('error', $e->getMessage());
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error', $this->operationErrorMessage($e, 'Unable to update the allocation. Please try again.'));
+        }
+
+        $allocation->refresh();
+        if ($allocation->recipient_user_id && $allocation->status === 'awaiting_receipt') {
+            app(NotificationService::class)->notifyUser(
+                $allocation->recipient_user_id, $allocation->health_unit_id, 'allocation_to_user',
+                'Updated Stock Allocation', 'Allocation #'.$allocation->id.' now contains '.$allocation->quantity_allocated.
+                    ' units of '.$medicine->medicine_name.'. Please confirm receipt of the updated allocation.',
+                'warning', route('notifications.index'), ['allocation_id' => $allocation->id], null, 0
+            );
         }
 
         ActivityLogger::log(
@@ -448,11 +489,11 @@ class AllocationController extends Controller
         try {
             DB::transaction(function () use ($allocation) {
                 $allocation = Allocation::whereKey($allocation->id)->lockForUpdate()->firstOrFail();
-                app(StockMovementService::class)->reverse($allocation);
+                app(StockMovementService::class)->reverse($allocation, 'Allocation record deleted');
                 $allocation->delete();
             });
         } catch (\Throwable $e) {
-            return back()->with('error', $e->getMessage());
+            return back()->with('error', $this->operationErrorMessage($e, 'Unable to delete the allocation. Please try again.'));
         }
         ActivityLogger::log('Allocation', 'Delete', 'Reversed and deleted allocation #'.$id.'.');
 
@@ -465,12 +506,21 @@ class AllocationController extends Controller
             return $redirect;
         }
 
-        if (! is_null(session('health_unit_id'))) {
+        if (! is_null(session('health_unit_id')) || session('role') !== 'admin') {
             return redirect()->route('allocation.index')
                 ->with('error', 'Only the Provincial Health Office can perform provincial allocations.');
         }
 
-        $medicines = Medicine::orderBy('medicine_name')->get();
+        $phoId = HealthUnit::phoId();
+        $medicines = collect();
+        if ($phoId !== null) {
+            $availableAtPho = fn ($batches) => $batches->availableAt($phoId);
+            $medicines = Medicine::whereHas('inventories', $availableAtPho)
+                ->withSum(['inventories as pho_available_stock' => $availableAtPho], 'available_stock')
+                ->orderBy('medicine_name')
+                ->orderBy('dosage')
+                ->get();
+        }
         $healthUnits = HealthUnit::rhuOnly()->orderBy('name')->get();
 
         return view('allocation.province', compact('medicines', 'healthUnits'));
@@ -482,7 +532,7 @@ class AllocationController extends Controller
             return $redirect;
         }
 
-        if (! is_null(session('health_unit_id'))) {
+        if (! is_null(session('health_unit_id')) || session('role') !== 'admin') {
             return redirect()->route('allocation.index')
                 ->with('error', 'Only the Provincial Health Office can perform provincial allocations.');
         }
@@ -490,6 +540,7 @@ class AllocationController extends Controller
         $request->validate([
             'medicine_id' => 'required|exists:medicines,id',
             'destination_health_unit_id' => 'required|exists:health_units,id',
+            'recipient_user_id' => ['prohibited'],
             'quantity_allocated' => 'required|integer|min:1',
             'date_allocated' => 'required|date',
             'batch_no' => 'nullable|string|max:100',
@@ -517,13 +568,7 @@ class AllocationController extends Controller
             DB::transaction(function () use ($request, $medicine, $destinationRhuId, $destination, $phoId, $qty) {
                 HealthUnit::whereKey($destinationRhuId)->lockForUpdate()->firstOrFail();
                 // ── FEFO: pull earliest-expiring PHO batches ──
-                $query = Inventory::where('health_unit_id', $phoId)
-                    ->where('medicine_id', $medicine->id)
-                    ->where('available_stock', '>', 0)
-                    ->where(function ($q) {
-                        $q->whereNull('expiration_date')
-                            ->orWhereDate('expiration_date', '>=', now()->toDateString());
-                    });
+                $query = Inventory::availableFefo($phoId, $medicine->id);
 
                 // Allow optional narrowing by batch/expiry, but still FEFO-ordered
                 if ($request->filled('batch_no')) {
@@ -533,12 +578,12 @@ class AllocationController extends Controller
                     $query->where('expiration_date', $request->expiration_date);
                 }
 
-                $batches = $query->fefo()->lockForUpdate()->get();
+                $batches = $query->lockForUpdate()->get();
 
                 $totalAvailable = $batches->sum('available_stock');
 
                 if ($totalAvailable < $qty) {
-                    throw new \Exception(
+                    throw new \DomainException(
                         'PHO has only '.$totalAvailable.' unit(s) of '.$medicine->medicine_name.
                         ' available across unexpired batches. Requested: '.$qty.'.'
                     );
@@ -641,8 +686,8 @@ class AllocationController extends Controller
                     ]);
                 }
             });
-        } catch (\Exception $e) {
-            return back()->withInput()->with('error', $e->getMessage());
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error', $this->operationErrorMessage($e, 'Unable to save the provincial allocation. Please try again.'));
         }
 
         ActivityLogger::log(
@@ -682,7 +727,7 @@ class AllocationController extends Controller
             DB::transaction(function () use ($allocation, $medicine) {
                 $allocation = Allocation::whereKey($allocation->id)->lockForUpdate()->firstOrFail();
                 if ($allocation->status !== 'pending' || $allocation->inventory_id) {
-                    throw new \RuntimeException('This request has already been processed.');
+                    throw new \DomainException('This request has already been processed.');
                 }
                 // FEFO deduction across batches
                 $batches = Inventory::availableFefo(
@@ -694,7 +739,7 @@ class AllocationController extends Controller
                 $needed = (int) $allocation->quantity_allocated;
 
                 if ($totalAvailable < $needed) {
-                    throw new \Exception(
+                    throw new \DomainException(
                         'Not enough stock to fulfil this request. Available: '.$totalAvailable.
                         ', requested: '.$needed.'.'
                     );
@@ -728,6 +773,7 @@ class AllocationController extends Controller
 
                 $allocation->update([
                     'status' => 'approved',
+                    'dispensing_enabled' => $allocation->recipient_user_id !== null,
                     'inventory_id' => $primaryBatch->id,
                 ]);
 
@@ -759,8 +805,8 @@ class AllocationController extends Controller
                     ]);
                 }
             });
-        } catch (\Exception $e) {
-            return back()->with('error', $e->getMessage());
+        } catch (\Throwable $e) {
+            return back()->with('error', $this->operationErrorMessage($e, 'Unable to approve the supply request. Please try again.'));
         }
 
         app(NotificationService::class)
@@ -828,22 +874,26 @@ class AllocationController extends Controller
             return redirect()->route('login');
         }
 
-        $allocation = Allocation::findOrFail($id);
+        $allocation = DB::transaction(function () use ($id) {
+            $allocation = Allocation::where('health_unit_id', session('health_unit_id'))
+                ->where('recipient_user_id', session('user_id'))->lockForUpdate()->findOrFail($id);
+            if (! in_array($allocation->status, ['awaiting_receipt', 'approved']) || ! $allocation->inventory_id) {
+                return null;
+            }
+            // Approval/allocation already deducted stock. Receipt acknowledges it only.
+            $allocation->update(['status' => $allocation->status === 'approved' ? 'received' : 'completed']);
 
-        if ((int) $allocation->recipient_user_id !== (int) session('user_id')) {
-            return back()->with('error', 'You are not the recipient of this allocation.');
-        }
+            Notification::where('allocation_id', $allocation->id)
+                ->where('user_id', session('user_id'))
+                ->whereIn('type', ['allocation_to_user', 'supply_request_approved'])
+                ->update(['is_read' => true]);
 
-        if ($allocation->status !== 'awaiting_receipt') {
+            return $allocation;
+        });
+
+        if (! $allocation) {
             return back()->with('error', 'This allocation is not awaiting receipt.');
         }
-
-        $allocation->update(['status' => 'completed']);
-
-        Notification::where('allocation_id', $allocation->id)
-            ->where('user_id', session('user_id'))
-            ->where('type', 'allocation_to_user')
-            ->update(['is_read' => true]);
 
         ActivityLogger::log(
             'Allocation', 'Received',
@@ -852,7 +902,7 @@ class AllocationController extends Controller
             ($allocation->medicine->medicine_name ?? 'medicine').'.'
         );
 
-        return back()->with('success', 'Receipt confirmed. Allocation marked as completed.');
+        return back()->with('success', 'Receipt confirmed. Stock was already issued and has not been deducted again.');
     }
 
     public function exportCsv(Request $request)
@@ -861,6 +911,7 @@ class AllocationController extends Controller
             return $redirect;
         }
 
+        $historyRange = HistoricalDateRange::fromRequest($request);
         $search = $request->search;
         $rhuFilter = $request->rhu_filter;
         $category = $request->category;
@@ -868,10 +919,14 @@ class AllocationController extends Controller
 
         $allocations = Allocation::with(['medicine', 'allocatedBy', 'recipient', 'healthUnit', 'destinationHealthUnit', 'inventory'])
             ->when($healthUnitId, function ($q) use ($healthUnitId) {
-                $q->where('health_unit_id', $healthUnitId);
+                $q->where(fn ($units) => $units->where('health_unit_id', $healthUnitId)->orWhere('destination_health_unit_id', $healthUnitId));
             })
             ->when(is_null($healthUnitId) && $rhuFilter, function ($q) use ($rhuFilter) {
-                $q->where('health_unit_id', $rhuFilter);
+                if ($rhuFilter === 'pho') {
+                    $q->where('health_unit_id', HealthUnit::phoId());
+                } else {
+                    $q->where(fn ($units) => $units->where('health_unit_id', $rhuFilter)->orWhere('destination_health_unit_id', $rhuFilter));
+                }
             })
             ->when($search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
@@ -891,6 +946,8 @@ class AllocationController extends Controller
             ->when($category, function ($q) use ($category) {
                 $q->whereHas('medicine', fn ($mq) => $mq->where('category', $category));
             })
+            ->when($historyRange->isFiltered(), fn ($q) => $historyRange->apply($q, 'date_allocated'))
+            ->orderByDesc('date_allocated')
             ->orderByDesc('id')
             ->get();
 
@@ -944,6 +1001,7 @@ class AllocationController extends Controller
 
     private function findAllocationForCurrentUser($id)
     {
+        abort_if(is_null(session('health_unit_id')) && session('role') !== 'admin', 403);
         $query = Allocation::query();
 
         if (session('health_unit_id')) {

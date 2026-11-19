@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Inventory extends Model
 {
     use SoftDeletes;
+
+    public const NEAR_EXPIRY_DAYS = 30;
 
     protected $table = 'inventory';
 
@@ -48,14 +51,44 @@ class Inventory extends Model
     // ============================================================
 
     /**
-     * FEFO ordering: earliest expiration_date first, null expiry last.
-     * Tiebreak by id ascending for stable results.
+     * FEFO uses earliest expiry, then FIFO by the first recorded receipt.
+     * Batches without a receipt date follow dated receipts, with ID as a stable fallback.
      */
     public function scopeFefo($query)
     {
-        return $query
+        return $query->withReceiptDate()
             ->orderByRaw('expiration_date IS NULL, expiration_date ASC')
+            ->orderByRaw('stock_received_at IS NULL')
+            ->orderBy('stock_received_at')
             ->orderBy('id', 'asc');
+    }
+
+    public function scopeWithReceiptDate($query)
+    {
+        $receipts = StockLog::query()->selectRaw('COALESCE(MIN(CASE WHEN stock_logs.inventory_id = inventory.id THEN stock_logs.date_added END), MIN(stock_logs.date_added))')
+            ->whereColumn('stock_logs.medicine_id', 'inventory.medicine_id')
+            ->whereColumn('stock_logs.health_unit_id', 'inventory.health_unit_id')
+            ->whereNull('stock_logs.voided_at')->where('stock_logs.quantity_added', '>', 0)->additions()
+            ->where(fn ($receipt) => $receipt->whereNull('stock_logs.movement_type')
+                ->orWhereIn('stock_logs.movement_type', ['addition', 'receipt', 'transfer_in']))
+            ->where(fn ($reason) => $reason->whereNull('stock_logs.remarks')->orWhere('stock_logs.remarks', 'not like', '%Inventory adjusted%'))
+            ->where(function ($match) {
+                $match->whereColumn('stock_logs.inventory_id', 'inventory.id')
+                    ->orWhere(function ($legacy) {
+                        $legacy->whereNull('stock_logs.inventory_id')->where(function ($batch) {
+                            $batch->whereColumn('stock_logs.batch_no', 'inventory.batch_no')
+                                ->orWhere(fn ($unnumbered) => $unnumbered->whereNull('stock_logs.batch_no')->whereNull('inventory.batch_no'));
+                        });
+                    });
+            });
+
+        return $query->addSelect(['stock_received_at' => $receipts]);
+    }
+
+    public function stockRotationKey(): string
+    {
+        return ($this->expiration_date?->toDateString() ?? '9999-12-31').':'.
+            ($this->stock_received_at ?? '9999-12-31 23:59:59').':'.sprintf('%020d', $this->id);
     }
 
     /**
@@ -64,27 +97,52 @@ class Inventory extends Model
     public function scopeAvailableFefo($query, int $healthUnitId, int $medicineId)
     {
         return $query
-            ->where('health_unit_id', $healthUnitId)
+            ->availableAt($healthUnitId)
             ->where('medicine_id', $medicineId)
+            ->fefo();
+    }
+
+    public function scopeAvailableAt($query, int $healthUnitId)
+    {
+        return $query
+            ->where('health_unit_id', $healthUnitId)
             ->where('available_stock', '>', 0)
             ->where(function ($q) {
                 $q->whereNull('expiration_date')
                   ->orWhereDate('expiration_date', '>=', now()->toDateString());
-            })
-            ->fefo();
+            });
     }
 
-    public function scopeExpiringWithin($query, $days)
+    public function scopeExpiringWithin($query, int $days = self::NEAR_EXPIRY_DAYS, ?CarbonInterface $from = null)
     {
-        return $query->where('expiration_date', '<=', now()->addDays($days))
-                     ->where('expiration_date', '>', now())
-                     ->where('available_stock', '>', 0);
+        $from ??= today();
+
+        return $query->whereDate('inventory.expiration_date', '>=', $from)
+            ->whereDate('inventory.expiration_date', '<=', $from->copy()->addDays($days))
+            ->where('inventory.available_stock', '>', 0)
+            ->whereHas('medicine');
     }
 
     public function scopeLowStock($query, $threshold = 10)
     {
         return $query->where('available_stock', '<=', $threshold)
                      ->where('available_stock', '>', 0);
+    }
+
+    public function scopeStockLevel($query, string $level)
+    {
+        return $query->where('inventory.available_stock', '>', 0)
+            ->where(fn ($batch) => $batch->whereNull('inventory.expiration_date')
+                ->orWhereDate('inventory.expiration_date', '>=', today()))
+            ->whereHas('medicine', function ($medicine) use ($level) {
+                if ($level === 'low') {
+                    $medicine->whereRaw('inventory.available_stock <= COALESCE(medicines.min_stock, ?)',
+                        [(int) config('inventory.default_min_stock', 50)]);
+                } elseif ($level === 'overstock') {
+                    $medicine->whereRaw('inventory.available_stock > COALESCE(medicines.max_stock, ?)',
+                        [(int) config('inventory.default_max_stock', 500)]);
+                }
+            });
     }
 
     public function scopeActive($query)

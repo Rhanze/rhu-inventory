@@ -11,7 +11,7 @@
     ">
         <p style="font-size:13px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#42ad8a; margin:0 0 6px 0;">Allocation Management</p>
         <h2 style="font-size:24px; font-weight:700; color:#0f172a; margin:0;">Add Allocation</h2>
-        <p style="font-size:14px; color:#475569; margin:6px 0 0 0;">Record stock released to a destination (barangay, outreach, patient, etc.).</p>
+        <p style="font-size:14px; color:#475569; margin:6px 0 0 0;">Record stock released to a barangay or another destination.</p>
     </div>
 
     {{-- Form Card --}}
@@ -25,7 +25,7 @@
 
             {{-- Inventory Item --}}
             <div>
-                <label style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">Inventory Item</label>
+                <label for="inventory_id" style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">Inventory Item</label>
                 <select name="inventory_id" id="inventory_id"
                         style="width:100%; padding:12px 16px; font-size:14px; border:2px solid #bec6cf; border-radius:14px; outline:none; background:white; color:#0f172a; box-sizing:border-box; appearance:auto;"
                         onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
@@ -70,25 +70,27 @@
 
             {{-- Destination --}}
             <div>
-                <label style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">Destination</label>
-                <input type="text" name="destination" id="destination-input" value="{{ old('destination') }}"
-                       list="prior-destinations"
-                       placeholder="e.g., Brgy Poblacion, Mobile Outreach Zone 4, Patient house visit"
-                       autocomplete="off"
+                <label for="destination-input" style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">Destination</label>
+                <input type="search" name="destination" id="destination-input" value="{{ old('destination') }}"
+                       list="assigned-barangays" data-choice-search data-search-empty="No matching assigned barangays."
+                       placeholder="Search assigned barangays or enter a destination"
+                       autocomplete="off" required maxlength="255" aria-describedby="destination-help"
                        style="width:100%; padding:12px 16px; font-size:14px; border:2px solid #bec6cf; border-radius:14px; outline:none; background:white; color:#0f172a; box-sizing:border-box;"
                        onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                        onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
 
-                @if(isset($priorDestinations) && $priorDestinations->count())
-                    <datalist id="prior-destinations">
-                        @foreach($priorDestinations as $prior)
-                            <option value="{{ $prior }}"></option>
-                        @endforeach
-                    </datalist>
-                @endif
+                <datalist id="assigned-barangays">
+                    @foreach($assignedBarangays as $barangay)
+                        <option value="{{ $barangay }}"></option>
+                    @endforeach
+                </datalist>
 
-                <small style="color:#64748b; font-size:13px;">
-                    💡 Type any destination — barangay name, outreach site, or purpose. Previous entries will appear as suggestions.
+                <small id="destination-help" style="display:block;margin-top:6px;color:#64748b;font-size:13px;">
+                    @if($assignedBarangays->isEmpty())
+                        No barangays are assigned to active midwives at this RHU. You can enter a destination.
+                    @else
+                        Choose a barangay assigned to a midwife at this RHU or enter another destination.
+                    @endif
                 </small>
                 @error('destination')
                     <p style="margin-top:4px; font-size:13px; color:#dc2626;">{{ $message }}</p>
@@ -97,10 +99,10 @@
 
             {{-- Recipient (optional) --}}
             <div>
-                <label style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">
+                <label for="recipient_user_id" style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">
                     Recipient <span style="color:#64748b; font-weight:400;">(optional)</span>
                 </label>
-                <select name="recipient_user_id"
+                <select name="recipient_user_id" id="recipient_user_id"
                         style="width:100%; padding:12px 16px; font-size:14px; border:2px solid #bec6cf; border-radius:14px; outline:none; background:white; color:#0f172a; box-sizing:border-box; appearance:auto;"
                         onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                         onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
@@ -243,7 +245,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (packs)  parts.push(`${packs} ${packs === 1 ? packType : packType + 's'}`);
         if (pieces) parts.push(`${pieces} ${pluralUnit(unit, pieces)}`);
 
-        qtyHelp.innerHTML = `<strong style="color:#0f5c4b;">= ${parts.join(' + ')} (${qty} ${pluralUnit(unit, qty)} total)</strong>`;
+        qtyHelp.textContent = `= ${parts.join(' + ')} (${qty} ${pluralUnit(unit, qty)} total)`;
+        qtyHelp.style.color = '#0f5c4b';
+        qtyHelp.style.fontWeight = '700';
     }
 
     inventorySelect.addEventListener('change', updateFromSelection);

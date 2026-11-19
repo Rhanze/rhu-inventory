@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('images/web-icon.png') }}">
-    <title>PHO Supply Portal | Inventory</title>
+    <title>PHO Supply Portal | @yield('title', 'Inventory')</title>
     @vite('resources/css/app.css')
 
     <style>
@@ -14,14 +14,16 @@
             background: linear-gradient(180deg, #d4f0ea 0%, #85e0b5 100%);
             color: #0f172a;
             min-height: 100vh;
-            font-size: 17px;
+            font-size: 1.0625rem;
+            line-height: 1.5;
         }
 
-        .app-shell { display: flex; min-height: 100vh; }
+        .app-shell { display: flex; min-width: 0; min-height: 100vh; }
+        .app-shell *, .app-shell *::before, .app-shell *::after { box-sizing: border-box; }
 
         /* ========== SIDEBAR ========== */
         .sidebar {
-            width: 280px;
+            width: 17.5rem;
             background: rgba(255,255,255,0.92);
             backdrop-filter: blur(12px);
             border-right: 0.5px solid rgba(66,173,138,0.3);
@@ -48,15 +50,16 @@
         .sidebar-brand img { width: 40px; height: 40px; object-fit: contain; }
 
         .sidebar-brand h2 {
-            font-size: 23px; font-weight: 700; color: #0f5c4b; margin: 0;
+            font-size: 1.4375rem; font-weight: 700; color: #0f5c4b; margin: 0;
         }
 
-        .sidebar-brand p { font-size: 15px; color: #475569; margin: 0; }
+        .sidebar-brand p { font-size: 0.9375rem; color: #475569; margin: 0; }
+        .sidebar-brand > div, .sidebar-footer .footer-row > div { min-width: 0; overflow-wrap: break-word; }
 
         .nav-section { padding: 0 12px; margin-bottom: 8px; }
 
         .nav-section-title {
-            font-size: 13px; font-weight: 600; text-transform: uppercase;
+            font-size: 0.8125rem; font-weight: 600; text-transform: uppercase;
             letter-spacing: 0.08em; color: #64748b; margin: 0 0 4px 12px;
         }
 
@@ -68,7 +71,7 @@
         .nav-links a {
             display: flex; align-items: center; gap: 10px;
             padding: 11px 12px; border-radius: 10px;
-            text-decoration: none; font-size: 17px; font-weight: 500;
+            text-decoration: none; font-size: 1.0625rem; font-weight: 500;
             color: #334155; transition: all 0.2s;
         }
 
@@ -100,11 +103,11 @@
         }
 
         .sidebar-footer .user-info {
-            font-size: 17px; font-weight: 600; color: #0f172a; line-height: 1.2;
+            font-size: 1.0625rem; font-weight: 600; color: #0f172a; line-height: 1.2;
         }
 
         .sidebar-footer .user-role {
-            font-size: 15px; color: #64748b; margin-top: 2px;
+            font-size: 0.9375rem; color: #64748b; margin-top: 2px;
         }
 
         .sidebar-footer form { margin: 0; }
@@ -139,30 +142,31 @@
         .public-header-inner {
             margin: 0; padding-left: 20px; padding-right: 20px;
             display: flex; align-items: center; justify-content: space-between;
-            gap: 20px; min-height: 70px;
+            gap: 20px; min-height: 70px; flex-wrap: wrap;
         }
 
-        .brand-wrap { display: flex; align-items: center; gap: 12px; }
+        .brand-wrap { display: flex; align-items: center; gap: 12px; flex: 1 1 26rem; min-width: 0; }
+        .brand-wrap > div { min-width: 0; }
 
         .logo-box {
-            width: 48px; height: 48px; border-radius: 10px;
+            width: 48px; height: 48px; border-radius: 10px; flex-shrink: 0;
             display: flex; align-items: center; justify-content: center;
         }
 
         .logo-box img { width: 100%; height: 100%; object-fit: contain; }
 
-        .brand-title { font-size: 27px; font-weight: 700; margin: 0; color: #0f172a; }
+        .brand-title { font-size: clamp(1.25rem, 1rem + 0.8vw, 1.6875rem); font-weight: 700; margin: 0; color: #0f172a; line-height: 1.25; overflow-wrap: break-word; }
 
-        .brand-sub { font-size: 16px; margin: 3px 0 0 0; color: #64748b; }
+        .brand-sub { font-size: 1rem; margin: 3px 0 0 0; color: #64748b; }
 
-        .header-actions { display: flex; align-items: center; gap: 12px; }
+        .header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex: 0 1 auto; min-width: 0; max-width: 100%; }
 
-        .header-search { display: flex; align-items: center; gap: 8px; margin: 0; }
+        .header-search { display: flex; align-items: center; gap: 8px; margin: 0; flex-wrap: wrap; min-width: 0; }
 
         .header-search input,
         .header-search select {
-            height: 42px; border: 2px solid #bec6cf; border-radius: 10px;
-            padding: 0 12px; font-size: 16px; outline: none;
+            min-height: 42px; border: 2px solid #bec6cf; border-radius: 10px;
+            padding: 8px 12px; font-size: 1rem; outline: none; min-width: 0; max-width: 100%;
             background: white; color: #0f172a;
         }
 
@@ -172,13 +176,13 @@
             box-shadow: 0 0 0 3px rgba(66,173,138,0.1);
         }
 
-        .header-search input { width: 200px; }
-        .header-search select { width: 150px; appearance: auto; }
+        .header-search input { width: 12.5rem; flex: 1 1 10rem; }
+        .header-search select { width: 9.375rem; flex: 1 1 9rem; appearance: auto; }
 
         .header-search button {
-            height: 42px; padding: 0 18px;
+            min-height: 42px; padding: 8px 18px;
             background: #42ad8a; color: white; border: none;
-            border-radius: 10px; font-weight: 600; font-size: 16px;
+            border-radius: 10px; font-weight: 600; font-size: 1rem;
             cursor: pointer; transition: background 0.25s, transform 0.1s;
         }
 
@@ -188,17 +192,17 @@
         /* ===== NOTIFICATION BELL ===== */
         .notification-bell {
             position: relative; display: inline-flex; align-items: center; justify-content: center;
-            width: 42px; height: 42px; border-radius: 10px;
+            width: 42px; height: 42px; border-radius: 10px; flex-shrink: 0;
             background: transparent; border: none; cursor: pointer;
             transition: background 0.2s; text-decoration: none;
-            color: #334155; font-size: 22px;
+            color: #334155; font-size: 1.375rem;
         }
         .notification-bell:hover { background: rgba(66,173,138,0.08); }
 
         .notification-badge {
             position: absolute; top: -4px; right: -4px;
             background: #dc2626; color: white;
-            font-size: 13px; font-weight: 700;
+            font-size: 0.8125rem; font-weight: 700;
             padding: 1px 7px; border-radius: 999px;
             min-width: 20px; text-align: center; display: none;
         }
@@ -208,19 +212,47 @@
             position: absolute; background: white;
             border: 1px solid #ccc; max-height: 250px; overflow-y: auto;
             z-index: 9999; border-radius: 0 0 10px 10px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1); min-width: 250px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1); min-width: min(250px, calc(100vw - 32px)); max-width: calc(100vw - 32px);
         }
 
         .autocomplete-suggestion-item {
-            padding: 10px 14px; cursor: pointer; font-size: 15px;
+            padding: 10px 14px; cursor: pointer; font-size: 0.9375rem;
             display: flex; justify-content: space-between; align-items: center;
             border-bottom: 1px solid #f0f0f0; color: #333;
         }
         .autocomplete-suggestion-item:hover { background: #E8F7F4; }
-        .suggestion-type { color: #888; font-size: 13px; margin-left: 12px; white-space: nowrap; }
+        .suggestion-type { color: #888; font-size: 0.8125rem; margin-left: 12px; white-space: nowrap; }
 
         /* ========== MAIN CONTENT ========== */
-        .main-content { flex: 1; padding: 28px; overflow-y: auto; }
+        .main-content { flex: 1; min-width: 0; padding: clamp(1rem, 2vw, 1.75rem); overflow: auto; }
+        .main-content input, .main-content select, .main-content textarea { max-width: 100%; }
+        #confirm-modal > div { box-sizing: border-box; max-height: calc(100dvh - 40px); overflow: auto; }
+        #confirm-message { overflow-wrap: break-word; }
+        #confirm-modal > div > div { flex-wrap: wrap; }
+
+        .dashboard-page, .dashboard-page > * { min-width: 0; }
+        .dashboard-page :is(h1, h2, h3, h4, p) { overflow-wrap: break-word; }
+        .dashboard-alerts-grid, .dashboard-stats-grid, .dashboard-welcome-grid,
+        .dashboard-actions-grid, .dashboard-charts-grid, .dashboard-panels-grid { display: grid; min-width: 0; }
+        .dashboard-alerts-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); }
+        .dashboard-stats-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
+        .dashboard-welcome-grid { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
+        .dashboard-actions-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .dashboard-charts-grid, .dashboard-panels-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .dashboard-alerts-grid > *, .dashboard-stats-grid > *, .dashboard-welcome-grid > *,
+        .dashboard-actions-grid > *, .dashboard-charts-grid > *, .dashboard-panels-grid > * { min-width: 0; }
+        .dashboard-actions-grid > a > div { min-width: 0; }
+        .dashboard-record-row { flex-wrap: wrap; gap: 10px; }
+        .dashboard-record-row > div { flex: 1 1 12rem; min-width: 0; }
+        .dashboard-record-row > span { flex: 0 0 auto; max-width: 100%; overflow-wrap: break-word; }
+
+        @media (max-width: 72rem) {
+            .dashboard-welcome-grid, .dashboard-charts-grid, .dashboard-panels-grid { grid-template-columns: minmax(0, 1fr); }
+            .dashboard-actions-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 52rem) {
+            .dashboard-actions-grid { grid-template-columns: minmax(0, 1fr); }
+        }
 
         /* ========== FOOTER ========== */
         .public-footer {
@@ -234,11 +266,11 @@
         .public-container { max-width: 1280px; margin: 0 auto; }
 
         .footer-grid {
-            display: grid; grid-template-columns: 2fr 1fr 1fr;
+            display: grid; grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr));
             gap: 24px; padding-bottom: 16px;
         }
 
-        .footer-grid > div { position: relative; padding-right: 16px; }
+        .footer-grid > div { position: relative; min-width: 0; padding-right: 16px; overflow-wrap: break-word; }
 
         .footer-grid > div:not(:last-child)::after {
             content: ""; position: absolute; top: 0; right: 0;
@@ -246,13 +278,13 @@
         }
 
         .footer-title {
-            font-size: 19px; font-weight: 700; color: #0f172a; margin: 0 0 10px 0;
+            font-size: 1.1875rem; font-weight: 700; color: #0f172a; margin: 0 0 10px 0;
         }
 
-        .footer-text { font-size: 16px; color: #64748b; line-height: 1.5; margin: 0; }
+        .footer-text { font-size: 1rem; color: #64748b; line-height: 1.5; margin: 0; }
 
         .footer-link {
-            display: block; font-size: 16px; color: #475569;
+            display: block; font-size: 1rem; color: #475569;
             text-decoration: none; margin-bottom: 4px;
         }
 
@@ -275,7 +307,7 @@
             display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
         }
 
-        .small-muted { font-size: 14px; color: #64748b; margin: 0; }
+        .small-muted { font-size: 0.875rem; color: #64748b; margin: 0; }
 
         @media print {
             .sidebar, .public-header, .public-footer, .no-print, .mw-bottom-bar { display: none !important; }
@@ -285,6 +317,13 @@
         @media (max-width: 768px) {
             .footer-grid { grid-template-columns: 1fr; }
             .footer-grid > div:not(:last-child)::after { display: none; }
+            body:not(.role-midwife) .app-shell { flex-direction: column; }
+            body:not(.role-midwife) .sidebar { position: static; width: 100%; height: auto; padding-top: 16px; }
+            body:not(.role-midwife) .sidebar .nav-links { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); }
+            body:not(.role-midwife) .sidebar-footer { margin-top: 16px; }
+            body:not(.role-midwife) .header-actions { width: 100%; }
+            .header-search { flex: 1; }
+            .public-footer { padding: 20px 16px 0; }
         }
 
         .nav-divider {
@@ -297,50 +336,11 @@
         .nav-scroll::-webkit-scrollbar-track { background: #e2e8f0; }
         .nav-scroll::-webkit-scrollbar-thumb { background: #42ad8a; border-radius: 10px; }
 
-        /* FONT SCALE OVERRIDE — bumped up for readability */
-        [style*="font-size:9px"]  { font-size: 12px !important; }
-        [style*="font-size: 9px"] { font-size: 12px !important; }
-        [style*="font-size:10px"] { font-size: 13px !important; }
-        [style*="font-size: 10px"] { font-size: 13px !important; }
-        [style*="font-size:11px"] { font-size: 14px !important; }
-        [style*="font-size: 11px"] { font-size: 14px !important; }
-        [style*="font-size:12px"] { font-size: 15px !important; }
-        [style*="font-size: 12px"] { font-size: 15px !important; }
-        [style*="font-size:13px"] { font-size: 16px !important; }
-        [style*="font-size: 13px"] { font-size: 16px !important; }
-        [style*="font-size:14px"] { font-size: 17px !important; }
-        [style*="font-size: 14px"] { font-size: 17px !important; }
-        [style*="font-size:15px"] { font-size: 18px !important; }
-        [style*="font-size: 15px"] { font-size: 18px !important; }
-        [style*="font-size:16px"] { font-size: 19px !important; }
-        [style*="font-size: 16px"] { font-size: 19px !important; }
-        [style*="font-size:17px"] { font-size: 20px !important; }
-        [style*="font-size: 17px"] { font-size: 20px !important; }
-        [style*="font-size:18px"] { font-size: 21px !important; }
-        [style*="font-size: 18px"] { font-size: 21px !important; }
-        [style*="font-size:20px"] { font-size: 23px !important; }
-        [style*="font-size: 20px"] { font-size: 23px !important; }
-        [style*="font-size:22px"] { font-size: 25px !important; }
-        [style*="font-size: 22px"] { font-size: 25px !important; }
-        [style*="font-size:24px"] { font-size: 27px !important; }
-        [style*="font-size: 24px"] { font-size: 27px !important; }
-        [style*="font-size:26px"] { font-size: 29px !important; }
-        [style*="font-size: 26px"] { font-size: 29px !important; }
-        [style*="font-size:28px"] { font-size: 31px !important; }
-        [style*="font-size: 28px"] { font-size: 31px !important; }
-        [style*="font-size:30px"] { font-size: 33px !important; }
-        [style*="font-size: 30px"] { font-size: 33px !important; }
-        [style*="font-size:32px"] { font-size: 35px !important; }
-        [style*="font-size: 32px"] { font-size: 35px !important; }
 
         /* ═══════════════════════════════════════════════════════════ */
         /* MOBILE: Midwife layout — hide sidebar, use bottom nav        */
         /* ═══════════════════════════════════════════════════════════ */
         @media (max-width: 767px) {
-            body.role-midwife .sidebar {
-                display: none !important;
-            }
-
             body.role-midwife .main-content {
                 padding: 16px 16px 100px 16px;
             }
@@ -353,9 +353,12 @@
                 padding-left: 16px;
                 padding-right: 16px;
                 gap: 10px;
+                flex-wrap: nowrap;
             }
+            body.role-midwife .brand-wrap { flex: 1; }
+            body.role-midwife .header-actions { flex: 0 0 auto; }
             body.role-midwife .brand-title {
-                font-size: 16px;
+                font-size: 1rem;
                 line-height: 1.2;
             }
             body.role-midwife .brand-sub {
@@ -384,15 +387,25 @@
                 display: none;
             }
 
-            body.role-midwife {
-                overflow-x: hidden;
-            }
         }
     </style>
+    @if(session('role') === 'midwife')
+        @include('layouts._midwife_styles')
+    @endif
+    <link rel="stylesheet" href="{{ asset('css/page-headings.css') }}?v={{ filemtime(public_path('css/page-headings.css')) }}">
+    <script src="{{ asset('js/page-headings.js') }}?v={{ filemtime(public_path('js/page-headings.js')) }}" defer></script>
+    <link rel="stylesheet" href="{{ asset('css/form-choice-search.css') }}?v={{ filemtime(public_path('css/form-choice-search.css')) }}">
+    <script src="{{ asset('js/form-choice-search.js') }}?v={{ filemtime(public_path('js/form-choice-search.js')) }}" defer></script>
+    @if(request()->routeIs('stock_logs.index') || (request()->routeIs('inventory.index') && request('view') === 'history'))
+        <link rel="stylesheet" href="{{ asset('css/stock-movements.css') }}?v={{ filemtime(public_path('css/stock-movements.css')) }}">
+    @endif
 </head>
 <body class="{{ session('role') === 'midwife' ? 'role-midwife' : '' }}">
     <div class="app-shell">
-        <aside class="sidebar nav-scroll">
+        <aside class="sidebar nav-scroll" id="app-sidebar" aria-label="Main navigation">
+            @if(session('role') === 'midwife')
+                <button type="button" class="mw-sidebar-close" data-midwife-menu-close aria-label="Close navigation">Close menu <span aria-hidden="true">&times;</span></button>
+            @endif
             <div class="sidebar-brand">
                 <div>
                     @php
@@ -445,6 +458,27 @@
                         </svg>
                         Forecasting
                     </a>
+                    <a href="{{ route('vaccination.calendar') }}" class="{{ request()->routeIs('vaccination.*', 'calendar_events.*') ? 'active' : '' }}" @if(request()->routeIs('vaccination.*', 'calendar_events.*')) aria-current="page" @endif>
+                        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" class="icon-accent" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="4" width="18" height="18" rx="2"/>
+                            <path d="M16 2v4M8 2v4M3 10h18"/>
+                        </svg>
+                        Schedule Calendar
+                    </a>
+                @endif
+
+                @if($hasRhu && in_array(session('role'), ['admin', 'staff', 'midwife']))
+                    @php
+                        $diseaseNavBarangay = $isMidwife ? \App\Support\BarangayDemandScope::options((int) session('health_unit_id'), (int) session('user_id'))->first() : null;
+                        $diseaseNavFilters = $diseaseNavBarangay ? ['consumption_scope' => 'area', 'barangay' => $diseaseNavBarangay, 'period_type' => 'weekly'] : [];
+                    @endphp
+                    <a href="{{ route('disease_reports.index', $diseaseNavFilters) }}" class="{{ request()->routeIs('disease_reports.*') ? 'active' : '' }}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" class="icon-accent" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 3v18h18"/>
+                            <path d="M6 13h3l3-7 4 12 2-5h3"/>
+                        </svg>
+                        Disease Trend Analysis
+                    </a>
                 @endif
 
                 @if($hasRhu && !$isMidwife)
@@ -471,15 +505,6 @@
                             <line x1="8.5" y1="8.5" x2="15.5" y2="15.5"/>
                         </svg>
                         Dispensing
-                    </a>
-
-                    <a href="{{ route('disease_reports.index') }}" class="{{ request()->routeIs('disease_reports.*') ? 'active' : '' }}">
-                        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" class="icon-accent" stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10"/>
-                            <line x1="12" y1="8" x2="12" y2="12"/>
-                            <line x1="12" y1="16" x2="12.01" y2="16"/>
-                        </svg>
-                        Disease Reports
                     </a>
 
                     <a href="{{ route('public_users.index') }}"
@@ -632,7 +657,7 @@
                                     <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
                                     <path d="M5.64 5.64l2.83 2.83M15.54 15.54l2.83 2.83M18.36 5.64l-2.83 2.83M8.46 15.54l-2.83 2.83"/>
                                 </svg>
-                                Distribution
+                                Transfer
                             </a>
                         @else
                             <a href="{{ route('transfers.index') }}" class="{{ request()->routeIs('transfers.*') ? 'active' : '' }}">
@@ -741,7 +766,7 @@
             </div>
         </aside>
 
-        <div style="flex:1; display:flex; flex-direction:column; min-height:100vh;">
+        <div style="flex:1; min-width:0; display:flex; flex-direction:column; min-height:100vh;">
             <header class="public-header">
                 <div class="public-header-inner">
                     <div class="brand-wrap">
@@ -763,27 +788,10 @@
                         {{-- Header search — now a real form (no more form= attribute gymnastics) --}}
                         <form class="header-search" action="{{ route('search.index') }}" method="GET">
                             <input type="text" name="q" value="{{ request('q') }}" placeholder="Search...">
-                            <select name="scope">
-                                @if(session('role') === 'admin')
-                                    <option value="all" {{ request('scope') === 'all' ? 'selected' : '' }}>All Sections</option>
-                                    <option value="medicine" {{ request('scope') === 'medicine' ? 'selected' : '' }}>Medicines</option>
-                                    <option value="users" {{ request('scope') === 'users' ? 'selected' : '' }}>Users</option>
-                                    <option value="rhu" {{ request('scope') === 'rhu' ? 'selected' : '' }}>RHU</option>
-                                    <option value="inventory" {{ request('scope') === 'inventory' ? 'selected' : '' }}>Inventory</option>
-                                    <option value="stock_logs" {{ request('scope') === 'stock_logs' ? 'selected' : '' }}>Stock Logs</option>
-                                    <option value="allocation" {{ request('scope') === 'allocation' ? 'selected' : '' }}>Allocation</option>
-                                    <option value="dispensing" {{ request('scope') === 'dispensing' ? 'selected' : '' }}>Dispensing</option>
-                                    <option value="transfers" {{ request('scope') === 'transfers' ? 'selected' : '' }}>Transfers</option>
-                                    <option value="forecast" {{ request('scope') === 'forecast' ? 'selected' : '' }}>Forecast</option>
-                                @else
-                                    <option value="all" {{ request('scope') === 'all' ? 'selected' : '' }}>All Sections</option>
-                                    <option value="medicine" {{ request('scope') === 'medicine' ? 'selected' : '' }}>Medicines</option>
-                                    <option value="inventory" {{ request('scope') === 'inventory' ? 'selected' : '' }}>Inventory</option>
-                                    <option value="stock_logs" {{ request('scope') === 'stock_logs' ? 'selected' : '' }}>Stock Logs</option>
-                                    <option value="allocation" {{ request('scope') === 'allocation' ? 'selected' : '' }}>Allocation</option>
-                                    <option value="dispensing" {{ request('scope') === 'dispensing' ? 'selected' : '' }}>Dispensing</option>
-                                    <option value="transfers" {{ request('scope') === 'transfers' ? 'selected' : '' }}>Transfers</option>
-                                @endif
+                            <select name="scope" data-native-select aria-label="Search section">
+                                @foreach(\App\Support\SearchSections::forViewer(session('role'), session('health_unit_id') !== null) as $searchSection => $searchLabel)
+                                    <option value="{{ $searchSection }}" @selected(request('scope', 'all') === $searchSection)>{{ $searchLabel }}</option>
+                                @endforeach
                             </select>
                             <button type="submit">Search</button>
                         </form>
@@ -791,14 +799,14 @@
                 </div>
             </header>
 
-            <main class="main-content">
+            <main class="main-content" id="main-content">
                 @if(session('success'))
-                    <div style="background:#eaf3de; border:0.5px solid #c0dd97; border-radius:10px; padding:12px; margin-bottom:20px; color:#3b6d11; font-size:17px;">
+                    <div style="background:#eaf3de; border:0.5px solid #c0dd97; border-radius:10px; padding:12px; margin-bottom:20px; color:#3b6d11; font-size: 1.0625rem;">
                         {{ session('success') }}
                     </div>
                 @endif
                 @if(session('error'))
-                    <div style="background:#fcebeb; border:0.5px solid #f7c1c1; border-radius:10px; padding:12px; margin-bottom:20px; color:#a32d2d; font-size:17px;">
+                    <div style="background:#fcebeb; border:0.5px solid #f7c1c1; border-radius:10px; padding:12px; margin-bottom:20px; color:#a32d2d; font-size: 1.0625rem;">
                         {{ session('error') }}
                     </div>
                 @endif
@@ -865,6 +873,10 @@
     {{-- ═══════════════════════════════════════════════════════════ --}}
     {{-- REUSABLE CONFIRM MODAL --}}
     {{-- ═══════════════════════════════════════════════════════════ --}}
+    @if(session('role') === 'midwife')
+        @include('layouts._midwife_navigation')
+    @endif
+
     <div id="confirm-modal" style="
         display: none; position: fixed; inset: 0; z-index: 99999;
         background: rgba(15,23,42,0.5); backdrop-filter: blur(2px);
@@ -875,18 +887,18 @@
             padding: 28px; max-width: 440px; width: 100%;
             box-shadow: 0 20px 40px rgba(0,0,0,0.2);
         ">
-            <h3 style="font-size: 21px; font-weight: 700; color: #0f172a; margin: 0 0 8px 0;">Are you sure?</h3>
-            <p id="confirm-message" style="font-size: 16px; color: #475569; margin: 0 0 20px 0; line-height: 1.5;"></p>
+            <h3 style="font-size: 1.3125rem; font-weight: 700; color: #0f172a; margin: 0 0 8px 0;">Are you sure?</h3>
+            <p id="confirm-message" style="font-size: 1rem; color: #475569; margin: 0 0 20px 0; line-height: 1.5;"></p>
             <div style="display:flex; gap:10px; justify-content:flex-end;">
                 <button type="button" onclick="confirmCancel()" style="
-                    font-size: 15px; font-weight: 600; padding: 10px 20px; border-radius: 10px;
+                    font-size: 0.9375rem; font-weight: 600; padding: 10px 20px; border-radius: 10px;
                     background: #ffffff; color: #334155; border: 1px solid #e2e8f0;
                     cursor: pointer; transition: background 0.2s;
                 " onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">
                     Cancel
                 </button>
                 <button type="button" onclick="confirmAccept()" style="
-                    font-size: 15px; font-weight: 600; padding: 10px 20px; border-radius: 10px;
+                    font-size: 0.9375rem; font-weight: 600; padding: 10px 20px; border-radius: 10px;
                     background: #dc2626; color: #ffffff; border: none;
                     cursor: pointer; transition: background 0.2s;
                 " onmouseover="this.style.background='#b91c1c'" onmouseout="this.style.background='#dc2626'">
@@ -896,34 +908,12 @@
         </div>
     </div>
 
-    {{-- Scroll restoration + hash highlight --}}
-    <script>
-        if ('scrollRestoration' in history) {
-            history.scrollRestoration = 'manual';
-        }
-
-        window.addEventListener('load', function () {
-            const hash = window.location.hash;
-            if (!hash) return;
-
-            const row = document.querySelector(hash);
-            if (!row) return;
-
-            row.querySelectorAll('td, th').forEach(cell => {
-                cell.style.backgroundColor = '#e5e7eb';
-                cell.style.transition = 'background-color 0.3s ease';
-            });
-
-            const headerOffset = 90;
-            const elementPosition = row.getBoundingClientRect().top + window.pageYOffset;
-            const offsetPosition = elementPosition - headerOffset - (window.innerHeight / 2) + (row.offsetHeight / 2);
-
-            window.scrollTo({
-                top: Math.max(0, offsetPosition),
-                behavior: 'smooth'
-            });
-        });
-    </script>
+    @include('layouts._empty_alert')
+    <script src="{{ asset('js/scroll-navigation.js') }}" defer></script>
+    <script src="{{ asset('js/empty-feedback.js') }}" defer></script>
+    @if(request()->routeIs('disease_reports.index'))
+        <script src="{{ asset('js/disease-navigation.js') }}" defer></script>
+    @endif
 
     {{-- Global search autocomplete --}}
     <script>
@@ -958,8 +948,9 @@
             function fetchSuggestions(query, scope) {
                 if (currentRequest) currentRequest.abort();
                 currentRequest = new AbortController();
-                fetch(`/search/autocomplete?q=${encodeURIComponent(query)}&scope=${scope}`, {
-                    signal: currentRequest.signal
+                fetch({{ Illuminate\Support\Js::from(route('search.autocomplete')) }} + '?q=' + encodeURIComponent(query) + '&scope=' + encodeURIComponent(scope), {
+                    signal: currentRequest.signal,
+                    headers: { 'Accept': 'application/json' }
                 })
                 .then(response => response.json())
                 .then(data => {
@@ -1016,7 +1007,7 @@
     {{-- Notification bell polling --}}
     <script>
         function fetchNotifications() {
-            fetch('{{ route("notifications.unread") }}')
+            fetch('{{ route("notifications.unread") }}', { headers: { 'Accept': 'application/json' } })
                 .then(response => response.json())
                 .then(data => {
                     const badge = document.getElementById('notification-badge');
@@ -1064,6 +1055,7 @@
                     const form = pendingForm;
                     pendingForm = null;
                     form.onsubmit = null;
+                    window.RhuNavigation?.rememberForm(form);
                     form.submit();
                 }
             };
@@ -1111,5 +1103,7 @@
         });
     </script>
     @endif
+    @stack('importDialogs')
+    @stack('programPlanningDialogs')
 </body>
 </html>

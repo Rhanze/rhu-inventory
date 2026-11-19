@@ -4,12 +4,80 @@ namespace App\Services;
 
 use App\Models\Allocation;
 use App\Models\Inventory;
+use App\Models\HealthUnit;
 use App\Models\Notification;
+use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class NotificationService
 {
+    /** The unique ledger survives reading, archiving and deleting a notification. */
+    public function scanDohPreparationReminders(): int
+    {
+        $count = 0;
+        $stages = collect(config('doh_planning.reminder_days', [14, 7]))->map(fn ($day) => (int) $day)
+            ->filter(fn ($day) => $day > 0 && $day <= 365)->unique()->sort()->values();
+        if ($stages->isEmpty()) {
+            return 0;
+        }
+        $users = User::where('is_active', true)->whereNotNull('health_unit_id')
+            ->whereIn('role', ['admin', 'staff', 'midwife'])->get()->groupBy('health_unit_id');
+        foreach (HealthUnit::whereIn('facility_type', ['Rural Health Unit', 'RHU'])->whereIn('id', $users->keys())->get() as $unit) {
+            $recipients = [];
+            if ($users[$unit->id]->contains(fn ($user) => in_array($user->role, ['admin', 'staff'], true))) {
+                $recipients[] = null;
+            }
+            foreach ($users[$unit->id]->where('role', 'midwife') as $midwife) {
+                $recipients[] = (int) $midwife->id;
+            }
+            foreach (app(DohEventPlanningService::class)->upcoming((int) $unit->id, null, $stages->max()) as $event) {
+                $stage = $stages->first(fn ($day) => $event['days_away'] <= $day);
+                $message = $this->dohPreparationMessage($event);
+                foreach ($recipients as $recipient) {
+                    $key = 'doh-prep:'.$unit->id.':'.$event['program_id'].':'.$event['date'].':'.$stage.':'.($recipient ?? 'shared');
+                    $count += DB::transaction(function () use ($key, $unit, $event, $stage, $recipient, $message) {
+                        if (! DB::table('doh_event_reminders')->insertOrIgnore(['dedup_key' => $key, 'created_at' => now()])) {
+                            return 0;
+                        }
+                        $notice = Notification::create(['health_unit_id' => $unit->id, 'user_id' => $recipient,
+                            'type' => 'doh_preparation', 'dedup_key' => $key,
+                            'title' => $stage.'-day preparation · '.$event['name'], 'message' => $message,
+                            'severity' => $event['shortage_count'] > 0 ? 'warning' : 'info',
+                            'link' => route('vaccination.calendar', ['month' => substr($event['date'], 0, 7), 'day' => $event['date']]).'#selected-day',
+                            'is_read' => false, 'created_at' => now()]);
+                        DB::table('doh_event_reminders')->where('dedup_key', $key)->update(['notification_id' => $notice->id]);
+
+                        return 1;
+                    });
+                }
+            }
+        }
+
+        return $count;
+    }
+
+    private function dohPreparationMessage(array $event): string
+    {
+        $message = $event['name'].' starts '.Carbon::parse($event['date'])->format('M j, Y').' at '.$event['where'].'. ';
+        $shortages = array_filter($event['items'], fn ($item) => ($item['stock_up'] ?? 0) > 0);
+        foreach (array_slice($shortages, 0, 4) as $item) {
+            $message .= 'Stock up '.number_format($item['stock_up']).' '.$item['unit'].' of '.$item['name']
+                .($item['dosage'] ? ' '.$item['dosage'] : '').($item['history_ready'] ? '. ' : ' at minimum; routine-demand history is insufficient. ');
+        }
+        if (count($shortages) > 4) {
+            $message .= (count($shortages) - 4).' more material shortages are listed in Calendar. ';
+        }
+        if ($event['items'] === [] || $event['unquantified_count'] > 0) {
+            $message .= 'Set local quantities for materials without enough release history. ';
+        } elseif ($shortages === []) {
+            $message .= 'Review projected stock, expiry dates and local turnout before preparing supplies. ';
+        }
+
+        return $message.'Open Calendar to review the event plan and request stock.';
+    }
+
     // ═══════════════════════════════════════════════════════════
     // VIEWER CONTEXT — routes every read query by role
     //   midwife       → only rows where user_id = her id
@@ -18,10 +86,18 @@ class NotificationService
 
     private function scopeForViewer($query, ?int $healthUnitId, ?int $userId, ?string $role)
     {
+        $query->where('type', '!=', 'disease_outbreak');
+        if ($healthUnitId !== null || $role !== 'admin') {
+            $query->where('type', '!=', Notification::TYPE_TRANSFER_PHO_REVIEW_REQUESTED);
+        }
+
         if ($role === 'midwife') {
             $query->where('user_id', $userId);
         } else {
             $query->where(fn ($q) => $q->whereNull('user_id')->orWhere('user_id', $userId));
+            if ($healthUnitId === null) {
+                $query->where('type', 'not like', 'supply_request%');
+            }
             if ($healthUnitId) {
                 $query->where(function ($q) use ($healthUnitId) {
                     $q->where('health_unit_id', $healthUnitId)
@@ -63,7 +139,7 @@ class NotificationService
             if ($inventory->expiration_date &&
                 $inventory->expiration_date >= now()->startOfDay() &&
                 $inventory->expiration_date <= now()->addDays(30)) {
-                $daysLeft = now()->diffInDays($inventory->expiration_date, false);
+                $daysLeft = (int) today()->diffInDays($inventory->expiration_date, false);
                 $count += $this->createInventoryNotification(
                     $inventory,
                     'near_expiry',
@@ -72,13 +148,20 @@ class NotificationService
                     'warning'
                 );
             }
+        }
 
-            if ($inventory->available_stock <= 10) {
-                $critical = $inventory->available_stock <= 3;
-                $count += $this->createInventoryNotification($inventory, 'low_stock',
+        // A small batch is not a stock shortage when other usable batches remain.
+        foreach (app(StockSummaryService::class)->inventories() as $summary) {
+            if ($summary->available_stock <= 10) {
+                $critical = $summary->available_stock <= 3;
+                $severity = $critical ? 'danger' : 'warning';
+                if ($this->notifyRhu($summary->health_unit_id, 'low_stock',
                     $critical ? 'Critical Low Stock Alert' : 'Low Stock Alert',
-                    $inventory->medicine->medicine_name.' has '.$inventory->available_stock.' units remaining.',
-                    $critical ? 'danger' : 'warning');
+                    $summary->medicine->medicine_name.' has '.$summary->available_stock.' usable units remaining.',
+                    $severity, route('inventory.index'), ['inventory_id' => $summary->id],
+                    'low_stock_'.$summary->medicine_id.'_'.$severity, 24)) {
+                    $count++;
+                }
             }
         }
 
@@ -102,6 +185,7 @@ class NotificationService
     ): ?Notification {
         if ($dedupKey) {
             $exists = Notification::where('type', $type)
+                ->where('dedup_key', $dedupKey)
                 ->where('health_unit_id', $healthUnitId)
                 ->whereNull('user_id')
                 ->where('created_at', '>=', now()->subHours($dedupHours))
@@ -115,6 +199,7 @@ class NotificationService
             'health_unit_id' => $healthUnitId,
             'user_id' => null,
             'type' => $type,
+            'dedup_key' => $dedupKey,
             'title' => $title,
             'message' => $message,
             'severity' => $severity,
@@ -138,6 +223,8 @@ class NotificationService
     ): ?Notification {
         if ($dedupKey) {
             $exists = Notification::where('type', $type)
+                ->where('dedup_key', $dedupKey)
+                ->where('health_unit_id', $healthUnitId)
                 ->where('user_id', $userId)
                 ->where('created_at', '>=', now()->subHours($dedupHours))
                 ->exists();
@@ -150,6 +237,7 @@ class NotificationService
             'health_unit_id' => $healthUnitId,
             'user_id' => $userId,
             'type' => $type,
+            'dedup_key' => $dedupKey,
             'title' => $title,
             'message' => $message,
             'severity' => $severity,
@@ -165,44 +253,61 @@ class NotificationService
 
     public function scanOverdueDoses(int $lookbackDays = 14): int
     {
-        $rows = DB::table('immunization_schedule as s')
-            ->leftJoin('immunization_records as r', function ($j) {
-                $j->on('r.patient_id', '=', 's.patient_id')
-                    ->on('r.vaccine_name', '=', 's.vaccine_name')
-                    ->on('r.dose_number', '=', 's.dose_number');
+        // immunization_schedule contains dose definitions; patient appointments
+        // live in vaccination_schedules. Each recipient sees only assigned children.
+        $rows = DB::table('vaccination_schedules as s')
+            ->join('public_users as p', function ($join) {
+                $join->on('p.id', '=', 's.public_user_id')
+                    ->on('p.health_unit_id', '=', 's.health_unit_id');
             })
-            ->whereNull('r.id')
-            ->where('s.scheduled_date', '<', now()->startOfDay())
-            ->where('s.scheduled_date', '>=', now()->subDays($lookbackDays)->startOfDay())
-            ->whereNotNull('s.health_unit_id')
-            ->groupBy('s.health_unit_id')
-            ->select('s.health_unit_id', DB::raw('COUNT(*) as overdue_count'))
+            ->join('users as u', function ($join) {
+                $join->on('u.id', '=', 'p.assigned_midwife_id')
+                    ->on('u.health_unit_id', '=', 'p.health_unit_id');
+            })
+            ->where('u.role', 'midwife')->where('u.is_active', true)
+            ->whereIn('s.status', ['pending', 'missed'])
+            ->whereNull('s.immunization_record_id')
+            ->whereDate('s.due_date', '<', today())
+            ->whereDate('s.due_date', '>=', today()->subDays(max(0, $lookbackDays)))
+            ->whereNotExists(function ($query) {
+                $query->selectRaw('1')->from('immunization_records as r')
+                    ->join('immunization_schedule as d', function ($join) {
+                        $join->on('d.antigen', '=', 'r.antigen')
+                            ->on('d.dose_number', '=', 'r.dose_number');
+                    })
+                    ->whereColumn('r.public_user_id', 's.public_user_id')
+                    ->whereColumn('r.dose_number', 's.dose_number')
+                    ->where(fn ($q) => $q->whereColumn('d.antigen_label', 's.vaccine_name')
+                        ->orWhereColumn('d.antigen', 's.vaccine_name'));
+            })
+            ->whereNotExists(function ($query) {
+                $query->selectRaw('1')->from('vaccination_schedules as completed')
+                    ->whereColumn('completed.public_user_id', 's.public_user_id')
+                    ->whereColumn('completed.vaccine_name', 's.vaccine_name')
+                    ->whereColumn('completed.dose_number', 's.dose_number')
+                    ->where('completed.status', 'given');
+            })
+            ->groupBy('s.health_unit_id', 'u.id')
+            ->select('s.health_unit_id', 'u.id as user_id', DB::raw('COUNT(DISTINCT s.public_user_id) as overdue_count'))
             ->get();
 
         $created = 0;
 
         foreach ($rows as $row) {
-            $midwives = DB::table('users')
-                ->where('health_unit_id', $row->health_unit_id)
-                ->where('role', 'midwife')
-                ->pluck('id');
-
-            foreach ($midwives as $midwifeUserId) {
-                $n = $this->notifyUser(
-                    (int) $midwifeUserId,
-                    $row->health_unit_id,
-                    'overdue_doses',
-                    'Overdue Vaccine Doses',
-                    $row->overdue_count.' child(ren) in your RHU have overdue vaccine doses. Open the Immunization TCL to follow up.',
-                    'warning',
-                    route('immunization.tcl'),
-                    [],
-                    'overdue_digest',
-                    20
-                );
-                if ($n) {
-                    $created++;
-                }
+            $n = $this->notifyUser(
+                (int) $row->user_id,
+                $row->health_unit_id,
+                'overdue_doses',
+                'Overdue Vaccine Doses',
+                $row->overdue_count.' assigned '.($row->overdue_count == 1 ? 'child has' : 'children have').' overdue vaccine doses. Open the vaccination calendar to follow up.',
+                'warning',
+                route('vaccination.calendar'),
+                [],
+                'overdue_digest',
+                20
+            );
+            if ($n) {
+                $created++;
             }
         }
 
@@ -215,17 +320,10 @@ class NotificationService
 
     public function scanLowStockDigest(int $threshold = 10): int
     {
-        $rows = DB::table('inventory as i')
-            ->join('medicines as m', 'm.id', '=', 'i.medicine_id')
-            ->where('i.available_stock', '>', 0)
-            ->where('i.available_stock', '<=', $threshold)
-            ->whereNotNull('i.health_unit_id')
-            ->groupBy('i.health_unit_id')
-            ->select(
-                'i.health_unit_id',
-                DB::raw('COUNT(DISTINCT i.medicine_id) as low_count')
-            )
-            ->get();
+        $rows = app(StockSummaryService::class)->inventories()
+            ->filter(fn ($item) => $item->available_stock <= $threshold)
+            ->groupBy('health_unit_id')
+            ->map(fn ($items, $unitId) => (object) ['health_unit_id' => (int) $unitId, 'low_count' => $items->count()]);
 
         $created = 0;
 
@@ -303,10 +401,11 @@ class NotificationService
         $events = DB::table('calendar_events')
             ->whereDate($dateCol, $tomorrow)
             ->whereNotNull('health_unit_id')
+            ->when(Schema::hasColumn('calendar_events', 'deleted_at'), fn ($q) => $q->whereNull('deleted_at'))
             ->where(function ($q) use ($hasType, $hasEventType) {
                 $q->where('title', 'like', '%EPI%');
                 if ($hasType) {
-                    $q->orWhere('type', 'epi');
+                    $q->orWhereIn('type', ['epi', 'immunization_day', 'immunization_drive', 'catch_up_campaign']);
                 }
                 if ($hasEventType) {
                     $q->orWhere('event_type', 'epi');
@@ -341,6 +440,7 @@ class NotificationService
             $midwives = DB::table('users')
                 ->where('health_unit_id', $event->health_unit_id)
                 ->where('role', 'midwife')
+                ->where('is_active', true)
                 ->pluck('id');
 
             foreach ($midwives as $midwifeUserId) {
@@ -409,6 +509,8 @@ class NotificationService
         $title = $isApproved ? 'Supply Request Approved' : 'Supply Request Rejected';
         $severity = $isApproved ? 'info' : 'danger';
         $message = "Your request for {$qty} units of {$medicineName} has been {$verb}.";
+        $rhuName = $allocation->healthUnit?->name ?? 'the requesting RHU';
+        $sharedMessage = "The supply request for {$qty} units of {$medicineName} at {$rhuName} has been {$verb}.";
 
         $dedupKey = 'supply_req_'.($allocation->id ?? 'x').'_'.$status;
         $link = route('supply_requests.index');
@@ -420,10 +522,10 @@ class NotificationService
             $rhuId,
             'supply_request_'.$verb,
             $title,
-            $message,
+            $sharedMessage,
             $severity,
-            $link,
-            [],
+            route('allocation.index'),
+            ['allocation_id' => $allocation->id],
             $dedupKey,
             72
         )) {
@@ -446,83 +548,12 @@ class NotificationService
                     $message,
                     $severity,
                     $link,
-                    [],
+                    ['allocation_id' => $allocation->id],
                     $dedupKey,
                     72
                 )) {
                     $count++;
                 }
-            }
-        }
-
-        return $count;
-    }
-
-    // ═══════════════════════════════════════════════════════════
-    // TRIGGER #5 — Disease outbreak flagged (called from controller)
-    // ═══════════════════════════════════════════════════════════
-
-    public function notifyDiseaseOutbreak($report): int
-    {
-        $rhuId = $report->health_unit_id ?? null;
-        if (! $rhuId) {
-            return 0;
-        }
-
-        $diseaseName = $report->disease_name
-                    ?? optional($report->disease)->name
-                    ?? optional($report->disease)->disease_name
-                    ?? 'Unknown disease';
-
-        $caseCount = $report->case_count
-                  ?? $report->cases
-                  ?? $report->total_cases
-                  ?? null;
-
-        $caseText = $caseCount
-            ? ' ('.$caseCount.' case'.($caseCount == 1 ? '' : 's').')'
-            : '';
-
-        $title = 'Disease Outbreak Flagged';
-        $message = "A disease outbreak has been flagged at your RHU: {$diseaseName}{$caseText}. Follow-up required.";
-
-        $dedupKey = 'outbreak_'.($report->id ?? 'x');
-
-        $count = 0;
-
-        if ($this->notifyRhu(
-            $rhuId,
-            'disease_outbreak',
-            $title,
-            $message,
-            'danger',
-            route('disease_reports.index'),
-            [],
-            $dedupKey,
-            72
-        )) {
-            $count++;
-        }
-
-        $midwives = DB::table('users')
-            ->where('health_unit_id', $rhuId)
-            ->where('role', 'midwife')
-            ->pluck('id');
-
-        foreach ($midwives as $midwifeUserId) {
-            if ($this->notifyUser(
-                (int) $midwifeUserId,
-                $rhuId,
-                'disease_outbreak',
-                $title,
-                $message,
-                'danger',
-                route('disease_reports.index'),
-                [],
-                $dedupKey,
-                72
-            )) {
-                $count++;
             }
         }
 
@@ -584,7 +615,7 @@ class NotificationService
 
     public function getNotifications(?int $healthUnitId, ?int $userId, ?string $role, string $view = 'active', int $limit = 50)
     {
-        $q = Notification::with(['inventory.medicine', 'healthUnit']);
+        $q = Notification::with(['inventory.medicine', 'healthUnit', 'transfer', 'allocation']);
 
         $this->scopeForViewer($q, $healthUnitId, $userId, $role);
 
@@ -594,7 +625,7 @@ class NotificationService
             $q->whereNull('archived_at');
         }
 
-        return $q->orderByDesc('created_at')->limit($limit)->get();
+        return $q->orderByDesc('created_at')->orderByDesc('id')->paginate($limit)->withQueryString();
     }
 
     public function getArchivedCount(?int $healthUnitId, ?int $userId, ?string $role): int

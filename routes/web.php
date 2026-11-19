@@ -4,6 +4,7 @@ use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\AllocationController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CalendarEventController;
+use App\Http\Controllers\CsvImportController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DiseaseReportController;
 use App\Http\Controllers\DispensingController;
@@ -12,6 +13,7 @@ use App\Http\Controllers\FamilyPlanningController;
 use App\Http\Controllers\ForecastController;
 use App\Http\Controllers\GisController;
 use App\Http\Controllers\ImmunizationController;
+use App\Http\Controllers\ImportedActivityLogController;
 use App\Http\Controllers\InventoryController;
 use App\Http\Controllers\MedicineController;
 use App\Http\Controllers\MidwifeDashboardController;
@@ -35,6 +37,8 @@ use App\Http\Controllers\VaccinationForecastController;
 use App\Http\Middleware\CheckSessionRole;
 use App\Http\Middleware\EnsureAdminRole;
 use App\Http\Middleware\EnsureNotMidwife;
+use App\Http\Middleware\PreventManagementIndexing;
+use App\Http\Middleware\RestrictMobileManagement;
 use Illuminate\Support\Facades\Route;
 
 // ============================================================
@@ -46,11 +50,7 @@ Route::domain(config('portals.enabled') ? config('portals.public_domain') : null
     Route::view('/terms', 'pages.terms')->name('terms');
     Route::view('/accessibility', 'pages.accessibility')->name('accessibility');
 
-    if (config('portals.enabled')) {
-        Route::get('/', [PublicController::class, 'home'])->name('public.home');
-    } else {
-        Route::view('/', 'public.landing')->name('public.home');
-    }
+    Route::get('/', [PublicController::class, 'home'])->name('public.home');
 
     Route::get('/public', [PublicController::class, 'home'])->name('public.home.citizen');
     Route::get('/medicine/{id}', [PublicController::class, 'show'])
@@ -60,7 +60,7 @@ Route::domain(config('portals.enabled') ? config('portals.public_domain') : null
     Route::get('/search/public-autocomplete', [PublicController::class, 'autocomplete'])->name('public.autocomplete');
 });
 
-Route::domain(config('portals.enabled') ? config('portals.management_domain') : null)->group(function () {
+Route::domain(config('portals.enabled') ? config('portals.management_domain') : null)->middleware(PreventManagementIndexing::class)->group(function () {
     if (config('portals.enabled')) {
         Route::get('/', fn () => redirect()->route(session('user_id') ? 'dashboard' : 'login'))->name('management.home');
     }
@@ -71,7 +71,12 @@ Route::domain(config('portals.enabled') ? config('portals.management_domain') : 
     // ============================================================
     // 2. AUTHENTICATED ROUTES (admin + staff + midwife)
     // ============================================================
-    Route::middleware(CheckSessionRole::class)->group(function () {
+    Route::middleware([CheckSessionRole::class, RestrictMobileManagement::class])->group(function () {
+
+        Route::get('/imports', [CsvImportController::class, 'index'])->name('imports.index');
+        Route::get('/imports/{section}', [CsvImportController::class, 'create'])->name('imports.create');
+        Route::get('/imports/{section}/template', [CsvImportController::class, 'template'])->name('imports.template');
+        Route::post('/imports/{section}', [CsvImportController::class, 'store'])->name('imports.store');
 
         Route::get('/public-users/search-suggestions', [PublicUserController::class, 'searchSuggestions'])->name('public_users.search.suggestions');
 
@@ -137,17 +142,11 @@ Route::domain(config('portals.enabled') ? config('portals.management_domain') : 
             Route::delete('/delete-archived', [NotificationController::class, 'destroyArchived'])->name('notifications.destroy-archived');
         });
 
-        // ========== Disease Reports ==========
+        // ========== Disease Trend Analysis ==========
         Route::prefix('disease-reports')->group(function () {
             Route::get('/', [DiseaseReportController::class, 'index'])->name('disease_reports.index');
-            Route::post('/', [DiseaseReportController::class, 'store'])->name('disease_reports.store');
-            Route::put('/{id}', [DiseaseReportController::class, 'update'])->name('disease_reports.update');
             Route::get('/chart-data', [DiseaseReportController::class, 'chartData'])->name('disease_reports.chart_data');
             Route::get('/export', [DiseaseReportController::class, 'exportCsv'])->name('disease_reports.export');
-            Route::delete('/{id}', [DiseaseReportController::class, 'destroy'])->name('disease_reports.destroy');
-
-            Route::post('/close-outbreak/{diseaseId}', [DiseaseReportController::class, 'closeOutbreak'])
-                ->name('disease_reports.close_outbreak');
         });
 
         // ========== Immunization ==========
@@ -169,6 +168,9 @@ Route::domain(config('portals.enabled') ? config('portals.management_domain') : 
 
             Route::get('/calendar', [VaccinationForecastController::class, 'calendar'])
                 ->name('vaccination.calendar');
+
+            Route::post('/calendar/programs/{program}/materials', [\App\Http\Controllers\DohEventPlanController::class, 'store'])
+                ->name('vaccination.program_materials.store');
 
             Route::get('/child/{patient}', [VaccinationForecastController::class, 'childSchedule'])
                 ->name('vaccination.child');
@@ -244,7 +246,7 @@ Route::domain(config('portals.enabled') ? config('portals.management_domain') : 
             ->name('allocation.mark_received');
 
         // ========== Transfers ==========
-        Route::prefix('transfers')->group(function () {
+        Route::prefix('transfers')->middleware(EnsureNotMidwife::class)->group(function () {
             Route::get('/', [TransferController::class, 'index'])->name('transfers.index');
             Route::get('/create', [TransferController::class, 'create'])->name('transfers.create');
             Route::post('/store', [TransferController::class, 'store'])->name('transfers.store');
@@ -299,6 +301,8 @@ Route::domain(config('portals.enabled') ? config('portals.management_domain') : 
 
             Route::post('/transfers/{id}/accept', [TransferController::class, 'accept'])->name('transfers.accept');
             Route::post('/transfers/{id}/reject', [TransferController::class, 'reject'])->name('transfers.reject');
+            Route::post('/transfers/{id}/pho-approve', [TransferController::class, 'phoApprove'])->name('transfers.pho_approve');
+            Route::post('/transfers/{id}/pho-reject', [TransferController::class, 'phoReject'])->name('transfers.pho_reject');
             Route::get('/transfers/distribute', [TransferController::class, 'distribute'])->name('transfers.distribute');
             Route::post('/transfers/distribute', [TransferController::class, 'distributeStore'])->name('transfers.distribute.store');
 
@@ -324,6 +328,7 @@ Route::domain(config('portals.enabled') ? config('portals.management_domain') : 
 
             Route::get('/activity-logs', [ActivityLogController::class, 'index'])->name('activity_logs.index');
             Route::get('/activity-logs/export', [ActivityLogController::class, 'exportCsv'])->name('activity_logs.export');
+            Route::post('/activity-logs/import-record', [ImportedActivityLogController::class, 'store'])->name('activity_logs.import_record');
 
             Route::prefix('redistribution')->group(function () {
                 Route::get('/', [RedistributionController::class, 'index'])->name('redistribution.index');

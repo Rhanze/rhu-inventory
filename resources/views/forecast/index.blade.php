@@ -2,66 +2,153 @@
 
 @section('content')
 @include('forecast._styles')
+<style>
+    .forecast-page { container:forecast-page / inline-size; }
+    .forecast-page > *, .forecast-page .forecast-panel, .forecast-page .forecast-chart-container { min-width:0;max-width:100%;box-sizing:border-box; }
+    .forecast-stock-panel { container:forecast-stock / inline-size; }
+    .forecast-page .forecast-stock-table th { font-size:1rem; }
+    .forecast-page .forecast-stock-table :is(td,small,.forecast-status) { font-size:1.0625rem; }
+    .forecast-stock-table :is(td,th,details,summary,p) { overflow-wrap:anywhere; }
+    .forecast-stock-table details { min-width:0;max-width:100%;box-sizing:border-box; }
+    .forecast-row-number { display:none; }
+    .forecast-chart-container { position:relative;width:100%; }
+    .forecast-page canvas { display:block;max-width:100%; }
+    @container forecast-page (max-width:70rem) {
+        .forecast-charts-row { grid-template-columns:minmax(0,1fr); }
+    }
+    @container forecast-stock (max-width:78rem) {
+
+        .forecast-stock-table { display:block;min-width:0;width:100%; }
+        .forecast-stock-table colgroup { display:none; }
+        .forecast-stock-table caption { display:block;max-width:100%;padding:0 20px 16px; }
+        .forecast-stock-table thead { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap; }
+        .forecast-stock-table tbody { display:grid;grid-template-columns:minmax(0,1fr);gap:16px;padding:0 20px 20px; }
+        .forecast-stock-table tbody tr { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;border:1px solid #d6e5df!important;border-radius:14px;background:#fff;min-width:0;overflow:visible; }
+        .forecast-stock-table td { display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-width:0;max-width:100%;padding:14px 16px;text-align:left!important;border-bottom:1px solid #edf2f0;overflow-wrap:anywhere; }
+        .forecast-stock-table td[data-label]::before { content:attr(data-label);display:block;color:#475569;font-size:1rem;font-weight:600;line-height:1.4; }
+        .forecast-stock-table td[data-label="Item"] { display:none; }
+        .forecast-stock-table td:nth-child(2) { grid-column:span 3;background:#f8fafc;border-radius:14px 0 0; }
+        .forecast-stock-table td:nth-child(3) { background:#f8fafc;border-radius:0 14px 0 0; }
+        .forecast-stock-table td:nth-child(2)::before { display:none; }
+        .forecast-stock-table td[colspan] { grid-column:1/-1; }
+        .forecast-row-number { display:inline;color:#64748b;margin-right:.4rem;font-weight:500; }
+        .forecast-stock-table details { width:100%; }
+    }
+    @container forecast-stock (max-width:48rem) {
+        .forecast-stock-table tbody tr { grid-template-columns:repeat(2,minmax(0,1fr)); }
+        .forecast-stock-table td:nth-child(2) { grid-column:1/-1;border-radius:14px 14px 0 0; }
+        .forecast-stock-table td:nth-child(3) { grid-column:1/-1;border-radius:0; }
+    }
+    @container forecast-stock (max-width:28rem) {
+        .forecast-stock-table tbody { padding:0 12px 12px; }
+        .forecast-stock-table tbody tr { grid-template-columns:minmax(0,1fr); }
+        .forecast-stock-table td { padding:12px 14px; }
+    }
+    @supports not (container-type:inline-size) {
+        @media(max-width:1440px) {
+
+        .forecast-stock-table { display:block;min-width:0;width:100%; }
+        .forecast-stock-table colgroup { display:none; }
+        .forecast-stock-table caption { display:block;max-width:100%;padding:0 20px 16px; }
+        .forecast-stock-table thead { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap; }
+        .forecast-stock-table tbody { display:grid;grid-template-columns:minmax(0,1fr);gap:16px;padding:0 20px 20px; }
+        .forecast-stock-table tbody tr { display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;border:1px solid #d6e5df!important;border-radius:14px;background:#fff;min-width:0;overflow:visible; }
+        .forecast-stock-table td { display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-width:0;max-width:100%;padding:14px 16px;text-align:left!important;border-bottom:1px solid #edf2f0;overflow-wrap:anywhere; }
+        .forecast-stock-table td[data-label]::before { content:attr(data-label);display:block;color:#475569;font-size:1rem;font-weight:600;line-height:1.4; }
+        .forecast-stock-table td[data-label="Item"] { display:none; }
+        .forecast-stock-table td:nth-child(2) { grid-column:span 3;background:#f8fafc;border-radius:14px 0 0; }
+        .forecast-stock-table td:nth-child(3) { background:#f8fafc;border-radius:0 14px 0 0; }
+        .forecast-stock-table td:nth-child(2)::before { display:none; }
+        .forecast-stock-table td[colspan] { grid-column:1/-1; }
+        .forecast-row-number { display:inline;color:#64748b;margin-right:.4rem;font-weight:500; }
+        .forecast-stock-table details { width:100%; }
+        }
+        @media(max-width:900px) {
+            .forecast-stock-table tbody tr { grid-template-columns:repeat(2,minmax(0,1fr)); }
+            .forecast-stock-table td:nth-child(2),.forecast-stock-table td:nth-child(3) { grid-column:1/-1; }
+        }
+        @media(max-width:560px) {
+            .forecast-stock-table tbody tr { grid-template-columns:minmax(0,1fr); }
+        }
+    }
+    @media print {
+        .forecast-stock-table { min-width:0;width:100%; }
+        .forecast-table-scroll { overflow:visible; }
+    }
+</style>
 <div class="forecast-page" style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem; width:100%; min-width:0; max-width:100%;">
 
     {{-- =================== HEADER =================== --}}
-    <div style="
-        background: #ffffff;
-        border-radius:12px; padding:24px 28px; border:1px solid #dce5e2;
-        
-        box-sizing:border-box; width:100%; min-width:0; max-width:100%;
-    ">
-        <p style="font-size:13px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#42ad8a; margin:0 0 6px 0;">Demand Forecasting</p>
-        <h1 style="font-size:26px; font-weight:700; color:#0f172a; margin:0;">Forecast Overview</h1>
-        <p style="font-size:14px;color:#475569;margin:8px 0 0;">Review stock priorities, projected demand, and the reports behind your forecast.</p>
-    </div>
+    <header class="forecast-panel forecast-header">
+        <div class="forecast-heading">
+            <p class="forecast-eyebrow">Demand Forecasting</p>
+            <h1>Forecast Overview</h1>
+            <p class="forecast-intro">Review stock priorities, projected demand, and upcoming supply needs.</p>
+        </div>
+    </header>
 
     @include('forecast._overview')
 
     {{-- ============================================================ --}}
     {{-- SECTION 1 - STOCK ANALYSIS TABLE                              --}}
     {{-- ============================================================ --}}
-    <div style="
-        background: #ffffff;
-        border-radius:12px; padding:0;
-        border:1px solid #dce5e2;
-        
+    <div class="forecast-panel forecast-stock-panel" style="
+        padding:0;
         overflow:hidden;
         box-sizing:border-box; width:100%; min-width:0; max-width:100%;
     ">
         <div style="padding:20px 26px 0 26px; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:12px;">
             <div>
-                <p style="font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#64748b; margin:0 0 4px 0;">Reference</p>
-                <h2 id="forecast-stock" style="font-size:20px; font-weight:700; color:#0f172a; margin:0 0 4px 0;">Current Stock vs Consumption Analysis</h2>
-                <p style="font-size:13px; color:#64748b; margin:0 0 18px 0;">Weekly stock-release regression drives projected demand, coverage, and reorder quantities.</p>
+                <p class="forecast-eyebrow">Stock analysis</p>
+                <h2 id="forecast-stock" style="--forecast-text-size:1.4375rem; font-weight:700; color:#0f172a; margin:0 0 4px 0;">Current Stock vs Consumption Analysis</h2>
+                <p style="--forecast-text-size:1rem; color:#64748b; margin:0 0 18px 0;">Weekly stock-release regression drives projected demand, coverage, and reorder quantities.</p>
             </div>
 
             @if($forecast['items']->total() > 0)
-                <p style="font-size:13px; color:#64748b; margin:0 0 18px 0;">
+                <p style="--forecast-text-size:1rem; color:#64748b; margin:0 0 18px 0;">
                     Showing <strong style="color:#0f172a;">{{ $forecast['items']->firstItem() ?? 0 }}</strong>–<strong style="color:#0f172a;">{{ $forecast['items']->lastItem() ?? 0 }}</strong>
                     of <strong style="color:#0f172a;">{{ $forecast['items']->total() }}</strong> items
                 </p>
             @endif
         </div>
 
-        <p class="forecast-scroll-note">All quantities use medicine base units. Scroll horizontally to view every column.</p>
+        <form method="GET" action="{{ route('forecast.index') }}#forecast-stock" style="display:flex; flex-wrap:wrap; align-items:end; gap:12px; padding:0 26px 16px;">
+            <label for="forecast-stock-filter" style="min-width:0; max-width:100%; color:#334155;">Show stock analysis items
+                <select id="forecast-stock-filter" name="stock_filter" data-native-select style="display:block; max-width:100%; min-height:44px; padding:8px 12px; font:inherit; border:1px solid #bec6cf; border-radius:10px; background:#fff; appearance:auto;">
+                    <option value="all" @selected($stockFilter === 'all')>All analysed items</option>
+                    <option value="shortage" @selected($stockFilter === 'shortage')>Projected need exceeds available stock</option>
+                    <option value="low" @selected($stockFilter === 'low')>Low or critical forecast coverage</option>
+                    <option value="critical" @selected($stockFilter === 'critical')>Critical forecast coverage</option>
+                    <option value="reorder" @selected($stockFilter === 'reorder')>At or below estimated reorder point</option>
+                    <option value="unknown" @selected($stockFilter === 'unknown')>Without completed usage history</option>
+                </select>
+            </label>
+            <button type="submit" class="btn btn-primary" style="min-height:44px;">Apply</button>
+        </form>
+        <p class="forecast-scroll-note">All quantities use medicine base units. The filter applies to the stock analysis table; overview metrics and charts show the full facility scope.</p>
         {{-- Scroll container: min-width:0 lets it shrink below the table's intrinsic width --}}
-        <div tabindex="0" role="region" aria-label="Stock analysis table" style="width:100%; min-width:0; max-width:100%; overflow-x:auto; overflow-y:hidden; box-sizing:border-box;">
-            <table style="width:100%; min-width:1100px; border-collapse:collapse; font-size:14px;">
+        <div class="forecast-table-scroll" tabindex="0" role="region" aria-label="Stock analysis table">
+            <table class="forecast-stock-table">
+                <colgroup>
+                    <col style="width:3%"><col style="width:16%"><col style="width:13%">
+                    <col style="width:7%"><col style="width:8%"><col style="width:12%">
+                    <col style="width:8%"><col style="width:7%"><col style="width:8%">
+                    <col style="width:10%"><col style="width:8%">
+                </colgroup>
                 <caption>Forecasts use recorded releases. No usage history means demand cannot yet be estimated.</caption>
                 <thead>
                     <tr style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
-                        <th style="padding:12px 16px; text-align:left; font-weight:600; color:#475569; font-size:12px; text-transform:uppercase; letter-spacing:0.06em;">#</th>
-                        <th style="padding:12px 16px; text-align:left; font-weight:600; color:#475569; font-size:12px; text-transform:uppercase; letter-spacing:0.06em;">Medicine</th>
-                        <th style="padding:12px 16px; text-align:left; font-weight:600; color:#475569; font-size:12px; text-transform:uppercase; letter-spacing:0.06em; white-space:nowrap;">RHU</th>
-                        <th style="padding:12px 16px; text-align:center; font-weight:600; color:#475569; font-size:12px; text-transform:uppercase; letter-spacing:0.06em;">Available</th>
-                        <th style="padding:12px 16px; text-align:center; font-weight:600; color:#475569; font-size:12px; text-transform:uppercase; letter-spacing:0.06em;">Average 30-day<br>Usage</th>
-                        <th style="padding:12px 16px; text-align:center; font-weight:600; color:#475569; font-size:12px;">Weekly trend</th>
-                        <th style="padding:12px 16px; text-align:center; font-weight:600; color:#475569; font-size:12px;">Next 30-day<br>Need</th>
-                        <th style="padding:12px 16px; text-align:center; font-weight:600; color:#475569; font-size:12px; text-transform:uppercase; letter-spacing:0.06em;">Days<br>Remaining</th>
-                        <th style="padding:12px 16px; text-align:center; font-weight:600; color:#475569; font-size:12px; text-transform:uppercase; letter-spacing:0.06em;">3‑mo<br>Need</th>
-                        <th style="padding:12px 16px; text-align:center; font-weight:600; color:#475569; font-size:12px; text-transform:uppercase; letter-spacing:0.06em;">Status</th>
-                        <th style="padding:12px 16px; text-align:center; font-weight:600; color:#475569; font-size:12px; text-transform:uppercase; letter-spacing:0.06em;">Reorder<br>Point</th>
+                        <th scope="col" style=" text-align:left;     ">#</th>
+                        <th scope="col" style=" text-align:left;     ">Medicine</th>
+                        <th scope="col" style=" text-align:left;      ">RHU</th>
+                        <th scope="col" style=" text-align:center;     ">Available</th>
+                        <th scope="col" style=" text-align:center;     ">Average 30-day<br>Usage</th>
+                        <th scope="col" style=" text-align:center;   ">Weekly trend</th>
+                        <th scope="col" style=" text-align:center;   ">Next 30-day<br>Need</th>
+                        <th scope="col" style=" text-align:center;     ">Days<br>Remaining</th>
+                        <th scope="col" style=" text-align:center;     ">3‑mo<br>Need</th>
+                        <th scope="col" style=" text-align:center;     ">Status</th>
+                        <th scope="col" style=" text-align:center;     ">Reorder<br>Point</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -73,33 +160,49 @@
 
                             $rowNumber = ($forecast['items']->currentPage() - 1) * $forecast['items']->perPage() + $loop->iteration;
                         @endphp
-                        <tr style="border-bottom:1px solid #f1f5f9;">
-                            <td style="padding:12px 16px; color:#64748b; text-align:center;">{{ $rowNumber }}</td>
-                            <td style="padding:12px 16px; font-weight:600; color:#0f172a;">{{ $item['medicine_name'] }}</td>
-                            <td style="padding:12px 16px; color:#334155; white-space:nowrap;">{{ $item['health_unit_name'] }}</td>
-                            <td style="padding:12px 16px; text-align:center; font-weight:600; color:#0f172a;">{{ $item['available_stock'] }}</td>
-                            <td style="padding:12px 16px; text-align:center; color:#64748b;">{{ number_format($item['monthly_consumption'], 1) }}</td>
-                            <td style="padding:12px 16px;text-align:center;color:#334155;">
+                        <tr id="forecast-item-{{ $item['inventory']->health_unit_id }}-{{ $item['inventory']->medicine_id }}" style="border-bottom:1px solid #f1f5f9;">
+                            <td data-label="Item" style=" color:#64748b; text-align:center;">{{ $rowNumber }}</td>
+                            <td data-label="Medicine" style="font-weight:600; color:#0f172a;">
+                                <span class="forecast-row-number" aria-hidden="true">#{{ $rowNumber }}</span>
+                                {{ $item['medicine_name'] }} {{ $item['inventory']->medicine->dosage }}
+                                <small style="display:block; color:#64748b;">{{ $item['base_unit'] }}</small>
+                                <details style="margin-top:8px; font-weight:400; font-size:1.0625rem; min-width:0; max-width:100%;">
+                                    <summary style="font-weight:600;">Demand basis</summary>
+                                    @if($item['model']['periods'] > 0)
+                                        <p style="margin:8px 0;">{{ number_format($item['history_total']) }} {{ $item['base_unit'] }} released from {{ $item['history_start'] }} to {{ $item['history_end'] }}, across {{ $item['model']['periods'] }} completed weeks.</p>
+                                        <p style="margin:8px 0;">{{ $item['model']['method'] === 'linear_regression' ? 'Weekly release trend' : 'Limited-history weekly average' }} projects {{ number_format($item['forecast_full_weeks_need'], 1) }} {{ $item['base_unit'] }} over {{ $item['forecast_complete_weeks'] }} full weeks@if($item['forecast_remaining_days'] > 0), plus {{ number_format($item['forecast_partial_week_need'], 1) }} over the final {{ $item['forecast_remaining_days'] }} days@endif.</p>
+                                        <p style="margin:8px 0;">Total need {{ number_format($item['forecast_need_3mo']) }} {{ $item['base_unit'] }} for {{ $item['forecast_start'] }} to {{ $item['forecast_end'] }}. Available now {{ number_format($item['available_stock']) }}. Additional stock needed {{ number_format($item['shortage']) }} = max(total need &minus; available, 0).</p>
+                                    @else
+                                        <p style="margin:8px 0;">Completed release history is needed to estimate this item's future demand.</p>
+                                    @endif
+                                </details>
+                            </td>
+                            <td data-label="RHU" style=" color:#334155; ">{{ $item['health_unit_name'] }}</td>
+                            <td data-label="Available" style=" text-align:center; font-weight:600; color:#0f172a;">{{ number_format($item['available_stock']) }}</td>
+                            <td data-label="Average 30-day usage" style=" text-align:center; color:#64748b;">
+                                {{ $item['model']['periods'] > 0 ? number_format($item['monthly_consumption'], 1) : 'No estimate' }}
+                                @if($item['model']['periods'] > 0)<small>{{ number_format($item['history_total']) }} {{ $item['base_unit'] }} recorded over {{ $item['model']['periods'] }} completed weeks</small>@endif
+                            </td>
+                            <td data-label="Weekly trend" style="text-align:center;color:#334155;">
                                 <strong>{{ ['rising' => 'Rising', 'falling' => 'Falling', 'stable' => 'Stable', 'insufficient_history' => 'Limited history', 'no_history' => 'No history'][$item['trend']] }}</strong>
                                 <small style="display:block;color:#64748b;">{{ $item['model']['periods'] }} completed week(s)
-                                    @if($item['model']['r_squared'] !== null) ? R&sup2; {{ number_format($item['model']['r_squared'], 2) }} @endif
                                 </small>
                             </td>
-                            <td style="padding:12px 16px;text-align:center;color:#334155;">{{ number_format($item['forecast_next_30_days']) }}</td>
-                            <td style="padding:12px 16px; text-align:center; font-weight:600; color:#0f172a;">
+                            <td data-label="Next 30-day need" style="text-align:center;color:#334155;">{{ $item['model']['periods'] > 0 ? number_format($item['forecast_next_30_days']) : 'No estimate' }}</td>
+                            <td data-label="Days remaining" style=" text-align:center; font-weight:600; color:#0f172a;">
                                 @if($item['days_remaining'] === '∞')
                                     <span style="color:#64748b;">∞</span>
                                 @else
                                     {{ $item['days_remaining'] }}
                                 @endif
                             </td>
-                            <td style="padding:12px 16px; text-align:center; color:#64748b;">{{ number_format($item['forecast_need_3mo']) }}</td>
-                            <td style="padding:12px 16px; text-align:center;">
+                            <td data-label="3-month need" style="text-align:center; color:#64748b;">{{ $item['model']['periods'] > 0 ? number_format($item['forecast_need_3mo']) : 'No estimate' }}</td>
+                            <td data-label="Status" style=" text-align:center;">
                                 <span class="forecast-status forecast-status-{{ $item['status'] }}">
                                     {{ $statusLabel }}
                                 </span>
                             </td>
-                            <td style="padding:12px 16px; text-align:center; color:#64748b; font-weight:600;">
+                            <td data-label="Reorder point" style=" text-align:center; color:#64748b; font-weight:600;">
                                 @if($item['reorder_point'] !== null)
                                     {{ number_format($item['reorder_point']) }}
                                 @else
@@ -110,7 +213,7 @@
                     @empty
                         <tr>
                             <td colspan="11" style="padding:40px 20px; text-align:center; color:#64748b;">
-                                <p style="font-size:16px; margin:0;">No stock data available</p>
+                                <p style="--forecast-text-size:1.1875rem; margin:0;">{{ $stockFilter === 'all' ? 'No stock data available' : 'No items match this stock analysis filter' }}</p>
                             </td>
                         </tr>
                     @endforelse
@@ -133,12 +236,12 @@
                 flex-wrap: wrap;
             ">
                 @if ($forecast['items']->onFirstPage())
-                    <span style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">
+                    <span style="--forecast-text-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">
                         ← Previous
                     </span>
                 @else
                     <a href="{{ $forecast['items']->previousPageUrl() }}" style="
-                        font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px;
+                        --forecast-text-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px;
                         background: #ffffff; color: #334155; border: 1px solid #e2e8f0;
                         text-decoration: none; transition: all 0.2s;
                     "
@@ -150,12 +253,12 @@
 
                 @foreach ($forecast['items']->getUrlRange(max(1, $forecast['items']->currentPage() - 2), min($forecast['items']->lastPage(), $forecast['items']->currentPage() + 2)) as $page => $url)
                     @if ($page == $forecast['items']->currentPage())
-                        <span style="font-size: 14px; font-weight: 600; padding: 8px 14px; border-radius: 8px; background: #42ad8a; color: #ffffff; border: 1px solid #42ad8a; cursor: default;">
+                        <span style="--forecast-text-size:1.0625rem; font-weight: 600; padding: 8px 14px; border-radius: 8px; background: #42ad8a; color: #ffffff; border: 1px solid #42ad8a; cursor: default;">
                             {{ $page }}
                         </span>
                     @else
                         <a href="{{ $url }}" style="
-                            font-size: 14px; font-weight: 500; padding: 8px 14px; border-radius: 8px;
+                            --forecast-text-size:1.0625rem; font-weight: 500; padding: 8px 14px; border-radius: 8px;
                             background: #ffffff; color: #334155; border: 1px solid #e2e8f0;
                             text-decoration: none; transition: all 0.2s;
                         "
@@ -168,7 +271,7 @@
 
                 @if ($forecast['items']->hasMorePages())
                     <a href="{{ $forecast['items']->nextPageUrl() }}" style="
-                        font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px;
+                        --forecast-text-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px;
                         background: #ffffff; color: #334155; border: 1px solid #e2e8f0;
                         text-decoration: none; transition: all 0.2s;
                     "
@@ -177,7 +280,7 @@
                         Next →
                     </a>
                 @else
-                    <span style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">
+                    <span style="--forecast-text-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">
                         Next →
                     </span>
                 @endif
@@ -190,52 +293,53 @@
     {{-- ============================================================ --}}
     {{-- SECTION 2 - SCHEDULED EVENTS                                  --}}
     {{-- ============================================================ --}}
-    <div style="
-        background: #ffffff;
-        border-radius:12px; padding:24px 26px;
-        border:1px solid #dce5e2;
-        
+    <div class="forecast-panel" style="
+        padding:24px 26px;
         box-sizing:border-box; width:100%; min-width:0; max-width:100%;
     ">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:12px; margin-bottom:18px;">
             <div>
-                <h2 style="font-size:20px; font-weight:700; color:#0f172a; margin:0 0 4px 0;" id="forecast-events">Scheduled Events &amp; Vaccine Targets</h2>
-                <p style="font-size:13px; color:#64748b; margin:0;">
-                    Upcoming calendar events and their recorded targets help you prepare stock before each event.
+                <h2 style="--forecast-text-size:1.4375rem; font-weight:700; color:#0f172a; margin:0 0 4px 0;" id="forecast-events">Scheduled Events &amp; Vaccine Targets</h2>
+                <p style="--forecast-text-size:1rem; color:#64748b; margin:0;">
+                    Calendar events, active EPI sessions, DoH programs and pending vaccine appointments for the next {{ $planned['summary']['horizon_days'] }} days.
                 </p>
             </div>
 
             <div style="display:flex; gap:20px; flex-wrap:wrap;">
                 <div style="text-align:center;">
-                    <div style="font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#64748b;">Events</div>
-                    <div style="font-size:22px; font-weight:800; color:#0f172a;">{{ $planned['summary']['total_events'] }}</div>
+                    <div style="--forecast-text-size:1rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#64748b;">Events</div>
+                    <div style="--forecast-text-size:1.5625rem; font-weight:800; color:#0f172a;">{{ $planned['summary']['total_events'] }}</div>
                 </div>
                 <div style="text-align:center;">
-                    <div style="font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#64748b;">Target Population</div>
-                    <div style="font-size:22px; font-weight:800; color:#42ad8a;">{{ number_format($planned['summary']['total_targets']) }}</div>
+                    <div style="--forecast-text-size:1rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#64748b;">Dose appointments</div>
+                    <div style="--forecast-text-size:1.5625rem; font-weight:800; color:#42ad8a;">{{ number_format($planned['summary']['total_targets']) }}</div>
                 </div>
                 <div style="text-align:center;">
-                    <div style="font-size:12px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#64748b;">Horizon</div>
-                    <div style="font-size:22px; font-weight:800; color:#0f172a;">{{ $planned['summary']['horizon_days'] }} days</div>
+                    <div style="--forecast-text-size:1rem; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:#64748b;">Horizon</div>
+                    <div style="--forecast-text-size:1.5625rem; font-weight:800; color:#0f172a;">{{ $planned['summary']['horizon_days'] }} days</div>
                 </div>
             </div>
         </div>
 
+        <p style="font-size:1rem; color:#475569; margin:16px 0;">Dose targets count pending vaccine appointments. A child can have several doses scheduled. Calendar activities with no recorded appointment targets show "Not specified".</p>
+        @if($planned['summary']['total_targets'] === 0 && count($planned['items']) > 0)
+            <p style="font-size:1rem; color:#92400e; margin:0 0 16px;">No pending vaccine appointments fall in this window. The chart shows the scheduled events. Register children and generate their vaccination schedules to add dose targets.</p>
+        @endif
         @if(count($planned['items']) > 0)
-            <div style="position:relative; width:100%; height:260px; margin-bottom:20px;">
+            <div class="forecast-chart-container" style="height:260px; margin-bottom:20px;">
                 <canvas id="plannedChart"></canvas>
             </div>
 
             <div style="width:100%; min-width:0; max-width:100%; overflow-x:auto; box-sizing:border-box; border-radius:12px; border:1px solid #e2e8f0;">
-                <table style="width:100%; min-width:760px; border-collapse:collapse; font-size:14px;">
+                <table style="width:100%; min-width:760px; border-collapse:collapse; --forecast-text-size:1.0625rem;">
                     <thead>
                         <tr style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
-                            <th style="padding:10px 14px; text-align:left; font-weight:600; color:#475569; font-size:12px; text-transform:uppercase; letter-spacing:0.06em;">Date</th>
-                            <th style="padding:10px 14px; text-align:left; font-weight:600; color:#475569; font-size:12px; text-transform:uppercase; letter-spacing:0.06em;">Event</th>
-                            <th style="padding:10px 14px; text-align:left; font-weight:600; color:#475569; font-size:12px; text-transform:uppercase; letter-spacing:0.06em;">Type</th>
-                            <th style="padding:10px 14px; text-align:center; font-weight:600; color:#475569; font-size:12px; text-transform:uppercase; letter-spacing:0.06em;">Target</th>
-                            <th style="padding:10px 14px; text-align:left; font-weight:600; color:#475569; font-size:12px; text-transform:uppercase; letter-spacing:0.06em;">Medicine / Vaccine</th>
-                            <th style="padding:10px 14px; text-align:center; font-weight:600; color:#475569; font-size:12px; text-transform:uppercase; letter-spacing:0.06em;">Planned Qty</th>
+                            <th scope="col" style="padding:10px 14px; text-align:left;     ">Date</th>
+                            <th scope="col" style="padding:10px 14px; text-align:left;     ">Event</th>
+                            <th scope="col" style="padding:10px 14px; text-align:left;     ">Type</th>
+                            <th scope="col" style="padding:10px 14px; text-align:center;     ">Dose appointments</th>
+                            <th scope="col" style="padding:10px 14px; text-align:left;     ">Vaccine / facility</th>
+                            <th scope="col" style="padding:10px 14px; text-align:center;     ">Basis</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -246,20 +350,20 @@
                                 </td>
                                 <td style="padding:10px 14px; font-weight:600; color:#0f172a;">{{ $item['title'] }}</td>
                                 <td style="padding:10px 14px;">
-                                    <span style="display:inline-block; font-size:12px; font-weight:600; padding:2px 9px; border-radius:999px; background:#E8F7F4; color:#0f5c4b; border:1px solid #b2d8c9;">
-                                        {{ ucfirst(str_replace('_', ' ', $item['type'])) }}
+                                    <span style="display:inline-block; --forecast-text-size:1rem; font-weight:600; padding:2px 9px; border-radius:999px; background:#E8F7F4; color:#0f5c4b; border:1px solid #b2d8c9;">
+                                        {{ $item['source'] }}
                                     </span>
                                 </td>
-                                <td style="padding:10px 14px; text-align:center; font-weight:700; color:#0f172a;">{{ $item['target_count'] }}</td>
+                                <td style="padding:10px 14px; text-align:center; font-weight:700; color:#0f172a;">{{ $item['target_count'] === null ? 'Not specified' : number_format($item['target_count']) }}</td>
                                 <td style="padding:10px 14px; color:#334155;">
                                     @if($item['medicine_name'])
                                         {{ $item['medicine_name'] }}
                                         @if($item['medicine_dosage'])<span style="color:#64748b;"> ({{ $item['medicine_dosage'] }})</span>@endif
                                     @else
-                                        <span style="color:#64748b;">Not linked</span>
+                                        <span style="color:#64748b;">{{ $item['health_unit_name'] ?? 'RHU program' }}</span>
                                     @endif
                                 </td>
-                                <td style="padding:10px 14px; text-align:center; font-weight:700; color:#2a9d8f;">{{ $item['target_count'] }}</td>
+                                <td style="padding:10px 14px; color:#475569;">{{ $item['basis'] }}@if($item['notes'] && $item['type'] === 'vaccine_targets')<small style="display:block;">{{ $item['notes'] }} at {{ $item['health_unit_name'] }}</small>@endif</td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -267,9 +371,9 @@
             </div>
         @else
             <div style="text-align:center; padding:36px 20px; background:#f8fafc; border-radius:12px; border:1px dashed #cbd5e1;">
-                <div style="font-size:36px; margin-bottom:6px;">📅</div>
-                <h4 style="font-size:17px; font-weight:600; color:#0f172a; margin:0 0 4px 0;">No scheduled events in the next 90 days</h4>
-                <p style="font-size:14px; color:#64748b; margin:0;">Add events to the RHU calendar to see scheduled forecasts here.</p>
+                <div style="--forecast-text-size:2.25rem; margin-bottom:6px;">📅</div>
+                <h4 style="--forecast-text-size:1.25rem; font-weight:600; color:#0f172a; margin:0 0 4px 0;">No scheduled events or vaccine appointments in the next {{ $planned['summary']['horizon_days'] }} days</h4>
+                <p style="--forecast-text-size:1.0625rem; color:#64748b; margin:0;">Add events to the RHU calendar to see scheduled forecasts here.</p>
             </div>
         @endif
     </div>
@@ -277,180 +381,71 @@
     {{-- ============================================================ --}}
     {{-- SECTION 3 - RECOMMENDED STOCK-UP                              --}}
     {{-- ============================================================ --}}
-    <div style="
-        background: #ffffff;
-        border-radius:12px; padding:24px 26px;
-        border:1px solid #dce5e2;
-        
-        box-sizing:border-box; width:100%; min-width:0; max-width:100%;
-    ">
-        <div style="margin-bottom:18px;">
-            <h2 style="font-size:20px; font-weight:700; color:#0f172a; margin:0 0 4px 0;" id="forecast-diseases">Medicines Linked to Reported Diseases</h2>
-            <p style="font-size:13px; color:#64748b; margin:0;">
-                Confirmed reports from the last {{ $unplanned['completed_periods'] }} completed weeks, ranked by reported cases. Linked medicines are shown for stock planning; quantities are not forecast from case counts.
-            </p>
-        </div>
-
-        @if(count($unplanned['items']) > 0)
-            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:16px;">
-                @foreach($unplanned['items'] as $disease)
-                    @php
-                        $rank  = $disease->rank  ?? ($loop->iteration);
-                        $color = $disease->color ?? '#42ad8a';
-                    @endphp
-                    <div style="
-                        background:#ffffff;
-                        border:1px solid #e2e8f0;
-                        border-left:4px solid {{ $color }};
-                        border-radius:14px;
-                        padding:18px 20px;
-                        
-                    ">
-                        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:10px;">
-                            <div>
-                                <div style="font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:{{ $color }}; margin-bottom:4px;">
-                                    #{{ $rank }} Trending
-                                </div>
-                                <h4 style="font-size:18px; font-weight:700; color:#0f172a; margin:0; line-height:1.25;">
-                                    {{ $disease->disease_name }}
-                                </h4>
-                            </div>
-                            <div style="text-align:right; flex-shrink:0;">
-                                <div style="font-size:22px; font-weight:800; color:{{ $color }}; line-height:1;">
-                                    {{ number_format($disease->total_cases) }}
-                                </div>
-                                <div style="font-size:12px; color:#64748b; margin-top:2px;">cases</div>
-                            </div>
-                        </div>
-
-                        <p style="font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#64748b; margin:14px 0 8px 0;">
-                            Recommended Medicines
-                        </p>
-
-                        @if(count($disease->medicines) > 0)
-                            <div style="display:flex; flex-direction:column; gap:6px;">
-                                @foreach($disease->medicines as $m)
-                                    <div style="
-                                        display:flex; justify-content:space-between; align-items:center; gap:8px;
-                                        background:#f8fafc; border:1px solid #eef2f6; border-radius:8px;
-                                        padding:8px 12px; font-size:13px;
-                                    ">
-                                        <span style="font-weight:600; color:#0f172a;">
-                                            {{ $m->medicine_name }}
-                                            @if($m->dosage)<span style="color:#64748b; font-weight:400;"> ({{ $m->dosage }})</span>@endif
-                                        </span>
-                                        @if($m->requires_prescription)
-                                            <span style="font-size:12px; font-weight:700; padding:2px 7px; border-radius:999px; background:#faeeda; color:#854f0b; border:1px solid #fac775;">Rx</span>
-                                        @else
-                                            <span style="font-size:12px; font-weight:700; padding:2px 7px; border-radius:999px; background:#E8F7F4; color:#3b6d11; border:1px solid #c0dd97;">OTC</span>
-                                        @endif
-                                    </div>
-                                @endforeach
-                            </div>
-                        @else
-                            <p style="font-size:13px; color:#64748b; margin:0;">No medicines linked to this disease yet.</p>
-                        @endif
-                    </div>
-                @endforeach
-            </div>
-
-            <p style="font-size:12px; color:#64748b; margin:14px 0 0 0; font-style:italic;">
-                These are recommendations only. Verify with the RHU physician before procuring.
-            </p>
-        @else
-            <div style="text-align:center; padding:36px 20px; background:#f8fafc; border-radius:12px; border:1px dashed #cbd5e1;">
-                <div style="font-size:36px; margin-bottom:6px;">📈</div>
-                <h4 style="font-size:17px; font-weight:600; color:#0f172a; margin:0 0 4px 0;">No confirmed weekly reports available</h4>
-                <p style="font-size:14px; color:#64748b; margin:0;">Reports must cover a completed week and be confirmed before appearing here. A missing report does not mean zero cases.</p>
-            </div>
-        @endif
-    </div>
+    @include('forecast._disease_consumption')
 
     {{-- ============================================================ --}}
     {{-- SECTION 4 - STOCK HEALTH CHARTS                               --}}
     {{-- ============================================================ --}}
-    <div style="display:grid; grid-template-columns: 1fr 1.3fr; gap:20px;" class="forecast-charts-row" id="forecast-charts">
+    <div class="forecast-charts-row" id="forecast-charts">
 
         {{-- Stock Health Distribution --}}
-        <div style="
-            background: #ffffff;
-            border-radius:12px; padding:24px 26px;
-            border:1px solid #dce5e2;
-            
+        <div class="forecast-panel" style="
+            padding:24px 26px;
             box-sizing:border-box; min-width:0;
         ">
             <div style="margin-bottom:16px;">
-                <p style="font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#42ad8a; margin:0 0 4px 0;">Stock Health</p>
-                <h2 style="font-size:20px; font-weight:700; color:#0f172a; margin:0 0 4px 0;">Status Distribution</h2>
-                <p style="font-size:13px; color:#64748b; margin:0;">Count of medicines by stock status.</p>
+                <p style="--forecast-text-size:1rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#42ad8a; margin:0 0 4px 0;">Stock Health</p>
+                <h2 style="--forecast-text-size:1.4375rem; font-weight:700; color:#0f172a; margin:0 0 4px 0;">Status Distribution</h2>
+                <p style="--forecast-text-size:1rem; color:#64748b; margin:0;">Count of medicines by stock status.</p>
             </div>
 
             @if(count($forecast['all_items']) > 0)
-                <div style="position:relative; width:100%; height:320px;">
+                <div class="forecast-chart-container" style="height:320px;">
                     <canvas id="statusChart"></canvas>
                 </div>
             @else
                 <div style="text-align:center; padding:36px 20px; background:#f8fafc; border-radius:12px; border:1px dashed #cbd5e1;">
-                    <div style="font-size:36px; margin-bottom:6px;">📊</div>
-                    <h4 style="font-size:17px; font-weight:600; color:#0f172a; margin:0 0 4px 0;">No stock data to chart</h4>
-                    <p style="font-size:14px; color:#64748b; margin:0;">Add inventory to see the distribution.</p>
+                    <div style="--forecast-text-size:2.25rem; margin-bottom:6px;">📊</div>
+                    <h4 style="--forecast-text-size:1.25rem; font-weight:600; color:#0f172a; margin:0 0 4px 0;">No stock data to chart</h4>
+                    <p style="--forecast-text-size:1.0625rem; color:#64748b; margin:0;">Add inventory to see the distribution.</p>
                 </div>
             @endif
         </div>
 
         {{-- Available vs Need --}}
-        <div style="
-            background: #ffffff;
-            border-radius:12px; padding:24px 26px;
-            border:1px solid #dce5e2;
-            
+        <div class="forecast-panel" style="
+            padding:24px 26px;
             box-sizing:border-box; min-width:0;
         ">
             <div style="margin-bottom:16px;">
-                <p style="font-size:13px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#42ad8a; margin:0 0 4px 0;">Demand vs Supply</p>
-                <h2 style="font-size:20px; font-weight:700; color:#0f172a; margin:0 0 4px 0;">Available Stock vs 3-Month Need</h2>
-                <p style="font-size:13px; color:#64748b; margin:0;">Top 10 medicines by 3-month need. Gap indicates shortfall.</p>
+                <p style="--forecast-text-size:1rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#42ad8a; margin:0 0 4px 0;">Demand vs Supply</p>
+                <h2 style="--forecast-text-size:1.4375rem; font-weight:700; color:#0f172a; margin:0 0 4px 0;">Available Stock vs 3-Month Need</h2>
+                <p style="--forecast-text-size:1rem; color:#64748b; margin:0;">Projected total use over {{ $forecast['summary']['horizon_days'] }} days is shown against available stock. Additional stock needed = max(total need &minus; available, 0). Each item retains its own unit; quantities in different units are not equivalent. Open Demand basis in an item row to see its history and calculation.</p>
             </div>
 
             @if(count($forecast['all_items']) > 0)
-                <div style="position:relative; width:100%; height:320px;">
+                <div class="forecast-chart-container" style="height:320px;">
                     <canvas id="needChart"></canvas>
                 </div>
             @else
                 <div style="text-align:center; padding:36px 20px; background:#f8fafc; border-radius:12px; border:1px dashed #cbd5e1;">
-                    <div style="font-size:36px; margin-bottom:6px;">📊</div>
-                    <h4 style="font-size:17px; font-weight:600; color:#0f172a; margin:0 0 4px 0;">No stock data to chart</h4>
-                    <p style="font-size:14px; color:#64748b; margin:0;">Add inventory to see the comparison.</p>
+                    <div style="--forecast-text-size:2.25rem; margin-bottom:6px;">📊</div>
+                    <h4 style="--forecast-text-size:1.25rem; font-weight:600; color:#0f172a; margin:0 0 4px 0;">No stock data to chart</h4>
+                    <p style="--forecast-text-size:1.0625rem; color:#64748b; margin:0;">Add inventory to see the comparison.</p>
                 </div>
             @endif
         </div>
 
     </div>
 
-    {{-- Methodology --}}
-    <details style="
-        background: #ffffff;
-        border-radius:16px; padding:16px 20px;
-        border:1px solid #dce5e2;
-        
-        box-sizing:border-box; width:100%; min-width:0; max-width:100%;
-    ">
-        <summary>How to read this forecast</summary>
-        <p style="font-size:14px; color:#475569; margin:12px 0 0;">
-            📌 <strong>Methodology:</strong>
-            <br>• <strong>Stock Analysis</strong>: linear regression of recorded weekly releases. Days Remaining uses cumulative projected releases (365+ means the forecast does not exhaust stock within a year).
-            <strong>Reorder Point</strong> sums projected demand during the {{ config('forecasting.lead_time_days') }}-day lead time plus {{ config('forecasting.safety_stock_days') }} safety days. Items without completed usage history show <strong>N/A</strong>.
-            <br>• <strong>Scheduled Events</strong>: derived from upcoming calendar events (next 90 days). Target population per event is the required quantity.
-            <br>• <strong>Recommended Stock-up</strong>: confirmed weekly reports from the last {{ $unplanned['completed_periods'] }} completed weeks, ranked by case count and color-coded. Linked medicines come from the disease-to-medicine mapping.
-            <br>• <strong>Charts</strong>: status distribution shows item count per status; need chart compares available stock against 3-month projected demand.
-        </p>
-    </details>
+
 
 </div>
 
 
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="{{ asset('lib/chartjs/chart.umd.js') }}"></script>
+<script src="{{ asset('js/forecast-consumption.js') }}" defer></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function () {
@@ -458,6 +453,10 @@ document.addEventListener('DOMContentLoaded', function () {
         console.warn('Chart.js not loaded');
         return;
     }
+
+    Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+    Chart.defaults.font.size = 16;
+    Chart.defaults.color = '#475569';
 
     const planned = @json($planned);
 
@@ -483,8 +482,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 return;
             }
             const method = fit.method === 'linear_regression' ? 'Linear regression' : 'Limited history: weekly-average fallback';
-            note.textContent = `${method} | ${fit.periods} completed week(s)` +
-                (fit.r_squared === null ? '' : ` | historical fit R-squared ${fit.r_squared.toFixed(3)} | slope ${fit.slope.toFixed(2)} units per week per period`);
+            note.textContent = `${method} | ${fit.periods} completed week(s) | ${item.base_unit || 'base units'}. Need covers ${item.forecast_start} to ${item.forecast_end}.`;
             const labels = history.concat(future).map(period => period.start);
             const actual = history.map(period => period.quantity).concat(future.map(() => null));
             const fitted = fit.fitted.concat(future.map(() => null));
@@ -525,13 +523,18 @@ document.addEventListener('DOMContentLoaded', function () {
             data: {
                 labels: labels,
                 datasets: [{
-                    label: 'Target Population',
+                    label: 'Dose appointments',
                     data: data,
                     backgroundColor: 'rgba(66, 173, 138, 0.9)',
                     borderColor: '#369f7d',
                     borderWidth: 1,
                     borderRadius: 8,
                     maxBarThickness: 60,
+                }, {
+                    label: 'Scheduled events',
+                    data: Object.values(planned?.summary?.events_by_month || {}),
+                    backgroundColor: 'rgba(59,130,246,.8)',
+                    borderColor: '#3b82f6', borderWidth: 1, borderRadius: 8, maxBarThickness: 60,
                 }]
             },
             options: {
@@ -539,7 +542,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 maintainAspectRatio: false,
                 animation: { duration: 600, easing: 'easeOutQuart' },
                 plugins: {
-                    legend: { display: false },
+                    legend: { display: true, labels: { font: { size: 15 } } },
                     tooltip: {
                         backgroundColor: '#0f172a',
                         titleColor: '#ffffff',
@@ -547,20 +550,20 @@ document.addEventListener('DOMContentLoaded', function () {
                         padding: 12,
                         cornerRadius: 8,
                         callbacks: {
-                            label: function (ctx) { return ' ' + Number(ctx.parsed.y).toLocaleString() + ' to be served'; }
+                            label: function (ctx) { return ' ' + ctx.dataset.label + ': ' + Number(ctx.parsed.y).toLocaleString(); }
                         }
                     }
                 },
                 scales: {
                     x: {
-                        ticks: { color: '#64748b', font: { size: 12 } },
+                        ticks: { color: '#64748b', font: { size: 14 } },
                         grid: { display: false },
                     },
                     y: {
                         beginAtZero: true,
                         ticks: {
                             color: '#64748b',
-                            font: { size: 11 },
+                            font: { size: 14 },
                             precision: 0,
                             callback: function (v) { return Number(v).toLocaleString(); }
                         },
@@ -606,7 +609,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 ctx.font = '800 32px Arial';
                 ctx.fillText(total, cx, cy - 6);
                 ctx.fillStyle = '#64748b';
-                ctx.font = '600 12px Arial';
+                ctx.font = '600 14px Arial';
                 ctx.fillText('TOTAL ITEMS', cx, cy + 22);
                 ctx.restore();
             }
@@ -633,7 +636,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     legend: {
                         position: 'bottom',
                         labels: {
-                            font: { size: 12, weight: '600' },
+                            font: { size: 14, weight: '600' },
                             color: '#334155',
                             usePointStyle: true,
                             pointStyle: 'circle',
@@ -677,7 +680,7 @@ document.addEventListener('DOMContentLoaded', function () {
             .slice(0, 10);
 
         const labels    = sorted.map(function (i) {
-            return i.medicine_name + (i.health_unit_name ? ' · ' + i.health_unit_name : '');
+            return i.medicine_name + ' (' + (i.base_unit || 'units') + ')' + (i.health_unit_name ? ' · ' + i.health_unit_name : '');
         });
         const available = sorted.map(function (i) { return Number(i.available_stock) || 0; });
         const need      = sorted.map(function (i) { return Number(i.forecast_need_3mo) || 0; });
@@ -716,7 +719,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     legend: {
                         position: 'top',
                         labels: {
-                            font: { size: 12, weight: '600' },
+                            font: { size: 14, weight: '600' },
                             color: '#334155',
                             usePointStyle: true,
                             pointStyle: 'circle',
@@ -730,12 +733,16 @@ document.addEventListener('DOMContentLoaded', function () {
                         padding: 12,
                         cornerRadius: 8,
                         callbacks: {
+                            label: function (context) {
+                                const item = sorted[context.dataIndex];
+                                return context.dataset.label + ': ' + Number(context.raw).toLocaleString() + ' ' + (item?.base_unit || 'units');
+                            },
                             afterBody: function (items) {
                                 const idx = items[0].dataIndex;
                                 const item = sorted[idx];
                                 if (!item) return '';
                                 const short = Math.max(0, (Number(item.forecast_need_3mo) || 0) - (Number(item.available_stock) || 0));
-                                return ['─────────────', 'Shortfall: ' + short.toLocaleString()];
+                                return ['Shortfall: ' + short.toLocaleString() + ' ' + (item.base_unit || 'units')];
                             }
                         }
                     }
@@ -745,7 +752,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         beginAtZero: true,
                         ticks: {
                             color: '#64748b',
-                            font: { size: 11 },
+                            font: { size: 14 },
                             precision: 0,
                             callback: function (v) { return Number(v).toLocaleString(); }
                         },
@@ -754,7 +761,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     y: {
                         ticks: {
                             color: '#334155',
-                            font: { size: 11 },
+                            font: { size: 14 },
                             autoSkip: false,
                         },
                         grid: { display: false },

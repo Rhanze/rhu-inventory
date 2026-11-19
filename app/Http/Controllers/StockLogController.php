@@ -7,6 +7,9 @@ use App\Models\HealthUnit;
 use App\Models\Inventory;
 use App\Models\Medicine;
 use App\Models\StockLog;
+use App\Services\InventoryHistoryService;
+use App\Support\HistoricalDateRange;
+use App\Support\StockLogBatchFilter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -24,115 +27,75 @@ class StockLogController extends Controller
         return null;
     }
 
-    private function parseBatchInput(?string $raw): array
-    {
-        $raw = trim((string) $raw);
-        if ($raw === '') {
-            return [];
-        }
-
-        $parts = array_filter(array_map('trim', explode(',', $raw)));
-        $expanded = [];
-
-        foreach ($parts as $part) {
-            if (preg_match('/^(\d+)\s*-\s*(\d+)$/', $part, $m)) {
-                $s = (int) $m[1];
-                $e = (int) $m[2];
-                if ($s > $e) {
-                    [$s, $e] = [$e, $s];
-                }
-                if ($e - $s > 1000) {
-                    $e = $s + 1000;
-                }
-                for ($i = $s; $i <= $e; $i++) {
-                    $expanded[] = (string) $i;
-                }
-            } else {
-                $expanded[] = $part;
-            }
-        }
-
-        return array_values(array_unique($expanded));
-    }
-
-    private function applyBatchFilter($query, Request $request)
-    {
-        return $query->when($request->filled('batch_input'), function ($q) use ($request) {
-            $batches = $this->parseBatchInput($request->batch_input);
-            if (empty($batches)) {
-                return;
-            }
-
-            $q->where(function ($sub) use ($batches) {
-                foreach ($batches as $b) {
-                    $sub->orWhere('batch_no', $b)
-                        ->orWhere('batch_no', 'like', '%-'.$b)
-                        ->orWhere('batch_no', 'like', '%-0'.$b)
-                        ->orWhere('batch_no', 'like', '%-00'.$b);
-                }
-            });
-        });
-    }
-
     public function index(Request $request)
     {
-        if (! session()->has('user_id')) {
-            return redirect()->route('login');
+        if ($redirect = $this->checkAccess()) {
+            return $redirect;
         }
+        $historyRange = HistoricalDateRange::fromRequest($request);
+        $this->validateFilters($request);
+        $showEvidence = $this->showsEvidence($request);
+        $stockLogs = $showEvidence
+            ? app(InventoryHistoryService::class)->records($request, $historyRange, stockLogs: true)
+            : $this->activeLogs($request, $historyRange)->paginate(20)->withQueryString();
+        $healthUnits = HealthUnit::rhuOnly()->orderBy('name')->get();
+        $medicines = Medicine::withTrashed()->orderBy('medicine_name')->get(['id', 'medicine_name', 'dosage']);
 
-        $search = $request->search;
-        $rhuFilter = $request->rhu_filter;
-        $typeFilter = $request->type;
-        $batchInput = $request->batch_input;
-        $category = $request->category;
-        $healthUnitId = session('health_unit_id');
-        $isPhoAdmin = is_null($healthUnitId);
-        $phoId = $isPhoAdmin ? HealthUnit::phoId() : null;
+        return view('stock_logs.index', compact('stockLogs', 'healthUnits', 'historyRange', 'showEvidence', 'medicines'));
+    }
 
-        $query = StockLog::with(['medicine', 'addedByUser', 'healthUnit'])
-            ->when($healthUnitId, function ($q) use ($healthUnitId) {
-                $q->where('health_unit_id', $healthUnitId);
-            })
-            ->when($isPhoAdmin && $rhuFilter === 'pho' && $phoId, function ($q) use ($phoId) {
-                $q->where('health_unit_id', $phoId);
-            })
-            ->when($isPhoAdmin && $rhuFilter && $rhuFilter !== 'pho', function ($q) use ($rhuFilter) {
-                $q->where('health_unit_id', $rhuFilter);
-            })
-            ->when($isPhoAdmin && ! $rhuFilter && $phoId, function ($q) use ($phoId) {
-                $q->where('health_unit_id', '!=', $phoId);
-            })
-            ->when($search, function ($query, $search) {
-                $query->whereHas('medicine', function ($sub) use ($search) {
-                    $sub->where('medicine_name', 'like', "%{$search}%");
+    private function validateFilters(Request $request): void
+    {
+        $request->validate([
+            'rhu_filter' => ['nullable', 'string', 'regex:/^(all|pho|[0-9]+)$/'],
+            'medicine_id' => ['nullable', 'integer', 'exists:medicines,id'],
+            'batch_no' => ['nullable', 'string', 'max:100'],
+            'batch_input' => ['nullable', 'string', 'max:1000'],
+            'search' => ['nullable', 'string', 'max:200'],
+            'type' => ['nullable', 'in:addition,release,reservation,reversal'],
+            'status' => ['nullable', 'in:active,cancelled,reversed,reversal,all'],
+            'source' => ['nullable', 'in:stock_logs'],
+            'movement_type' => ['nullable', 'in:addition,receipt,transfer_in,adjustment_in,dispensing,allocation,transfer_out,adjustment_out'],
+        ]);
+    }
+
+    private function showsEvidence(Request $request): bool
+    {
+        return $request->boolean('evidence') || $request->filled('action') || $request->filled('record_kind')
+            || in_array($request->input('type'), ['reservation', 'reversal'], true)
+            || ($request->filled('status') && $request->input('status') !== 'active');
+    }
+
+    private function activeLogs(Request $request, HistoricalDateRange $range)
+    {
+        $unitId = session('health_unit_id');
+        $facility = $request->input('rhu_filter');
+        $phoId = $unitId === null ? HealthUnit::phoId() : null;
+        if ($unitId === null && $facility && $facility !== 'all') {
+            $unitId = $facility === 'pho' ? ($phoId ?? -1) : (int) $facility;
+        }
+        $query = StockLog::activeForReporting()->with(['medicine', 'healthUnit', 'addedByUser'])
+            ->when($unitId !== null, fn ($q) => $q->where('health_unit_id', $unitId))
+            ->when($unitId === null && ! $facility && $phoId, fn ($q) => $q->where('health_unit_id', '!=', $phoId))
+            ->when($request->filled('search'), function ($query) use ($request) {
+                $term = '%'.$request->input('search').'%';
+                $query->where(function ($search) use ($term) {
+                    $search->whereHas('medicine', fn ($medicine) => $medicine->where('medicine_name', 'like', $term))
+                        ->orWhereHas('addedByUser', fn ($staff) => $staff->where('name', 'like', $term)->orWhere('username', 'like', $term))
+                        ->orWhere('batch_no', 'like', $term);
                 });
             })
-            ->when($typeFilter === 'addition', function ($q) {
-                $q->where(fn ($sub) => $sub->whereNull('remarks')->orWhere('remarks', 'like', 'Added%'));
-            })
-            ->when($typeFilter === 'release', function ($q) {
-                $q->where('remarks', 'like', 'Released%');
-            })
-            ->when($category, function ($q) use ($category) {
-                $q->whereHas('medicine', fn ($mq) => $mq->where('category', $category));
-            });
+            ->when($request->input('type') === 'addition', fn ($q) => $q->additions())
+            ->when($request->input('type') === 'release', fn ($q) => $q->releases())
+            ->when($request->filled('movement_type'), fn ($q) => $q->where('movement_type', $request->input('movement_type')))
+            ->when($request->filled('medicine_id'), fn ($q) => $q->where('medicine_id', $request->input('medicine_id')))
+            ->when($request->filled('batch_no'), fn ($q) => $q->where('batch_no', $request->input('batch_no')))
+            ->when($request->filled('category'), fn ($q) => $q->whereHas('medicine',
+                fn ($medicine) => $medicine->where('category', $request->input('category'))));
+        StockLogBatchFilter::apply($query, 'batch_no', $request->input('batch_input'));
+        $range->apply($query, 'date_added');
 
-        $query = $this->applyBatchFilter($query, $request);
-
-        $stockLogs = $query
-            ->orderBy('id', 'desc')
-            ->paginate(20)
-            ->appends([
-                'search' => $search,
-                'rhu_filter' => $rhuFilter,
-                'type' => $typeFilter,
-                'batch_input' => $batchInput,
-                'category' => $category,
-            ]);
-
-        $healthUnits = HealthUnit::rhuOnly()->orderBy('name')->get();
-
-        return view('stock_logs.index', compact('stockLogs', 'healthUnits'));
+        return $query->orderByDesc('date_added')->orderByDesc('id');
     }
 
     public function create()
@@ -179,6 +142,7 @@ class StockLogController extends Controller
             'storage_location' => 'nullable|string|max:255',
             'pack_type' => 'nullable|string|max:50',
             'pieces_per_pack' => 'nullable|integer|min:1',
+            'remarks' => 'nullable|string|max:1000',
         ]);
 
         $medicine = Medicine::findOrFail($request->medicine_id);
@@ -202,7 +166,7 @@ class StockLogController extends Controller
                 'storage_location' => $request->storage_location,
                 'date_added' => $request->date_added,
                 'added_by' => session('user_id'),
-                'remarks' => 'Added — Stock entry',
+                'remarks' => 'Added — '.($request->filled('remarks') ? trim($request->remarks) : 'Stock entry'),
             ]);
 
             $inventory->increment('available_stock', $request->quantity_added);
@@ -220,6 +184,9 @@ class StockLogController extends Controller
             $logParts[] = '| Packaging: '.$inventory->pieces_per_pack.' per '.$inventory->pack_type;
         }
         $logParts[] = '. New available stock: '.$inventory->available_stock.'.';
+        if ($request->filled('remarks')) {
+            $logParts[] = 'Reason: '.trim($request->remarks);
+        }
 
         ActivityLogger::log(
             'Stock Logs',
@@ -236,57 +203,19 @@ class StockLogController extends Controller
             return $redirect;
         }
 
-        $search = $request->search;
-        $rhuFilter = $request->rhu_filter;
-        $typeFilter = $request->type;
-        $category = $request->category;
-        $healthUnitId = session('health_unit_id');
-        $isPhoAdmin = is_null($healthUnitId);
-        $phoId = $isPhoAdmin ? HealthUnit::phoId() : null;
-
-        $query = StockLog::with(['medicine', 'healthUnit', 'addedByUser'])
-            ->when($healthUnitId, function ($q) use ($healthUnitId) {
-                $q->where('health_unit_id', $healthUnitId);
-            })
-            ->when($isPhoAdmin && $rhuFilter === 'pho' && $phoId, function ($q) use ($phoId) {
-                $q->where('health_unit_id', $phoId);
-            })
-            ->when($isPhoAdmin && $rhuFilter && $rhuFilter !== 'pho', function ($q) use ($rhuFilter) {
-                $q->where('health_unit_id', $rhuFilter);
-            })
-            ->when($isPhoAdmin && ! $rhuFilter && $phoId, function ($q) use ($phoId) {
-                $q->where('health_unit_id', '!=', $phoId);
-            })
-            ->when($search, function ($query, $search) {
-                $query->where(function ($q) use ($search) {
-                    $q->whereHas('medicine', function ($mq) use ($search) {
-                        $mq->where('medicine_name', 'like', "%{$search}%");
-                    })->orWhereHas('addedByUser', function ($uq) use ($search) {
-                        $uq->where('name', 'like', "%{$search}%")
-                            ->orWhere('username', 'like', "%{$search}%");
-                    });
-                });
-            })
-            ->when($typeFilter === 'addition', function ($q) {
-                $q->where(fn ($sub) => $sub->whereNull('remarks')->orWhere('remarks', 'like', 'Added%'));
-            })
-            ->when($typeFilter === 'release', function ($q) {
-                $q->where('remarks', 'like', 'Released%');
-            })
-            ->when($category, function ($q) use ($category) {
-                $q->whereHas('medicine', fn ($mq) => $mq->where('category', $category));
-            });
-
-        $query = $this->applyBatchFilter($query, $request);
-
-        $stockLogs = $query->orderByDesc('id')->get();
+        $historyRange = HistoricalDateRange::fromRequest($request);
+        $this->validateFilters($request);
+        $showEvidence = $this->showsEvidence($request);
+        $stockLogs = $showEvidence
+            ? app(InventoryHistoryService::class)->records($request, $historyRange, paginate: false, stockLogs: true)
+            : $this->activeLogs($request, $historyRange)->get();
 
         $filename = 'stock_logs_'.now()->format('Ymd_His').'.csv';
 
-        return response()->streamDownload(function () use ($stockLogs) {
+        return response()->streamDownload(function () use ($stockLogs, $showEvidence) {
             $handle = fopen('php://output', 'w');
 
-            fputcsv($handle, [
+            $headers = [
                 'ID',
                 'Medicine',
                 'Batch No.',
@@ -296,9 +225,22 @@ class StockLogController extends Controller
                 'Added By',
                 'RHU',
                 'Remarks',
-            ]);
+            ];
+            if ($showEvidence) {
+                array_push($headers, 'Movement', 'Status', 'Reference', 'Available change', 'Reserved change');
+            }
+            fputcsv($handle, $headers);
 
             foreach ($stockLogs as $log) {
+                if ($showEvidence) {
+                    fputcsv($handle, [
+                        $log->event_source.'-'.$log->event_id, $log->medicine_name ?? '', $log->batch_no ?? '',
+                        $log->storage_location ?? '', $log->quantity_added, substr((string) $log->date_added, 0, 10),
+                        $log->actor_name ?? '', $log->facility_name ?? '', $log->remarks ?? '', $log->event_label,
+                        $log->status_label, $log->mechanism, $log->available_delta, $log->allocated_delta,
+                    ]);
+                    continue;
+                }
                 fputcsv($handle, [
                     $log->id,
                     $log->medicine->medicine_name ?? '',
@@ -321,7 +263,8 @@ class StockLogController extends Controller
     public function autocompleteMedicines(Request $request)
     {
         $search = trim($request->get('q', ''));
-        if (strlen($search) < 2) {
+        $recommendations = $request->boolean('recommendations') && $search === '';
+        if (! $recommendations && strlen($search) < 2) {
             return response()->json([]);
         }
 
@@ -330,8 +273,8 @@ class StockLogController extends Controller
                 ->orWhere('dosage', 'like', "%{$search}%");
         })
             ->orderBy('medicine_name')
-            ->limit(15)
-            ->get(['id', 'medicine_name', 'dosage']);
+            ->limit($recommendations ? 6 : 15)
+            ->get(['id', 'medicine_name', 'dosage', 'dosage_form', 'category', 'unit', 'requires_prescription']);
 
         $results = $medicines->map(function ($m) {
             $text = $m->medicine_name;
@@ -342,6 +285,11 @@ class StockLogController extends Controller
             return [
                 'id' => $m->id,
                 'text' => $text,
+                'dosage' => $m->dosage,
+                'dosage_form' => $m->dosage_form,
+                'category' => $m->category,
+                'unit' => $m->unit,
+                'requires_prescription' => $m->requires_prescription,
             ];
         });
 

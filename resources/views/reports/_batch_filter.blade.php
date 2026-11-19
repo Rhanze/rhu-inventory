@@ -11,8 +11,8 @@
                 <input type="hidden" name="{{ $k }}" value="{{ $v }}">
             @endif
         @endforeach
-        <select name="batch_filter" onchange="this.form.submit()" style="
-            height: 40px; padding: 0 12px; font-size: 14px;
+        <select name="batch_filter" onchange="this.form.requestSubmit()" style="
+            min-height:2.75rem;height:auto; padding: 0 12px; font-size:1.0625rem;
             border: 2px solid #bec6cf; border-radius: 10px; outline: none;
             background: white; color: #0f172a; appearance: auto;
         ">

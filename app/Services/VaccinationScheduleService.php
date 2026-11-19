@@ -3,7 +3,10 @@
 namespace App\Services;
 
 use App\Models\HealthUnit;
+use App\Models\ImmunizationRecord;
+use App\Models\ImmunizationSchedule;
 use App\Models\PublicUser;
+use App\Models\RhuImmunizationSchedule;
 use App\Models\VaccinationSchedule;
 use Carbon\Carbon;
 
@@ -38,20 +41,28 @@ class VaccinationScheduleService
 
     public function generateFor(PublicUser $child): int
     {
-        if (! $child->birth_date) {
+        if (! $child->birth_date || ! $child->is_under_five) {
             return 0;
         }
 
         $birth = Carbon::parse($child->birth_date)->startOfDay();
+        $definitions = ImmunizationSchedule::all()->keyBy(fn ($row) => $row->antigen_label.':'.$row->dose_number);
+        $records = ImmunizationRecord::where('public_user_id', $child->id)->get()
+            ->keyBy(fn ($row) => $row->antigen.':'.$row->dose_number);
         $created = 0;
 
         foreach (self::EPI_SCHEDULE as [$vaccine, $dose, $offsetDays]) {
-            $exists = VaccinationSchedule::where('public_user_id', $child->id)
+            $definition = $definitions->get($vaccine.':'.$dose);
+            $record = $definition ? $records->get($definition->antigen.':'.$dose) : null;
+            $existing = VaccinationSchedule::where('public_user_id', $child->id)
                 ->where('vaccine_name', $vaccine)
-                ->where('dose_number', $dose)
-                ->exists();
+                ->where('dose_number', $dose);
 
-            if ($exists) {
+            if ($existing->exists()) {
+                if ($record) {
+                    $existing->update(['status' => 'given', 'given_date' => $record->date_given->toDateString(),
+                        'immunization_record_id' => $record->id]);
+                }
                 continue;
             }
 
@@ -61,7 +72,9 @@ class VaccinationScheduleService
                 'vaccine_name' => $vaccine,
                 'dose_number' => $dose,
                 'due_date' => $birth->copy()->addDays($offsetDays)->toDateString(),
-                'status' => 'pending',
+                'status' => $record ? 'given' : 'pending',
+                'given_date' => $record?->date_given?->toDateString(),
+                'immunization_record_id' => $record?->id,
             ]);
             $created++;
         }
@@ -153,34 +166,46 @@ class VaccinationScheduleService
     // ═══════════════════════════════════════════════════════════
 
     /**
-     * Given a due_date, return the RHU session date nearest to it.
+     * Return the first area session, or RHU default, on or after the dose due date.
      */
-    public function sessionDateFor(Carbon $dueDate, ?int $healthUnitId = null): Carbon
+    public function sessionDateFor(Carbon $dueDate, ?int $healthUnitId = null, ?string $barangay = null): Carbon
     {
         if (! $healthUnitId) {
             return $dueDate->copy();
         }
 
         $rhu = HealthUnit::find($healthUnitId);
+        if ($rhu && trim((string) $barangay) !== '') {
+            $area = RhuImmunizationSchedule::active()->forHealthUnit($healthUnitId)
+                ->whereRaw('LOWER(TRIM(area_label)) = ?', [mb_strtolower(trim($barangay))])->first();
+            if ($area) {
+                $rhu->immunization_pattern = $area->pattern;
+                $rhu->immunization_weekday = $area->weekday;
+                $rhu->immunization_week_number = $area->week_number;
+            }
+        }
         if (! $rhu
             || $rhu->immunization_pattern === 'exact'
             || $rhu->immunization_weekday === null) {
             return $dueDate->copy();
         }
 
-        $candidates = collect();
-
-        foreach ([-1, 0, 1] as $monthOffset) {
-            $monthStart = $dueDate->copy()->addMonths($monthOffset)->startOfMonth();
-            $session = $this->sessionInMonth($monthStart, $rhu);
-            if ($session) {
-                $candidates->push($session);
-            }
+        if ($rhu->immunization_pattern === 'weekly') {
+            $session = $dueDate->copy()->startOfDay();
+            return $session->dayOfWeek === (int) $rhu->immunization_weekday
+                ? $session : $session->next((int) $rhu->immunization_weekday);
         }
 
-        return $candidates
-            ->sortBy(fn ($d) => abs($d->diffInDays($dueDate)))
-            ->first() ?? $dueDate->copy();
+        $monthStart = $dueDate->copy()->startOfMonth();
+        for ($monthOffset = 0; $monthOffset < 2; $monthOffset++) {
+            $session = $this->sessionInMonth($monthStart, $rhu);
+            if ($session && $session->greaterThanOrEqualTo($dueDate->copy()->startOfDay())) {
+                return $session;
+            }
+            $monthStart->addMonth();
+        }
+
+        return $dueDate->copy();
     }
 
     /**
@@ -197,7 +222,7 @@ class VaccinationScheduleService
         }
 
         return match ($rhu->immunization_pattern) {
-            'weekly' => $monthStart->copy()->next($weekday),
+            'weekly' => $monthStart->copy()->firstOfMonth($weekday),
             'monthly_first' => $monthStart->copy()->firstOfMonth($weekday),
             'monthly_last' => $monthStart->copy()->lastOfMonth($weekday),
             'monthly_nth' => $rhu->immunization_week_number
@@ -222,8 +247,14 @@ class VaccinationScheduleService
 
         for ($i = 0; $i < $months; $i++) {
             $session = $this->sessionInMonth($cursor->copy(), $rhu);
-            if ($session && ($session->isToday() || $session->isFuture())) {
-                $dates[] = $session->copy();
+            while ($session && $session->month === $cursor->month) {
+                if ($session->greaterThanOrEqualTo(today())) {
+                    $dates[] = $session->copy();
+                }
+                if ($rhu->immunization_pattern !== 'weekly') {
+                    break;
+                }
+                $session->addWeek();
             }
             $cursor->addMonth();
         }
@@ -237,7 +268,7 @@ class VaccinationScheduleService
 
     public function rescheduleMissedDoses(int $graceDays = 30): int
     {
-        $missed = VaccinationSchedule::whereHas('patient', fn ($q) => $q->forViewer())->with('healthUnit')
+        $missed = VaccinationSchedule::whereHas('patient', fn ($q) => $q->forViewer())->with(['healthUnit', 'patient'])
             ->where('status', 'missed')
             ->whereDate('due_date', '<', now()->subDays($graceDays)->toDateString())
             ->get();
@@ -248,7 +279,7 @@ class VaccinationScheduleService
             $alreadyRescheduled = VaccinationSchedule::where('public_user_id', $dose->public_user_id)
                 ->where('vaccine_name', $dose->vaccine_name)
                 ->where('dose_number', $dose->dose_number)
-                ->where('status', 'pending')
+                ->whereIn('status', ['pending', 'given', 'skipped'])
                 ->exists();
 
             if ($alreadyRescheduled) {
@@ -256,18 +287,7 @@ class VaccinationScheduleService
             }
 
             $originalDue = Carbon::parse($dose->due_date);
-            $nextMonth = $originalDue->copy()->addMonth()->startOfMonth();
-
-            $rhu = $dose->healthUnit;
-            $newDate = null;
-
-            if ($rhu && $rhu->immunization_pattern !== 'exact' && $rhu->immunization_weekday !== null) {
-                $newDate = $this->sessionInMonth($nextMonth, $rhu);
-            }
-
-            if (! $newDate) {
-                $newDate = $originalDue->copy()->addMonth();
-            }
+            $newDate = $this->sessionDateFor(today(), $dose->health_unit_id, $dose->patient?->barangay);
 
             VaccinationSchedule::create([
                 'health_unit_id' => $dose->health_unit_id,

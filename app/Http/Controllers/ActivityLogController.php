@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ActivityLog;
+use App\Support\HistoricalDateRange;
 use Illuminate\Http\Request;
 
 class ActivityLogController extends Controller
@@ -22,11 +23,16 @@ class ActivityLogController extends Controller
 
     private function getBaseQuery(Request $request)
     {
-        $search = trim($request->get('search', ''));
-        $module = trim($request->get('module', ''));
-        $action = trim($request->get('action', ''));
+        $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:200'],
+            'module' => ['nullable', 'string', 'max:100'],
+            'action' => ['nullable', 'string', 'max:100'],
+        ]);
+        $search = trim($filters['search'] ?? '');
+        $module = trim($filters['module'] ?? '');
+        $action = trim($filters['action'] ?? '');
 
-        $query = ActivityLog::with('user')
+        $query = ActivityLog::with(['user', 'healthUnit'])
             ->where('health_unit_id', session('health_unit_id'));
 
         // Admin sees all RHU logs, staff sees only their own logs
@@ -63,9 +69,12 @@ class ActivityLogController extends Controller
             return $redirect;
         }
 
-        $search = trim($request->get('search', ''));
+        $filteredQuery = $this->getBaseQuery($request);
+        $historyRange = HistoricalDateRange::fromRequest($request);
+        $historyRange->apply($filteredQuery, 'created_at');
+        $search = trim($request->input('search', ''));
 
-        $baseQuery = ActivityLog::with('user')
+        $baseQuery = ActivityLog::with(['user', 'healthUnit'])
             ->where('health_unit_id', session('health_unit_id'));
 
         if (session('role') === 'staff') {
@@ -81,26 +90,16 @@ class ActivityLogController extends Controller
                                               ->count(),
         ];
 
-        $logs = (clone $baseQuery)
-            ->when($search, function ($query, $search) {
-                $query->where(function ($q) use ($search) {
-                    $q->where('module', 'like', "%{$search}%")
-                      ->orWhere('action', 'like', "%{$search}%")
-                      ->orWhere('description', 'like', "%{$search}%")
-                      ->orWhereHas('user', function ($uq) use ($search) {
-                          $uq->where('name', 'like', "%{$search}%")
-                             ->orWhere('username', 'like', "%{$search}%");
-                      });
-                });
-            })
+        $logs = $filteredQuery
             ->orderByDesc('id')
-            ->paginate(100)  // <-- now 100 per page
+            ->paginate(100)
             ->withQueryString();
 
         return view('activity_logs.index', compact(
             'logs',
             'search',
-            'stats'
+            'stats',
+            'historyRange'
         ));
     }
 
@@ -110,27 +109,9 @@ class ActivityLogController extends Controller
             return $redirect;
         }
 
-        $search = trim($request->get('search', ''));
-
-        $query = ActivityLog::with('user')
-            ->where('health_unit_id', session('health_unit_id'));
-
-        if (session('role') === 'staff') {
-            $query->where('user_id', session('user_id'));
-        }
-
+        $query = $this->getBaseQuery($request);
+        HistoricalDateRange::fromRequest($request)->apply($query, 'created_at');
         $logs = $query
-            ->when($search, function ($q) use ($search) {
-                $q->where(function ($sub) use ($search) {
-                    $sub->where('module', 'like', "%{$search}%")
-                        ->orWhere('action', 'like', "%{$search}%")
-                        ->orWhere('description', 'like', "%{$search}%")
-                        ->orWhereHas('user', function ($uq) use ($search) {
-                            $uq->where('name', 'like', "%{$search}%")
-                               ->orWhere('username', 'like', "%{$search}%");
-                        });
-                });
-            })
             ->orderByDesc('id')
             ->get();
 
@@ -146,6 +127,7 @@ class ActivityLogController extends Controller
                 'Action',
                 'Description',
                 'Date & Time',
+                'Where',
             ]);
 
             foreach ($logs as $index => $log) {
@@ -156,6 +138,7 @@ class ActivityLogController extends Controller
                     $log->action,
                     $log->description,
                     $log->created_at ? \Carbon\Carbon::parse($log->created_at)->format('M d, Y | h:i A') : 'N/A',
+                    $log->healthUnit->name ?? ($log->health_unit_id === null ? 'Provincial Health Office' : 'Facility not recorded'),
                 ]);
             }
 

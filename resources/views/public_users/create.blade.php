@@ -4,7 +4,7 @@
 <div style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
 
     {{-- Header --}}
-    <div style="
+    <div class="mw-page-card" style="
         background: rgba(255,255,255,0.9); backdrop-filter: blur(12px);
         border-radius:20px; padding:24px 28px; border:1px solid rgba(255,255,255,0.4);
         box-shadow:0 8px 20px rgba(0,0,0,0.06);
@@ -49,7 +49,7 @@
         </style>
 
         {{-- Basic info --}}
-        <div class="form-card" style="
+        <div class="form-card mw-page-card" style="
             background:rgba(255,255,255,0.95); border-radius:20px;
             border:1px solid rgba(66,173,138,0.15); box-shadow:0 8px 20px rgba(0,0,0,0.06);
             padding:28px; margin-bottom:20px;">
@@ -57,7 +57,7 @@
                 Basic Information
             </p>
 
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+            <div class="mw-form-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
                 <div>
                     <label>First Name <span class="req">*</span></label>
                     <input type="text" name="first_name" value="{{ old('first_name') }}" required placeholder="First name">
@@ -68,7 +68,7 @@
                 </div>
             </div>
 
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+            <div class="mw-form-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
                 <div>
                     <label>Birth Date <span class="req">*</span></label>
                     <input type="date" name="birth_date" value="{{ old('birth_date') }}"
@@ -80,9 +80,12 @@
                 </div>
             </div>
 
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+            <div class="mw-form-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
                 <div>
                     <label>Barangay <span class="req">*</span></label>
+                    @if(session('role') === 'midwife')
+                        @include('public_users._assigned_barangay')
+                    @else
                     <input type="text" name="barangay" value="{{ old('barangay') }}" required
                            placeholder="e.g. Poblacion"
                            list="barangay-list">
@@ -91,6 +94,7 @@
                             <option value="{{ $b }}"></option>
                         @endforeach
                     </datalist>
+                    @endif
                 </div>
                 <div>
                     <label>Contact Number</label>
@@ -105,7 +109,7 @@
         </div>
 
         {{-- FHSIS / Maternal --}}
-        <div class="form-card" style="
+        <div class="form-card mw-page-card" style="
             background:rgba(255,255,255,0.95); border-radius:20px;
             border:1px solid rgba(66,173,138,0.15); box-shadow:0 8px 20px rgba(0,0,0,0.06);
             padding:28px; margin-bottom:20px;">
@@ -113,7 +117,7 @@
                 FHSIS / Maternal Health <span style="color:#64748b; font-weight:400; text-transform:none; letter-spacing:normal;">(all optional)</span>
             </p>
 
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+            <div class="mw-form-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
                 <div>
                     <label>Household ID</label>
                     <input type="text" name="household_id" value="{{ old('household_id') }}" placeholder="e.g. HH-0001">
@@ -131,7 +135,7 @@
                 <label for="is_pregnant" style="margin:0; cursor:pointer;">Currently pregnant</label>
             </div>
 
-            <div id="pregnancy-fields" style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:16px;">
+            <div id="pregnancy-fields" class="mw-form-grid" style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:16px;">
                 <div>
                     <label>LMP</label>
                     <input type="date" name="lmp" value="{{ old('lmp') }}" max="{{ now()->toDateString() }}">
@@ -158,7 +162,7 @@
                 border:1px solid #e2e8f0; font-size:16px; font-weight:600; text-decoration:none;">
                 Cancel
             </a>
-            <button type="submit" style="
+            <button type="submit" @disabled(session('role') === 'midwife' && $barangays->isEmpty()) style="
                 padding:10px 20px; border-radius:10px; background:#42ad8a; color:white;
                 font-size:16px; font-weight:600; border:none; cursor:pointer;">
                 Save Patient

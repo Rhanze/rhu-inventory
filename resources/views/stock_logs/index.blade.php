@@ -11,10 +11,34 @@
         }
         .table-scroll::-webkit-scrollbar-thumb:hover { background: #42ad8a; }
         .table-scroll { scrollbar-width: thin; scrollbar-color: #cbd5e1 #f1f5f9; }
+        .stock-log-filters { min-width: 0; background: #fff; border: 1px solid #d6e5df; border-radius: 16px; padding: 18px 20px; }
+        .stock-log-fields { display: flex; flex-wrap: wrap; gap: 12px; }
+        .stock-log-fields label { display: grid; gap: 6px; flex: 1 1 12rem; min-width: 0; color: #334155; font-weight: 600; }
+        .stock-log-fields .stock-log-search { flex: 2 1 18rem; }
+        .stock-log-fields :is(input, select) {
+            box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px;
+            padding: 8px 12px; font: inherit; background: #fff; color: #0f172a;
+            border: 1px solid #a6b7af; border-radius: 8px; text-overflow: ellipsis;
+        }
+        .stock-log-options { margin-top: 12px; }
+        .stock-log-options summary { width: fit-content; padding: 6px 0; cursor: pointer; font-weight: 600; color: #0f5c4b; }
+        .stock-log-options .stock-log-fields { padding: 8px 0 4px; }
+        .stock-log-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 10px; }
+        .stock-log-actions button { min-height: 44px; padding: 8px 16px; border: 0; border-radius: 8px; background: #258663; color: #fff; cursor: pointer; font: inherit; font-weight: 600; }
+        .stock-log-filters a, .stock-log-results a { color: #0f5c4b; text-decoration: underline; }
+        .stock-log-filters :is(input, select, button, a, summary):focus-visible { outline: 3px solid #0f766e; outline-offset: 2px; }
+        .stock-log-results { margin: 0; color: #334155; }
+        .stock-movement-evidence { background: #fff; border-radius: 16px; padding: 18px 20px; min-width: 0; }
+        .stock-movement-evidence .inventory-history-scroll { overflow-x: auto; max-width: 100%; }
+        .stock-movement-evidence table { width: 100%; min-width: 72rem; border-collapse: collapse; }
+        .stock-movement-evidence :is(th, td) { padding: 12px; vertical-align: top; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        .stock-movement-evidence th { background: #f8fafc; }
+        .stock-movement-evidence small { display: block; color: #475569; font-size: 1rem; }
+        .stock-movement-evidence .inventory-history-status { display: inline-block; white-space: nowrap; border: 1px solid #cbd5e1; border-radius: 8px; padding: 4px 8px; }
     </style>
 
     {{-- Header Card --}}
-    <div class="no-print" style="
+    <div class="no-print page-heading" style="
         background: rgba(255,255,255,0.9);
         backdrop-filter: blur(12px);
         border-radius: 20px;
@@ -27,112 +51,22 @@
         flex-wrap: wrap;
         gap: 16px;
     ">
-        <div style="display:flex; align-items:center; gap:24px; flex-wrap:wrap;">
-            <div>
-                <p style="font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #42ad8a; margin: 0 0 6px 0;">Stock Logs</p>
-                @if(is_null(session('health_unit_id')))
-                    <h2 style="font-size: 24px; font-weight: 700; color: #0f172a; margin: 0;">
-                        @if(request('rhu_filter') === 'pho')
-                            PHO Stock Logs
-                        @elseif(request('rhu_filter'))
-                            @php $selectedRhu = $healthUnits->firstWhere('id', request('rhu_filter')); @endphp
-                            {{ $selectedRhu->name ?? 'RHU Stock Logs' }}
-                        @else
-                            Health Units Stock Logs
-                        @endif
-                    </h2>
-                @else
-                    <h2 style="font-size: 24px; font-weight: 700; color: #0f172a; margin: 0;">Manage Stocks</h2>
-                @endif
+        <div class="page-heading-main" style="display:flex; align-items:center; gap:24px; flex-wrap:wrap; min-width:0; max-width:100%;">
+            <div class="page-heading-title">
+                <h1 style="font-size:1.5rem; font-weight:700; color:#0f172a; margin:0;">Stock Logs</h1>
             </div>
 
-            {{-- TAB BAR: Inventory / Stock Logs --}}
-            <div style="background: #f1f5f9; border-radius: 12px; padding: 4px; display: inline-flex; gap: 4px;">
-                <a href="{{ route('inventory.index', array_filter(['rhu_filter' => request('rhu_filter')])) }}" style="
-                    display: inline-flex; align-items: center; gap: 8px;
-                    padding: 8px 18px; border-radius: 9px;
-                    font-size: 14px; font-weight: 600; text-decoration: none;
-                    background: transparent; color: #475569;
-                    transition: all 0.2s;
-                " onmouseover="this.style.background='rgba(255,255,255,0.7)'; this.style.color='#0f5c4b';"
-                   onmouseout="this.style.background='transparent'; this.style.color='#475569';">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-                        <line x1="12" y1="22.08" x2="12" y2="12"/>
-                    </svg>
-                    Inventory
-                </a>
+            @include('inventory._navigation', ['activeInventoryTab' => 'logs'])
 
-                <a href="{{ route('stock_logs.index', array_filter(['rhu_filter' => request('rhu_filter')])) }}" style="
-                    display: inline-flex; align-items: center; gap: 8px;
-                    padding: 8px 18px; border-radius: 9px;
-                    font-size: 14px; font-weight: 600; text-decoration: none;
-                    background: #42ad8a; color: #ffffff;
-                    box-shadow: 0 2px 6px rgba(66,173,138,0.25);
-                ">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                        <polyline points="14 2 14 8 20 8"/>
-                        <line x1="8" y1="13" x2="16" y2="13"/>
-                        <line x1="8" y1="17" x2="16" y2="17"/>
-                    </svg>
-                    Stock Logs
-                </a>
-            </div>
         </div>
 
         {{-- Actions --}}
-        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-
-            {{-- Location filter (PHO admin only) --}}
-            @if(is_null(session('health_unit_id')))
-                <form method="GET" action="{{ route('stock_logs.index') }}" style="display: flex; gap: 8px; align-items: center;">
-                    @if(request('search'))
-                        <input type="hidden" name="search" value="{{ request('search') }}">
-                    @endif
-                    @if(request('type'))
-                        <input type="hidden" name="type" value="{{ request('type') }}">
-                    @endif
-                    <select name="rhu_filter" style="
-                        height: 40px; padding: 0 12px; font-size: 14px;
-                        border: 2px solid #bec6cf; border-radius: 10px; outline: none;
-                        background: white; color: #0f172a; appearance: auto;
-                    " onchange="this.form.submit()">
-                        <option value="">All Health Units</option>
-                        <option value="pho" {{ request('rhu_filter') === 'pho' ? 'selected' : '' }}>Your PHO Stock Logs</option>
-                        @foreach($healthUnits as $rhu)
-                            <option value="{{ $rhu->id }}" {{ request('rhu_filter') == $rhu->id ? 'selected' : '' }}>
-                                {{ $rhu->name }}
-                            </option>
-                        @endforeach
-                    </select>
-                </form>
-            @endif
-
-            {{-- Type Filter --}}
-            <form method="GET" action="{{ route('stock_logs.index') }}" style="display: flex; gap: 8px; align-items: center;">
-                @if(request('search'))
-                    <input type="hidden" name="search" value="{{ request('search') }}">
-                @endif
-                @if(request('rhu_filter'))
-                    <input type="hidden" name="rhu_filter" value="{{ request('rhu_filter') }}">
-                @endif
-                <select name="type" style="
-                    height: 40px; padding: 0 12px; font-size: 14px;
-                    border: 2px solid #bec6cf; border-radius: 10px; outline: none;
-                    background: white; color: #0f172a; appearance: auto;
-                " onchange="this.form.submit()">
-                    <option value="">All Types</option>
-                    <option value="addition" {{ request('type') == 'addition' ? 'selected' : '' }}>Stock In</option>
-                    <option value="release"  {{ request('type') == 'release' ? 'selected' : '' }}>Stock Out</option>
-                </select>
-            </form>
+        <div class="page-heading-actions" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
 
             {{-- EXPORT BUTTON — opens inline modal --}}
             <button type="button" onclick="openStockLogsExportModal()" style="
                 display:inline-flex; align-items:center; gap:6px;
-                font-size:14px; font-weight:600;
+                font-size:1.0625rem; font-weight:600;
                 padding:9px 18px; border-radius:10px;
                 background:#42ad8a; color:#ffffff;
                 border:none; cursor:pointer; transition: background 0.2s;
@@ -145,9 +79,37 @@
                 </svg>
                 Export
             </button>
+            @include('imports._link', ['section' => session('health_unit_id') ? 'stock_logs' : 'shipments', 'fallback' => true])
         </div>
     </div>
 
+    @php
+        $stockLogFacility = (string) request('rhu_filter');
+        $stockLogFacilityLabel = session('health_unit_id') !== null ? 'Your RHU' : match ($stockLogFacility) {
+            '' => 'All RHUs',
+            'all' => 'All facilities including PHO',
+            'pho' => 'Provincial Health Office',
+            default => $healthUnits->firstWhere('id', $stockLogFacility)?->name ?? 'Selected facility',
+        };
+    @endphp
+    @include('stock_logs._filters')
+    @include('shared.empty_result', ['resultKey' => 'history', 'recordCount' => $stockLogs->total()])
+    <p class="stock-log-results">
+        <strong>{{ number_format($stockLogs->total()) }} {{ Str::plural('movement', $stockLogs->total()) }}</strong>
+        &middot; {{ $stockLogFacilityLabel }} &middot; {{ $historyRange->label() }}
+        @if(request('source') === 'stock_logs')
+            &middot; <a href="{{ route('stock_logs.index', ['evidence' => 1] + request()->except('source', 'page')) }}">Include additional movement records</a>
+        @endif
+    </p>
+
+    @if($showEvidence)
+        <section class="stock-movement-evidence" aria-label="Stock movements">
+            @if(request()->filled('record_kind'))
+                <p style="margin:0 0 12px;color:#475569;">{{ request('record_kind') === 'allocation' ? 'Stock issued for allocations' : 'Stock issued through dispensing' }}. A single record can include several batches.</p>
+            @endif
+            @include('stock_logs._movement_table', ['movements' => $stockLogs])
+        </section>
+    @else
     {{-- Table card --}}
     <div style="
         background: rgba(255,255,255,0.9);
@@ -159,19 +121,19 @@
         overflow: hidden;
     ">
         <div class="table-scroll" style="width: 100%; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;">
-            <table style="width:100%; min-width: 1000px; border-collapse: collapse; font-size: 14px;">
+            <table style="width:100%; min-width: 1000px; border-collapse: collapse; font-size:1.0625rem;">
                 <thead>
                     <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                        <th class="no-print" style="padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">#</th>
-                        <th style="padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Batch No.</th>
-                        <th style="padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Medicine</th>
-                        <th style="padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Type</th>
-                        <th style="padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Dosage</th>
-                        <th style="padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Quantity</th>
-                        <th style="padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Date</th>
-                        <th style="padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Added By</th>
+                        <th class="no-print" style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">#</th>
+                        <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Batch No.</th>
+                        <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Medicine</th>
+                        <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Type</th>
+                        <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Dosage</th>
+                        <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Quantity</th>
+                        <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Date</th>
+                        <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Added By</th>
                         @if(is_null(session('health_unit_id')))
-                            <th style="padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">RHU</th>
+                            <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">RHU</th>
                         @endif
                     </tr>
                 </thead>
@@ -181,16 +143,20 @@
                         @php
                             $isHighlighted = (string) request('highlight') === (string) $log->id;
                             $rowBg = $isHighlighted ? '#f1f5f9' : 'transparent';
-                            $isRelease = stripos($log->remarks ?? '', 'Released') !== false;
+                            $isRelease = $log->movement_direction === 'release';
 
                             if ($isRelease) {
                                 $typeLabel   = 'Stock Out';
                                 $typeIcon    = '↑';
                                 $typeStyles  = 'background:#FFF0F0; color:#A32D2D; border:1px solid #F7C1C1;';
-                            } else {
+                            } elseif ($log->movement_direction === 'addition') {
                                 $typeLabel   = 'Stock In';
                                 $typeIcon    = '↓';
                                 $typeStyles  = 'background:#E8F7F4; color:#0f5c4b; border:1px solid #42AD8A;';
+                            } else {
+                                $typeLabel = 'Unknown';
+                                $typeIcon = '';
+                                $typeStyles = 'background:#f1f5f9; color:#475569;';
                             }
 
                             $med  = $log->medicine;
@@ -217,8 +183,8 @@
                             <td style="padding: 14px 16px; font-weight: 600; color: #0f172a;">{{ $med->medicine_name ?? 'N/A' }}</td>
 
                             <td style="padding: 14px 16px;">
-                                <span style="display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:600; padding:3px 10px; border-radius:999px; {{ $typeStyles }}">
-                                    <span style="font-size:14px; line-height:1;">{{ $typeIcon }}</span>
+                                <span style="display:inline-flex; align-items:center; gap:4px; font-size:1.0625rem; font-weight:600; padding:3px 10px; border-radius:999px; {{ $typeStyles }}">
+                                    <span style="font-size:1.0625rem; line-height:1;">{{ $typeIcon }}</span>
                                     {{ $typeLabel }}
                                 </span>
                             </td>
@@ -226,7 +192,7 @@
                             <td style="padding: 14px 16px; color: #334155;">
                                 <div>{{ $med->dosage ?? '—' }}</div>
                                 @if($med && $med->dosage_form)
-                                    <div style="font-size: 12px; color: #64748b; margin-top: 2px;">{{ $med->dosage_form }}</div>
+                                    <div style="font-size:1.0625rem; color: #64748b; margin-top: 2px;">{{ $med->dosage_form }}</div>
                                 @endif
                             </td>
 
@@ -234,7 +200,7 @@
                                 {{ $log->quantity_added }}<span style="font-weight: 500; color: #64748b;">{{ $unitLabel }}</span>
                             </td>
 
-                            <td style="padding: 14px 16px; color: #334155;">{{ $log->date_added }}</td>
+                            <td style="padding: 14px 16px; color: #334155;">{{ $log->date_added?->format('M j, Y') ?? 'Not recorded' }}</td>
 
                             <td style="padding: 14px 16px; color: #334155;">{{ $log->addedByUser->name ?? 'N/A' }}</td>
 
@@ -258,6 +224,8 @@
         </div>
     </div>
 
+    @endif
+
     {{-- Pagination --}}
     @if ($stockLogs->hasPages())
         <div class="no-print" style="
@@ -274,9 +242,9 @@
             flex-wrap: wrap;
         ">
             @if ($stockLogs->onFirstPage())
-                <span style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">← Previous</span>
+                <span style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">← Previous</span>
             @else
-                <a href="{{ $stockLogs->previousPageUrl() }}" style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
+                <a href="{{ $stockLogs->previousPageUrl() }}" style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
                    onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#42ad8a';" onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0';">
                     ← Previous
                 </a>
@@ -284,9 +252,9 @@
 
             @foreach ($stockLogs->getUrlRange(1, $stockLogs->lastPage()) as $page => $url)
                 @if ($page == $stockLogs->currentPage())
-                    <span style="font-size: 14px; font-weight: 600; padding: 8px 14px; border-radius: 8px; background: #42ad8a; color: #ffffff; border: 1px solid #42ad8a; cursor: default;">{{ $page }}</span>
+                    <span style="font-size:1.0625rem; font-weight: 600; padding: 8px 14px; border-radius: 8px; background: #42ad8a; color: #ffffff; border: 1px solid #42ad8a; cursor: default;">{{ $page }}</span>
                 @else
-                    <a href="{{ $url }}" style="font-size: 14px; font-weight: 500; padding: 8px 14px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
+                    <a href="{{ $url }}" style="font-size:1.0625rem; font-weight: 500; padding: 8px 14px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
                        onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#42ad8a';" onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0';">
                         {{ $page }}
                     </a>
@@ -294,12 +262,12 @@
             @endforeach
 
             @if ($stockLogs->hasMorePages())
-                <a href="{{ $stockLogs->nextPageUrl() }}" style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
+                <a href="{{ $stockLogs->nextPageUrl() }}" style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
                    onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#42ad8a';" onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0';">
                     Next →
                 </a>
             @else
-                <span style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">Next →</span>
+                <span style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">Next →</span>
             @endif
         </div>
     @endif
@@ -324,10 +292,10 @@
         max-height:90vh; overflow-y:auto;
     ">
         <div style="padding:22px 26px 14px; border-bottom:1px solid #f1f5f9;">
-            <h3 style="font-size:19px; font-weight:700; color:#0f172a; margin:0 0 4px 0;">
+            <h3 style="font-size:1.1875rem; font-weight:700; color:#0f172a; margin:0 0 4px 0;">
                 Export Stock Logs
             </h3>
-            <p style="font-size:13px; color:#64748b; margin:0;">
+            <p style="font-size:1.0625rem; color:#64748b; margin:0;">
                 Choose what to include, then pick an action.
             </p>
         </div>
@@ -337,13 +305,13 @@
             {{-- 1. PROGRAM CATEGORY --}}
             <div style="margin-bottom:22px;">
                 <label for="category-stockLogsExportModal"
-                       style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                       style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Program Category
                 </label>
                 <select id="category-stockLogsExportModal"
                         style="
-                            width:100%; height:44px;
-                            padding:0 14px; font-size:14px;
+                            width:100%; min-height:2.75rem;height:auto;
+                            padding:0 14px; font-size:1.0625rem;
                             border:2px solid #bec6cf; border-radius:10px;
                             outline:none; box-sizing:border-box;
                             background:#ffffff; color:#0f172a; appearance:auto; cursor:pointer;
@@ -366,13 +334,13 @@
             @if(is_null(session('health_unit_id')))
                 <div style="margin-bottom:22px;">
                     <label for="rhu-stockLogsExportModal"
-                           style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                           style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                         Health Unit (RHU)
                     </label>
                     <select id="rhu-stockLogsExportModal"
                             style="
-                                width:100%; height:44px;
-                                padding:0 14px; font-size:14px;
+                                width:100%; min-height:2.75rem;height:auto;
+                                padding:0 14px; font-size:1.0625rem;
                                 border:2px solid #bec6cf; border-radius:10px;
                                 outline:none; box-sizing:border-box;
                                 background:#ffffff; color:#0f172a; appearance:auto; cursor:pointer;
@@ -380,6 +348,7 @@
                             onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                             onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
                         <option value="" {{ !request('rhu_filter') ? 'selected' : '' }}>All Health Units</option>
+                        <option value="all" @selected(request('rhu_filter') === 'all')>All facilities including PHO</option>
                         <option value="pho" {{ request('rhu_filter') === 'pho' ? 'selected' : '' }}>Your PHO Stock Logs</option>
                         @foreach($healthUnits as $rhu)
                             <option value="{{ $rhu->id }}" {{ request('rhu_filter') == $rhu->id ? 'selected' : '' }}>
@@ -393,13 +362,13 @@
             {{-- 3. MOVEMENT TYPE --}}
             <div style="margin-bottom:22px;">
                 <label for="type-stockLogsExportModal"
-                       style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                       style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Movement Type
                 </label>
                 <select id="type-stockLogsExportModal"
                         style="
-                            width:100%; height:44px;
-                            padding:0 14px; font-size:14px;
+                            width:100%; min-height:2.75rem;height:auto;
+                            padding:0 14px; font-size:1.0625rem;
                             border:2px solid #bec6cf; border-radius:10px;
                             outline:none; box-sizing:border-box;
                             background:#ffffff; color:#0f172a; appearance:auto; cursor:pointer;
@@ -409,26 +378,28 @@
                     <option value=""          {{ !request('type')              ? 'selected' : '' }}>All Movements</option>
                     <option value="addition"  {{ request('type') == 'addition'  ? 'selected' : '' }}>Stock In only</option>
                     <option value="release"   {{ request('type') == 'release'   ? 'selected' : '' }}>Stock Out only</option>
+                    <option value="reservation" @selected(request('type') === 'reservation')>Reservations only</option>
+                    <option value="reversal" @selected(request('type') === 'reversal')>Reversals only</option>
                 </select>
             </div>
 
             {{-- 4. DATE RANGE --}}
             <div style="margin-bottom:22px;">
-                <label style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                <label style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Date Range
                 </label>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
                     <div>
                         <label for="dateFrom-stockLogsExportModal"
-                               style="font-size:12px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">
+                               style="font-size:1.0625rem; font-weight:600; color:#475569; display:block; margin-bottom:4px;">
                             From
                         </label>
                         <input type="date"
                                id="dateFrom-stockLogsExportModal"
                                value="{{ request('date_from', '') }}"
                                style="
-                                   width:100%; height:44px;
-                                   padding:0 12px; font-size:14px;
+                                   width:100%; min-height:2.75rem;height:auto;
+                                   padding:0 12px; font-size:1.0625rem;
                                    border:2px solid #bec6cf; border-radius:10px;
                                    outline:none; box-sizing:border-box;
                                    background:#ffffff; color:#0f172a;
@@ -438,15 +409,15 @@
                     </div>
                     <div>
                         <label for="dateTo-stockLogsExportModal"
-                               style="font-size:12px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">
+                               style="font-size:1.0625rem; font-weight:600; color:#475569; display:block; margin-bottom:4px;">
                             To
                         </label>
                         <input type="date"
                                id="dateTo-stockLogsExportModal"
                                value="{{ request('date_to', '') }}"
                                style="
-                                   width:100%; height:44px;
-                                   padding:0 12px; font-size:14px;
+                                   width:100%; min-height:2.75rem;height:auto;
+                                   padding:0 12px; font-size:1.0625rem;
                                    border:2px solid #bec6cf; border-radius:10px;
                                    outline:none; box-sizing:border-box;
                                    background:#ffffff; color:#0f172a;
@@ -455,7 +426,7 @@
                                onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
                     </div>
                 </div>
-                <p style="font-size:12px; color:#64748b; margin:6px 0 0 0;">
+                <p style="font-size:1.0625rem; color:#64748b; margin:6px 0 0 0;">
                     Leave both blank to include all dates.
                 </p>
             </div>
@@ -463,7 +434,7 @@
             {{-- 5. BATCH NUMBER(S) --}}
             <div>
                 <label for="batchInput-stockLogsExportModal"
-                       style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                       style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Batch Number(s)
                 </label>
                 <input type="text"
@@ -471,15 +442,15 @@
                        placeholder="e.g. BT-001, BT-002, 1-8"
                        value="{{ request('batch_input', '') }}"
                        style="
-                           width:100%; height:44px;
-                           padding:0 14px; font-size:14px;
+                           width:100%; min-height:2.75rem;height:auto;
+                           padding:0 14px; font-size:1.0625rem;
                            border:2px solid #bec6cf; border-radius:10px;
                            outline:none; box-sizing:border-box;
                            background:#ffffff; color:#0f172a;
                        "
                        onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                        onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
-                <p style="font-size:12px; color:#64748b; margin:6px 0 0 0;">
+                <p style="font-size:1.0625rem; color:#64748b; margin:6px 0 0 0;">
                     Separate multiple batch numbers with commas. Leave blank to include all batches.
                 </p>
             </div>
@@ -495,7 +466,7 @@
             <button type="button"
                     onclick="closeStockLogsExportModal()"
                     style="
-                        font-size:14px; font-weight:600;
+                        font-size:1.0625rem; font-weight:600;
                         padding:10px 18px; border-radius:10px;
                         background:#ffffff; color:#334155;
                         border:1px solid #e2e8f0; cursor:pointer;
@@ -509,7 +480,7 @@
                     onclick="runStockLogsExport('print')"
                     style="
                         display:inline-flex; align-items:center; gap:6px;
-                        font-size:14px; font-weight:600;
+                        font-size:1.0625rem; font-weight:600;
                         padding:10px 18px; border-radius:10px;
                         background:#ffffff; color:#334155;
                         border:1px solid #e2e8f0; cursor:pointer;
@@ -528,7 +499,7 @@
                     onclick="runStockLogsExport('csv')"
                     style="
                         display:inline-flex; align-items:center; gap:6px;
-                        font-size:14px; font-weight:600;
+                        font-size:1.0625rem; font-weight:600;
                         padding:10px 18px; border-radius:10px;
                         background:#42ad8a; color:#ffffff;
                         border:none; cursor:pointer;

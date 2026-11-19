@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DispensingRecord;
 use App\Models\FamilyPlanning;
 use App\Models\PostpartumVisit;
 use App\Models\PrenatalVisit;
 use App\Models\PublicUser;
 use App\Models\VaccinationSchedule;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
 
 class Patient360Controller extends Controller
 {
@@ -19,6 +19,7 @@ class Patient360Controller extends Controller
         }
 
         $healthUnitId = session('health_unit_id');
+        abort_unless($healthUnitId, 403, 'Patient records require an assigned RHU.');
 
         $query = PublicUser::forViewer();
         if ($healthUnitId) {
@@ -46,9 +47,10 @@ class Patient360Controller extends Controller
             ->get();
 
         // ── Dispensing (best-effort by name — table has no patient_id) ──
-        $dispensingRecords = DB::table('dispensing_records')
+        $dispensingRecords = DispensingRecord::with('medicine')
             ->where('patient_name', $patient->full_name)
             ->where('health_unit_id', $patient->health_unit_id)
+            ->when(session('role') === 'midwife', fn ($q) => $q->where('dispensed_by', session('user_id')))
             ->orderByDesc('date_dispensed')
             ->limit(30)
             ->get();

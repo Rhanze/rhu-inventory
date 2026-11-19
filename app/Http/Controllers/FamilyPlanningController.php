@@ -43,7 +43,7 @@ class FamilyPlanningController extends Controller
             ->when($method, fn ($q) => $q->where('method', $method))
             ->when($supplyFilter === 'due', function ($q) {
                 $q->whereNotNull('next_supply_date')
-                    ->whereBetween('next_supply_date', [now(), now()->addDays(30)]);
+                    ->whereBetween('next_supply_date', [today()->toDateString(), today()->addDays(30)->toDateString()]);
             })
             ->orderByDesc('date_accepted')
             ->paginate(20)
@@ -62,11 +62,11 @@ class FamilyPlanningController extends Controller
         $stats = [
             'total' => FamilyPlanning::whereHas('patient', fn ($q) => $q->forViewer())->where('health_unit_id', $healthUnitId)->count(),
             'this_month' => FamilyPlanning::whereHas('patient', fn ($q) => $q->forViewer())->where('health_unit_id', $healthUnitId)
-                ->whereBetween('date_accepted', [now()->startOfMonth(), now()->endOfMonth()])
+                ->whereBetween('date_accepted', [today()->startOfMonth()->toDateString(), today()->endOfMonth()->toDateString()])
                 ->count(),
             'due_for_supply' => FamilyPlanning::whereHas('patient', fn ($q) => $q->forViewer())->where('health_unit_id', $healthUnitId)
                 ->whereNotNull('next_supply_date')
-                ->whereBetween('next_supply_date', [now(), now()->addDays(30)])
+                ->whereBetween('next_supply_date', [today()->toDateString(), today()->addDays(30)->toDateString()])
                 ->count(),
         ];
 

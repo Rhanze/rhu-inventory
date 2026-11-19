@@ -40,7 +40,7 @@
             $daysLeft = now()->startOfDay()->diffInDays($expiry->copy()->startOfDay(), false);
             if ($daysLeft < 0) {
                 $expiryBadge = ['label' => 'Expired',     'bg' => '#FECACA', 'color' => '#991B1B', 'border' => '#FCA5A5'];
-            } elseif ($daysLeft <= 90) {
+            } elseif ($daysLeft <= \App\Models\Inventory::NEAR_EXPIRY_DAYS) {
                 $expiryBadge = ['label' => 'Near Expiry', 'bg' => '#FFE4CC', 'color' => '#B85C00', 'border' => '#FFB870'];
             } elseif ($daysLeft <= 180) {
                 $expiryBadge = ['label' => 'Monitor',     'bg' => '#FEF3C7', 'color' => '#92400E', 'border' => '#FCD34D'];
@@ -217,6 +217,13 @@
                 @error('expiration_date')
                     <p style="margin-top:4px; font-size:13px; color:#dc2626;">{{ $message }}</p>
                 @enderror
+            </div>
+
+            <div>
+                <label for="remarks" style="display:block;margin-bottom:6px;font-size:1rem;font-weight:600;color:#0f172a;">Reason for stock adjustment (optional)</label>
+                <textarea name="remarks" id="remarks" rows="3" maxlength="2000" placeholder="Explain any change to the stock quantity"
+                          style="width:100%;padding:12px 16px;font:inherit;border:2px solid #bec6cf;border-radius:14px;box-sizing:border-box;">{{ old('remarks') }}</textarea>
+                @error('remarks')<p style="color:#dc2626;">{{ $message }}</p>@enderror
             </div>
 
             {{-- Buttons --}}

@@ -53,7 +53,7 @@ class VaccinationSchedule extends Model
 
     public function getIsOverdueAttribute(): bool
     {
-        return $this->status === 'pending' && $this->due_date->isPast();
+        return $this->status === 'pending' && $this->due_date->lessThan(today());
     }
 
     public function getStatusLabelAttribute(): string

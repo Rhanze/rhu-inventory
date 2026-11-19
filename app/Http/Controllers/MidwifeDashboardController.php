@@ -3,14 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Allocation;
-use App\Models\Disease;
-use App\Models\DiseaseReport;
 use App\Models\DispensingRecord;
 use App\Models\HealthUnit;
 use App\Models\Notification;
 use App\Models\PublicUser;
-use App\Models\TransferRequest;
 use App\Models\User;
+use App\Services\DiseaseConsumptionTrendService;
+use App\Support\BarangayDemandScope;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -60,42 +59,38 @@ class MidwifeDashboardController extends Controller
 
         $user = User::find(session('user_id'));
         $healthUnit = HealthUnit::find($healthUnitId);
+        $snapshotDate = today()->toDateString();
+        $snapshotMonthStart = today()->startOfMonth()->toDateString();
 
         // ═══════════ Snapshot ═══════════
-        $dispensedToday = DispensingRecord::where('dispensed_by', session('user_id'))->where('health_unit_id', $healthUnitId)
-            ->whereDate('date_dispensed', today())
+        $dispensedToday = DispensingRecord::qualifying()->where('dispensed_by', session('user_id'))->where('health_unit_id', $healthUnitId)
+            ->whereDate('date_dispensed', $snapshotDate)
             ->count();
 
-        $dispensedThisMonth = DispensingRecord::where('dispensed_by', session('user_id'))->where('health_unit_id', $healthUnitId)
-            ->whereMonth('date_dispensed', now()->month)
-            ->whereYear('date_dispensed', now()->year)
+        $dispensedThisMonth = DispensingRecord::qualifying()->where('dispensed_by', session('user_id'))->where('health_unit_id', $healthUnitId)
+            ->whereDate('date_dispensed', '>=', $snapshotMonthStart)
+            ->whereDate('date_dispensed', '<=', $snapshotDate)
             ->count();
 
         $activePatients = PublicUser::forViewer()->where('health_unit_id', $healthUnitId)->count();
 
         $pendingRequests = Allocation::where('allocated_by', session('user_id'))->where('health_unit_id', $healthUnitId)
+            ->whereNull('destination_health_unit_id')
             ->where('status', 'pending')
             ->count();
 
         // ═══════════ Recent dispensing ═══════════
-        $recentDispensing = DispensingRecord::where('dispensed_by', session('user_id'))->with(['medicine'])
+        $recentDispensing = DispensingRecord::qualifying()->where('dispensed_by', session('user_id'))->with(['medicine'])
             ->where('health_unit_id', $healthUnitId)
             ->orderByDesc('date_dispensed')
             ->orderByDesc('id')
             ->limit(5)
             ->get();
 
-        // ═══════════ Incoming transfers ═══════════
-        $incomingTransfers = TransferRequest::with(['medicine', 'fromHealthUnit'])
-            ->where('to_health_unit_id', $healthUnitId)
-            ->where('status', 'accepted')
-            ->orderByDesc('approved_at')
-            ->limit(5)
-            ->get();
-
         // ═══════════ Recent supply requests ═══════════
         $recentRequests = Allocation::where('allocated_by', session('user_id'))->with(['medicine'])
             ->where('health_unit_id', $healthUnitId)
+            ->whereNull('destination_health_unit_id')
             ->orderByDesc('date_allocated')
             ->orderByDesc('id')
             ->limit(5)
@@ -109,36 +104,13 @@ class MidwifeDashboardController extends Controller
             ->limit(5)
             ->get();
 
-        // ═══════════ Disease trend data ═══════════
-        $diseases = Disease::active()
-            ->whereHas('reports', function ($q) use ($healthUnitId) {
-                $q->where('health_unit_id', $healthUnitId)
-                    ->where('report_date', '>=', now()->subDays(90));
-            })
-            ->orderBy('name')
-            ->get();
-
-        $weekStart = now()->startOfWeek();
-        $weekCases = [];
-        foreach ($diseases as $d) {
-            $weekCases[$d->id] = (int) DiseaseReport::where('health_unit_id', $healthUnitId)
-                ->where('disease_id', $d->id)
-                ->where('report_date', '>=', $weekStart)
-                ->sum('case_count');
-        }
-
-        $outbreakAlerts = DiseaseReport::with('disease')
-            ->where('health_unit_id', $healthUnitId)
-            ->where('is_outbreak', true)
-            ->where('report_date', '>=', now()->subDays(30))
-            ->orderByDesc('report_date')
-            ->get();
-
-        $totalCasesThisMonth = (int) DiseaseReport::where('health_unit_id', $healthUnitId)
-            ->where('report_date', '>=', now()->startOfMonth())
-            ->sum('case_count');
-
-        $allDiseases = Disease::active()->orderBy('name')->get();
+        // Automatic medicine demand for an explicitly assigned barangay.
+        $assignedDemandBarangays = BarangayDemandScope::options((int) $healthUnitId, (int) session('user_id'));
+        $demandBarangay = $assignedDemandBarangays->first();
+        $demandService = app(DiseaseConsumptionTrendService::class);
+        $areaDemand = $demandBarangay ? $demandService->analyze((int) $healthUnitId, $demandBarangay, 'weekly') : null;
+        $areaSavedConsumption = $demandBarangay ? $demandService->recordsQuery((int) $healthUnitId, $demandBarangay)
+            ->selectRaw('COUNT(*) AS record_count, MIN(date_dispensed) AS first_date, MAX(date_dispensed) AS last_date')->first() : null;
 
         // ═══════════ IMMUNIZATION CALENDAR — NEXT 14 DAYS ═══════════  // ← NEW
         $calendarPreview = $this->buildDueListByDay(
@@ -153,19 +125,19 @@ class MidwifeDashboardController extends Controller
         return view('dashboard.midwife', compact(
             'user',
             'healthUnit',
+            'snapshotDate',
+            'snapshotMonthStart',
             'dispensedToday',
             'dispensedThisMonth',
             'activePatients',
             'pendingRequests',
             'recentDispensing',
-            'incomingTransfers',
             'recentRequests',
             'unreadNotifications',
-            'diseases',
-            'weekCases',
-            'outbreakAlerts',
-            'totalCasesThisMonth',
-            'allDiseases',
+            'assignedDemandBarangays',
+            'demandBarangay',
+            'areaDemand',
+            'areaSavedConsumption',
             'calendarPreview',      // ← NEW
             'barangayCoverage'      // ← NEW
         ));
@@ -327,58 +299,6 @@ class MidwifeDashboardController extends Controller
      */
     private function buildBarangayCoverage(int $healthUnitId): array
     {
-        // Total children under 5 per barangay (denominator)
-        $totals = PublicUser::forViewer()->where('health_unit_id', $healthUnitId)
-            ->whereNotNull('birth_date')
-            ->where('birth_date', '>=', now()->subYears(5))
-            ->whereNotNull('barangay')
-            ->where('barangay', '!=', '')
-            ->select('barangay', DB::raw('COUNT(*) as total'))
-            ->groupBy('barangay')
-            ->orderByDesc('total')
-            ->pluck('total', 'barangay');
-
-        if ($totals->isEmpty()) {
-            return [
-                'labels' => [],
-                'immunized' => [],
-                'totals' => [],
-                'percent' => [],
-            ];
-        }
-
-        // Immunized children per barangay (at least 1 dose recorded)
-        $immunized = collect();
-        if (Schema::hasTable('immunization_records')) {
-            $immunized = DB::table('immunization_records')
-                ->join('public_users', 'public_users.id', '=', 'immunization_records.public_user_id')
-                ->when(session('role') === 'midwife', fn ($q) => $q->where('public_users.assigned_midwife_id', session('user_id')))
-                ->where('public_users.health_unit_id', $healthUnitId)
-                ->whereIn('public_users.barangay', $totals->keys()->toArray())
-                ->select(
-                    'public_users.barangay',
-                    DB::raw('COUNT(DISTINCT immunization_records.public_user_id) as count')
-                )
-                ->groupBy('public_users.barangay')
-                ->pluck('count', 'barangay');
-        }
-
-        $labels = $totals->keys()->toArray();
-        $immCounts = [];
-        $percents = [];
-
-        foreach ($labels as $b) {
-            $imm = (int) ($immunized[$b] ?? 0);
-            $tot = (int) ($totals[$b] ?? 0);
-            $immCounts[] = $imm;
-            $percents[] = $tot > 0 ? (int) round(($imm / $tot) * 100) : 0;
-        }
-
-        return [
-            'labels' => $labels,
-            'immunized' => $immCounts,
-            'totals' => $totals->values()->toArray(),
-            'percent' => $percents,
-        ];
+        return app(\App\Services\BarangayImmunizationCoverageService::class)->forHealthUnit($healthUnitId);
     }
 }

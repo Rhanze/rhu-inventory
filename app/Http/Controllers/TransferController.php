@@ -38,17 +38,10 @@ class TransferController extends Controller
 
         $query = TransferRequest::with([
             'fromHealthUnit', 'toHealthUnit', 'medicine',
-            'requestedBy', 'inventory', 'receivedByUser',
-        ]);
+            'requestedBy', 'inventory', 'receivedByUser', 'phoReviewer',
+        ])->visibleToViewer($healthUnitId, session('role'));
 
-        if (! $isPHO) {
-            $query->where(function ($q) use ($healthUnitId) {
-                $q->where('from_health_unit_id', $healthUnitId)
-                    ->orWhere('to_health_unit_id', $healthUnitId);
-            });
-        }
-
-        $transfers = $query->orderByDesc('created_at')->paginate(20);
+        $transfers = $query->orderByDesc('created_at')->orderByDesc('id')->paginate(20);
 
         return view('transfers.index', compact('transfers', 'isPHO'));
     }
@@ -96,19 +89,13 @@ class TransferController extends Controller
 
         $medicine = Medicine::findOrFail($request->medicine_id);
 
-        $sourceHasStock = Inventory::where('health_unit_id', $fromRhuId)
-            ->where('medicine_id', $medicine->id)
-            ->where('available_stock', '>', 0)
-            ->exists();
+        $sourceHasStock = Inventory::availableFefo((int) $fromRhuId, $medicine->id)->exists();
 
         if (! $sourceHasStock) {
             return back()->with('error', 'The source RHU does not have this medicine in stock.');
         }
 
-        $fromRhu = HealthUnit::find($fromRhuId);
-        $toRhu = HealthUnit::find($toRhuId);
-
-        DB::transaction(function () use ($request, $fromRhuId, $toRhuId, $medicine, $toRhu) {
+        DB::transaction(function () use ($request, $fromRhuId, $toRhuId, $medicine) {
             $transfer = TransferRequest::create([
                 'initiator_type' => 'rhu_request',
                 'from_health_unit_id' => $fromRhuId,
@@ -117,6 +104,7 @@ class TransferController extends Controller
                 'quantity' => $request->quantity,
                 'notes' => $request->notes,
                 'status' => 'pending',
+                'pho_review_status' => TransferRequest::PHO_REVIEW_PENDING,
                 'requested_by' => session('user_id'),
 
                 // Snapshot of what the requesting RHU asked for
@@ -131,29 +119,34 @@ class TransferController extends Controller
                 'pieces_per_pack' => null,
             ]);
 
-            Notification::create([
-                'health_unit_id' => $fromRhuId,
-                'transfer_id' => $transfer->id,
-                'type' => 'transfer_request',
-                'link' => route('transfers.index'),
-                'title' => 'New Stock Transfer Request',
-                'message' => $toRhu->name.' is requesting '.$transfer->formatQuantity($request->quantity).
-                                    ' of '.$medicine->medicine_name.
-                                    ($request->notes ? ' — '.$request->notes : ''),
-                'severity' => 'warning',
-                'is_read' => false,
-                'created_at' => now(),
-            ]);
-        });
-
-        ActivityLogger::log(
-            'Transfer', 'Request',
-            'Requested '.$request->quantity.' units of '.$medicine->medicine_name.
-            ' from '.$fromRhu->name.'.'
-        );
+            app(TransferService::class)->notifyPhoReviewRequested($transfer);
+            ActivityLogger::log('Transfer', 'Request', 'Submitted transfer #'.$transfer->id.' for PHO review.');
+        }, 3);
 
         return redirect()->route('transfers.index')
-            ->with('success', 'Transfer request sent to '.$fromRhu->name.'. Awaiting their acceptance.');
+            ->with('success', 'Transfer request submitted for PHO approval.');
+    }
+
+    public function phoApprove($id)
+    {
+        $this->ensurePhoReviewer();
+        app(TransferService::class)->reviewByPho((int) $id, (int) session('user_id'), true);
+
+        return back()->with('success', 'Transfer request approved. The supplying RHU has been notified.');
+    }
+
+    public function phoReject(Request $request, $id)
+    {
+        $this->ensurePhoReviewer();
+        $data = $request->validate(['rejection_reason' => 'nullable|string|max:500']);
+        app(TransferService::class)->reviewByPho((int) $id, (int) session('user_id'), false, $data['rejection_reason'] ?? null);
+
+        return back()->with('success', 'Transfer request rejected. The requesting RHU has been notified.');
+    }
+
+    private function ensurePhoReviewer(): void
+    {
+        abort_unless(session()->has('user_id') && session('role') === 'admin' && session('health_unit_id') === null, 403);
     }
 
     public function accept(Request $request, $id)
@@ -190,50 +183,9 @@ class TransferController extends Controller
             return $redirect;
         }
 
-        $request->validate(['rejection_reason' => 'nullable|string|max:500']);
-
-        $transfer = TransferRequest::findOrFail($id);
-
-        if ($transfer->from_health_unit_id != session('health_unit_id')) {
-            return back()->with('error', 'Only the source RHU can reject this request.');
-        }
-        if ($transfer->status !== 'pending') {
-            return back()->with('error', 'This request is no longer pending.');
-        }
-
-        DB::transaction(function () use ($transfer, $request) {
-            $transfer = TransferRequest::whereKey($transfer->id)->lockForUpdate()->firstOrFail();
-            abort_unless($transfer->status === 'pending', 409);
-            $transfer->update([
-                'status' => 'rejected',
-                'rejected_by' => session('user_id'),
-                'rejected_at' => now(),
-                'rejection_reason' => $request->rejection_reason,
-            ]);
-
-        });
-
-        Notification::create([
-            'health_unit_id' => $transfer->to_health_unit_id,
-            'transfer_id' => $transfer->id,
-            'type' => 'transfer_rejected',
-            'link' => route('transfers.index'),
-            'title' => 'Transfer Request Rejected',
-            'message' => $transfer->fromHealthUnit->name.' rejected your request for '.
-                                $transfer->formatQuantity($transfer->quantity).' of '.
-                                ($transfer->medicine->medicine_name ?? 'medicine').
-                                ($request->rejection_reason ? ' — Reason: '.$request->rejection_reason : ''),
-            'severity' => 'danger',
-            'is_read' => false,
-            'created_at' => now(),
-        ]);
-
-        Notification::where('transfer_id', $transfer->id)
-            ->where('health_unit_id', session('health_unit_id'))
-            ->where('is_read', false)
-            ->update(['is_read' => true]);
-
-        ActivityLogger::log('Transfer', 'Reject', 'Rejected transfer #'.$id);
+        $data = $request->validate(['rejection_reason' => 'nullable|string|max:500']);
+        app(TransferService::class)->rejectBySource((int) $id, (int) session('health_unit_id'), (int) session('user_id'),
+            $data['rejection_reason'] ?? null);
 
         return back()->with('success', 'Transfer rejected.');
     }
@@ -257,7 +209,7 @@ class TransferController extends Controller
         if ($redirect = $this->checkAccess()) {
             return $redirect;
         }
-        if (! is_null(session('health_unit_id'))) {
+        if (! is_null(session('health_unit_id')) || session('role') !== 'admin') {
             return redirect()->route('transfers.index')
                 ->with('error', 'Only PHO admins can create distribution directives.');
         }
@@ -273,7 +225,7 @@ class TransferController extends Controller
         if ($redirect = $this->checkAccess()) {
             return $redirect;
         }
-        if (! is_null(session('health_unit_id'))) {
+        if (! is_null(session('health_unit_id')) || session('role') !== 'admin') {
             return back()->with('error', 'Unauthorized.');
         }
 
@@ -287,10 +239,8 @@ class TransferController extends Controller
 
         $medicine = Medicine::findOrFail($request->medicine_id);
 
-        $batch = Inventory::where('health_unit_id', $request->from_health_unit_id)
-            ->where('medicine_id', $medicine->id)
+        $batch = Inventory::availableFefo((int) $request->from_health_unit_id, $medicine->id)
             ->where('available_stock', '>=', $request->quantity)
-            ->orderByRaw('expiration_date IS NULL, expiration_date ASC')
             ->first();
 
         if (! $batch) {

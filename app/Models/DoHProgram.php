@@ -34,23 +34,31 @@ class DoHProgram extends Model
      */
     public function occursOn(Carbon $date): bool
     {
-        if (!$this->is_active) return false;
+        $earliest = $date->copy()->startOfDay()->subDays(max(1, (int) $this->duration_days) - 1);
 
-        switch ($this->recurrence) {
-            case 'yearly':
-                if ((int) $this->month !== $date->month) return false;
-                $start = Carbon::create($date->year, $this->month, $this->day)->startOfDay();
-                $end   = $start->copy()->addDays(max(1, (int) $this->duration_days) - 1);
-                return $date->between($start, $end);
+        return $this->startsBetween($earliest, $date) !== [];
+    }
 
-            case 'monthly':
-                return (int) $this->day === $date->day;
-
-            case 'weekly':
-                return (int) $this->weekday === $date->dayOfWeek;
-
-            default:
-                return false;
+    /** Return occurrence starts without rolling invalid dates into another month. */
+    public function startsBetween(Carbon $from, Carbon $through): array
+    {
+        if (! $this->is_active) {
+            return [];
         }
+
+        $dates = [];
+        for ($date = $from->copy()->startOfDay(); $date->lte($through); $date->addDay()) {
+            $matches = match ($this->recurrence) {
+                'yearly' => (int) $this->month === $date->month && (int) $this->day === $date->day,
+                'monthly' => (int) $this->day === $date->day,
+                'weekly' => (int) $this->weekday === $date->dayOfWeek,
+                default => false,
+            };
+            if ($matches) {
+                $dates[] = $date->copy();
+            }
+        }
+
+        return $dates;
     }
 }

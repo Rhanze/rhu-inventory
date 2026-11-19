@@ -1,6 +1,7 @@
 @extends('layouts.app')
 
 @php
+    $purposeLimit = match (old('urgency')) { 'urgent' => 246, 'emergency' => 243, default => 255 };
     // Prepare medicines JSON for the JS autocomplete, enriched with stock info
     $medicinesJson = $medicines->map(function ($m) use ($stockLevels) {
         $info = $stockLevels[$m->id] ?? null;
@@ -18,10 +19,11 @@
 @endphp
 
 @section('content')
-<div style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
+@include('supply_requests._mobile_styles')
+<div class="supply-request-page" style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
 
     {{-- Header --}}
-    <div style="
+    <div class="supply-request-header" style="
         background: rgba(255,255,255,0.9); backdrop-filter: blur(12px);
         border-radius: 20px; padding: 24px 28px;
         border: 1px solid rgba(255,255,255,0.4);
@@ -55,7 +57,7 @@
         </div>
     @endif
 
-    <div style="
+    <div class="supply-request-panel" style="
         background: rgba(255,255,255,0.95); border-radius: 20px;
         border: 1px solid rgba(66,173,138,0.15); box-shadow: 0 8px 20px rgba(0,0,0,0.06);
         padding: 28px;">
@@ -85,6 +87,7 @@
 
                     <button type="button"
                             id="clear-medicine-btn"
+                            aria-label="Clear selected medicine"
                             onclick="clearMedicine()"
                             style="position:absolute; right:12px; top:50%; transform:translateY(-50%);
                                    width:28px; height:28px;
@@ -112,7 +115,7 @@
             </div>
 
             {{-- ─────── QUANTITY + URGENCY ─────── --}}
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+            <div class="supply-request-form-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
                 <div>
                     <label style="display:block; font-size:14px; font-weight:700; color:#0f172a; margin-bottom:6px;">
                         Quantity <span style="color:#dc2626;">*</span>
@@ -130,7 +133,7 @@
                     <label style="display:block; font-size:14px; font-weight:700; color:#0f172a; margin-bottom:6px;">
                         Urgency <span style="color:#dc2626;">*</span>
                     </label>
-                    <select name="urgency" required
+                    <select name="urgency" id="request-urgency" required
                             style="width:100%; height:48px; padding:0 16px; font-size:16px;
                                    border:2px solid #bec6cf; border-radius:12px;
                                    background:#fff; color:#0f172a; box-sizing:border-box; outline:none;"
@@ -148,7 +151,7 @@
                 <label style="display:block; font-size:14px; font-weight:700; color:#0f172a; margin-bottom:6px;">
                     Purpose <span style="color:#dc2626;">*</span>
                 </label>
-                <input type="text" name="purpose" required maxlength="255"
+                <input type="text" name="purpose" id="request-purpose" required maxlength="{{ $purposeLimit }}" aria-describedby="purpose-help purpose-limit"
                        value="{{ old('purpose') }}"
                        placeholder="e.g., Immunization outreach — Barangay Poblacion, Oct 15"
                        style="width:100%; height:48px; padding:0 16px; font-size:16px;
@@ -156,12 +159,13 @@
                               background:#fff; color:#0f172a; box-sizing:border-box; outline:none;"
                        onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                        onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
-                <p style="font-size:13px; color:#64748b; margin:6px 0 0 0;">
+                <p id="purpose-help" style="font-size:13px; color:#64748b; margin:6px 0 0 0;">
                     Tell your RHU admin what this stock is for — the activity, the barangay, or the date.
                 </p>
+                <p id="purpose-limit" aria-live="polite" style="font-size:13px; color:#64748b; margin:6px 0 0;">Maximum {{ $purposeLimit }} characters for this urgency.</p>
             </div>
 
-            <div style="display:flex; gap:10px; justify-content:flex-end; padding-top:8px;">
+            <div class="supply-request-form-actions" style="display:flex; gap:10px; justify-content:flex-end; padding-top:8px;">
                 <a href="{{ route('supply_requests.index') }}" style="
                     padding:12px 24px; border-radius:10px; background:#fff; color:#334155;
                     border:1px solid #e2e8f0; font-size:16px; font-weight:600; text-decoration:none;">
@@ -262,7 +266,7 @@ function renderSuggestions(matches, query) {
                  onclick="pickMedicine(${i})"
                  onmouseover="highlightSuggestion(${i})"
                  style="padding:12px 16px; cursor:pointer; border-bottom:1px solid #f1f5f9; transition:background 0.1s;">
-                <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+                <div class="supply-medicine-option" style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
                     <div style="min-width:0; flex:1;">
                         <div style="font-weight:600; color:#0f172a; font-size:15px;">${highlightMatch(m.name, query)}</div>
                         ${meta ? `<div style="font-size:13px; color:#64748b; margin-top:2px;">${escapeHtml(meta)}</div>` : ''}
@@ -373,7 +377,7 @@ function showStockPanel(m) {
     } else {
         html += `<div style="display:flex; align-items:center; gap:8px; margin-bottom:${(m.near_expiry || m.low) ? '6px' : '0'};">
             <span style="font-size:18px;">📦</span>
-            <span><strong>${m.stock}</strong> on hand at your RHU${m.unit ? ` (${m.unit}s)` : ''}</span>
+            <span><strong>${Number(m.stock)}</strong> on hand at your RHU${m.unit ? ` (${escapeHtml(m.unit)}s)` : ''}</span>
         </div>`;
 
         if (m.low) {
@@ -421,7 +425,9 @@ function renderQtyHelp() {
     if (qty < 1) { help.textContent = ''; return; }
 
     const unit = pickedMedicine.unit || 'unit';
-    help.innerHTML = `<strong style="color:#0f5c4b;">= ${qty} ${qty === 1 ? unit : unit + 's'}</strong>`;
+    help.textContent = `= ${qty} ${qty === 1 ? unit : unit + 's'}`;
+    help.style.color = '#0f5c4b';
+    help.style.fontWeight = '700';
 }
 
 function highlightMatch(text, query) {
@@ -437,6 +443,20 @@ function highlightMatch(text, query) {
 
 // ═══ If the form was submitted with errors, restore the picked medicine ═══
 document.addEventListener('DOMContentLoaded', function () {
+    const urgency = document.getElementById('request-urgency');
+    const purpose = document.getElementById('request-purpose');
+    const purposeLimit = document.getElementById('purpose-limit');
+    function updatePurposeLimit() {
+        const limit = { normal: 255, urgent: 246, emergency: 243 }[urgency.value] ?? 255;
+        purpose.maxLength = limit;
+        purpose.setCustomValidity(Array.from(purpose.value).length > limit
+            ? `Please shorten the purpose to ${limit} characters for this urgency.` : '');
+        purposeLimit.textContent = `Maximum ${limit} characters for this urgency.`;
+    }
+    urgency.addEventListener('change', updatePurposeLimit);
+    purpose.addEventListener('input', updatePurposeLimit);
+    updatePurposeLimit();
+
     const hiddenId = document.getElementById('medicine-id-hidden').value;
     if (!hiddenId) return;
 

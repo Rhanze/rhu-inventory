@@ -6,7 +6,7 @@
     <style>
         .hidden { display: none !important; }
         .filter-card input, .filter-card select {
-            height: 44px; padding: 0 14px; font-size: 16px;
+            min-height:2.75rem;height:auto; padding: 0 14px; font-size:1.0625rem;
             border: 2px solid #bec6cf; border-radius: 10px; outline: none;
             background: white; color: #0f172a; width: 100%; box-sizing: border-box;
         }
@@ -14,19 +14,19 @@
             border-color: #42ad8a; box-shadow: 0 0 0 3px rgba(66,173,138,0.1);
         }
         .filter-card label {
-            display: block; margin-bottom: 6px; font-size: 15px;
+            display: block; margin-bottom: 6px; font-size:1.0625rem;
             font-weight: 600; color: #0f172a;
         }
         .filter-card .btn-filter {
-            font-size: 15px; font-weight: 600; padding: 8px 22px; border-radius: 10px;
+            font-size:1.0625rem; font-weight: 600; padding: 8px 22px; border-radius: 10px;
             background: #42ad8a; color: white; border: none; cursor: pointer;
-            transition: background 0.2s; height: 44px;
+            transition: background 0.2s; min-height:2.75rem;height:auto;
         }
         .filter-card .btn-filter:hover { background: #369f7d; }
         .filter-card .btn-reset {
-            font-size: 15px; font-weight: 600; padding: 8px 22px; border-radius: 10px;
+            font-size:1.0625rem; font-weight: 600; padding: 8px 22px; border-radius: 10px;
             background: #ffffff; color: #334155; border: 1px solid #e2e8f0;
-            text-decoration: none; height: 44px;
+            text-decoration: none; min-height:2.75rem;height:auto;
             display: inline-flex; align-items: center;
             transition: all 0.2s;
         }
@@ -50,10 +50,10 @@
         display: flex; align-items: center; justify-content: space-between;
         flex-wrap: wrap; gap: 16px;">
         <div>
-            <p style="font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #42ad8a; margin: 0 0 6px 0;">
+            <p style="font-size:1.0625rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #42ad8a; margin: 0 0 6px 0;">
                 Provincial Health Office
             </p>
-            <h2 style="font-size: 24px; font-weight: 700; color: #0f172a; margin: 0;">
+            <h2 style="font-size:1.5rem; font-weight: 700; color: #0f172a; margin: 0;">
                 DOH Receive Records
             </h2>
         </div>
@@ -61,7 +61,7 @@
         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
             <button type="button" onclick="openShipExportModal()" style="
                 display:inline-flex; align-items:center; gap:6px;
-                font-size:14px; font-weight:600; padding:9px 18px; border-radius:10px;
+                font-size:1.0625rem; font-weight:600; padding:9px 18px; border-radius:10px;
                 background:#42ad8a; color:#ffffff; border:1px solid #42ad8a;
                 cursor:pointer; transition: background 0.2s, border-color 0.2s;"
                 onmouseover="this.style.background='#369f7d'; this.style.borderColor='#369f7d'"
@@ -73,10 +73,11 @@
                 </svg>
                 Export
             </button>
+            @include('imports._link', ['section' => 'shipments'])
 
             <a href="{{ route('inventory.pho_receive.create') }}" style="
                 display:inline-flex; align-items:center; gap:6px;
-                font-size:14px; font-weight:600; padding:9px 18px; border-radius:10px;
+                font-size:1.0625rem; font-weight:600; padding:9px 18px; border-radius:10px;
                 background:#42ad8a; color:#ffffff; text-decoration:none;">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 Add Receive Record
@@ -105,7 +106,7 @@
                 <label for="date_to">Date To</label>
                 <input type="date" name="date_to" id="date_to" value="{{ $dateTo }}">
             </div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <div style="display:flex; gap:8px;flex-wrap:wrap; flex-wrap:wrap;">
                 <button type="submit" class="btn-filter">Apply Filters</button>
                 <a href="{{ route('inventory.pho_receive') }}" class="btn-reset">Reset</a>
             </div>
@@ -118,16 +119,16 @@
         border: 1px solid rgba(255,255,255,0.4);
         box-shadow: 0 8px 20px rgba(0,0,0,0.06); overflow: hidden;">
         <div class="table-scroll" style="width:100%; overflow-x:auto; overflow-y:hidden;">
-            <table style="width:100%; min-width: 800px; border-collapse: collapse; font-size: 14px;">
+            <table style="width:100%; min-width: 800px; border-collapse: collapse; font-size:1.0625rem;">
                 <thead>
                     <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                        <th style="padding:14px 16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">#</th>
-                        <th style="padding:14px 16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Shipment No.</th>
-                        <th style="padding:14px 16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Reference No.</th>
-                        <th style="padding:14px 16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Supplier</th>
-                        <th style="padding:14px 16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Received By</th>
-                        <th style="padding:14px 16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Date Received</th>
-                        <th style="padding:14px 16px; text-align:center; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Actions</th>
+                        <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">#</th>
+                        <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Shipment No.</th>
+                        <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Reference No.</th>
+                        <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Supplier</th>
+                        <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Received By</th>
+                        <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Date Received</th>
+                        <th style="padding:14px 16px; text-align:center; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -215,23 +216,23 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.04);
             display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;">
             @if ($shipments->onFirstPage())
-                <span style="font-size:14px; font-weight:500; padding:8px 16px; border-radius:8px; background:#f1f5f9; color:#94a3b8; border:1px solid #e2e8f0; user-select:none;">← Previous</span>
+                <span style="font-size:1.0625rem; font-weight:500; padding:8px 16px; border-radius:8px; background:#f1f5f9; color:#94a3b8; border:1px solid #e2e8f0; user-select:none;">← Previous</span>
             @else
-                <a href="{{ $shipments->previousPageUrl() }}" style="font-size:14px; font-weight:500; padding:8px 16px; border-radius:8px; background:#ffffff; color:#334155; border:1px solid #e2e8f0; text-decoration:none;">← Previous</a>
+                <a href="{{ $shipments->previousPageUrl() }}" style="font-size:1.0625rem; font-weight:500; padding:8px 16px; border-radius:8px; background:#ffffff; color:#334155; border:1px solid #e2e8f0; text-decoration:none;">← Previous</a>
             @endif
 
             @foreach ($shipments->getUrlRange(1, $shipments->lastPage()) as $page => $url)
                 @if ($page == $shipments->currentPage())
-                    <span style="font-size:14px; font-weight:600; padding:8px 14px; border-radius:8px; background:#42ad8a; color:#ffffff; border:1px solid #42ad8a;">{{ $page }}</span>
+                    <span style="font-size:1.0625rem; font-weight:600; padding:8px 14px; border-radius:8px; background:#42ad8a; color:#ffffff; border:1px solid #42ad8a;">{{ $page }}</span>
                 @else
-                    <a href="{{ $url }}" style="font-size:14px; font-weight:500; padding:8px 14px; border-radius:8px; background:#ffffff; color:#334155; border:1px solid #e2e8f0; text-decoration:none;">{{ $page }}</a>
+                    <a href="{{ $url }}" style="font-size:1.0625rem; font-weight:500; padding:8px 14px; border-radius:8px; background:#ffffff; color:#334155; border:1px solid #e2e8f0; text-decoration:none;">{{ $page }}</a>
                 @endif
             @endforeach
 
             @if ($shipments->hasMorePages())
-                <a href="{{ $shipments->nextPageUrl() }}" style="font-size:14px; font-weight:500; padding:8px 16px; border-radius:8px; background:#ffffff; color:#334155; border:1px solid #e2e8f0; text-decoration:none;">Next →</a>
+                <a href="{{ $shipments->nextPageUrl() }}" style="font-size:1.0625rem; font-weight:500; padding:8px 16px; border-radius:8px; background:#ffffff; color:#334155; border:1px solid #e2e8f0; text-decoration:none;">Next →</a>
             @else
-                <span style="font-size:14px; font-weight:500; padding:8px 16px; border-radius:8px; background:#f1f5f9; color:#94a3b8; border:1px solid #e2e8f0; user-select:none;">Next →</span>
+                <span style="font-size:1.0625rem; font-weight:500; padding:8px 16px; border-radius:8px; background:#f1f5f9; color:#94a3b8; border:1px solid #e2e8f0; user-select:none;">Next →</span>
             @endif
         </div>
     @endif
@@ -257,10 +258,10 @@
     ">
         {{-- Header --}}
         <div style="padding:22px 26px 14px; border-bottom:1px solid #f1f5f9;">
-            <h3 style="font-size:19px; font-weight:700; color:#0f172a; margin:0 0 4px 0;">
+            <h3 style="font-size:1.1875rem; font-weight:700; color:#0f172a; margin:0 0 4px 0;">
                 Export DOH Receive Records
             </h3>
-            <p style="font-size:13px; color:#64748b; margin:0;">
+            <p style="font-size:1.0625rem; color:#64748b; margin:0;">
                 Filter what to include, then export as CSV.
             </p>
         </div>
@@ -271,7 +272,7 @@
             {{-- SHIPMENT NUMBER(S) --}}
             <div style="margin-bottom:22px;">
                 <label for="shipmentNo-shipExportModal"
-                       style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                       style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Shipment Number(s)
                 </label>
                 <input type="text"
@@ -279,15 +280,15 @@
                        placeholder="e.g. DOH-2026-0001, DOH-2026-0002"
                        value="{{ request('shipment_no', '') }}"
                        style="
-                           width:100%; height:44px;
-                           padding:0 14px; font-size:14px;
+                           width:100%; min-height:2.75rem;height:auto;
+                           padding:0 14px; font-size:1.0625rem;
                            border:2px solid #bec6cf; border-radius:10px;
                            outline:none; box-sizing:border-box;
                            background:#ffffff; color:#0f172a;
                        "
                        onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                        onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
-                <p style="font-size:12px; color:#64748b; margin:6px 0 0 0;">
+                <p style="font-size:1.0625rem; color:#64748b; margin:6px 0 0 0;">
                     Separate multiple shipment numbers with commas. Leave blank to include all.
                 </p>
             </div>
@@ -295,15 +296,15 @@
             {{-- DATE FROM --}}
             <div style="margin-bottom:22px;">
                 <label for="dateFrom-shipExportModal"
-                       style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                       style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Date From
                 </label>
                 <input type="date"
                        id="dateFrom-shipExportModal"
                        value="{{ request('date_from', '') }}"
                        style="
-                           width:100%; height:44px;
-                           padding:0 14px; font-size:14px;
+                           width:100%; min-height:2.75rem;height:auto;
+                           padding:0 14px; font-size:1.0625rem;
                            border:2px solid #bec6cf; border-radius:10px;
                            outline:none; box-sizing:border-box;
                            background:#ffffff; color:#0f172a;
@@ -315,15 +316,15 @@
             {{-- DATE TO --}}
             <div>
                 <label for="dateTo-shipExportModal"
-                       style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                       style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Date To
                 </label>
                 <input type="date"
                        id="dateTo-shipExportModal"
                        value="{{ request('date_to', '') }}"
                        style="
-                           width:100%; height:44px;
-                           padding:0 14px; font-size:14px;
+                           width:100%; min-height:2.75rem;height:auto;
+                           padding:0 14px; font-size:1.0625rem;
                            border:2px solid #bec6cf; border-radius:10px;
                            outline:none; box-sizing:border-box;
                            background:#ffffff; color:#0f172a;
@@ -344,7 +345,7 @@
             <button type="button"
                     onclick="closeShipExportModal()"
                     style="
-                        font-size:14px; font-weight:600;
+                        font-size:1.0625rem; font-weight:600;
                         padding:10px 18px; border-radius:10px;
                         background:#ffffff; color:#334155;
                         border:1px solid #e2e8f0; cursor:pointer;
@@ -358,7 +359,7 @@
                     onclick="runShipExport()"
                     style="
                         display:inline-flex; align-items:center; gap:6px;
-                        font-size:14px; font-weight:600;
+                        font-size:1.0625rem; font-weight:600;
                         padding:10px 18px; border-radius:10px;
                         background:#42ad8a; color:#ffffff;
                         border:none; cursor:pointer;

@@ -55,27 +55,25 @@
 
             {{-- Destination (free text) --}}
             <div>
-                <label style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">Destination</label>
+                <label for="destination-input" style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">Destination</label>
                 <input type="text" name="destination" id="destination-input"
                        value="{{ old('destination', $allocation->destination) }}"
                        list="prior-destinations"
-                       placeholder="e.g., Brgy Poblacion, Mobile Outreach Zone 4, Patient house visit"
-                       autocomplete="off"
+                       placeholder="Type a new destination or choose a suggestion"
+                       autocomplete="off" required maxlength="255" aria-describedby="destination-help"
                        style="width:100%; padding:12px 16px; font-size:14px; border:2px solid #bec6cf; border-radius:14px; outline:none; background:white; color:#0f172a; box-sizing:border-box;"
                        onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                        onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
 
                 {{-- Datalist of prior destinations --}}
-                @if(isset($priorDestinations) && $priorDestinations->count())
-                    <datalist id="prior-destinations">
-                        @foreach($priorDestinations as $prior)
-                            <option value="{{ $prior }}"></option>
-                        @endforeach
-                    </datalist>
-                @endif
+                <datalist id="prior-destinations">
+                    @foreach($priorDestinations as $prior)
+                        <option value="{{ $prior }}"></option>
+                    @endforeach
+                </datalist>
 
-                <small style="color:#64748b; font-size:13px;">
-                    💡 Type any destination — barangay name, outreach site, or purpose. Previous entries will appear as suggestions.
+                <small id="destination-help" style="display:block;margin-top:6px;color:#64748b;font-size:13px;">
+                    Enter a barangay, outreach site or program. New destinations are saved when you save the allocation.
                 </small>
                 @error('destination')
                     <p style="margin-top:4px; font-size:13px; color:#dc2626;">{{ $message }}</p>

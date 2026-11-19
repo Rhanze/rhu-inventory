@@ -7,8 +7,10 @@ use App\Models\ImmunizationSchedule;
 use App\Models\PublicUser;
 use App\Models\VaccinationSchedule;
 use App\Services\ImmunizationService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ImmunizationController extends Controller
 {
@@ -120,6 +122,9 @@ class ImmunizationController extends Controller
         $child = PublicUser::forViewer()->where('id', $validated['public_user_id'])
             ->where('health_unit_id', $healthUnitId)
             ->firstOrFail();
+        if ($child->birth_date && Carbon::parse($validated['date_given'])->startOfDay()->lessThan($child->birth_date)) {
+            throw ValidationException::withMessages(['date_given' => 'The vaccination date cannot be before the patient birth date.']);
+        }
 
         // Prevent duplicate dose
         $exists = ImmunizationRecord::whereHas('patient', fn ($q) => $q->forViewer())->where('public_user_id', $child->id)
@@ -144,8 +149,8 @@ class ImmunizationController extends Controller
                 'remarks' => $validated['remarks'] ?? null,
             ]);
 
-            // Keep the calendar in sync if a schedule row exists
-            VaccinationSchedule::whereHas('patient', fn ($q) => $q->forViewer())->where('health_unit_id', $healthUnitId)
+            // Keep all existing reminders in sync, including rescheduled doses.
+            $updated = VaccinationSchedule::whereHas('patient', fn ($q) => $q->forViewer())->where('health_unit_id', $healthUnitId)
                 ->where('public_user_id', $child->id)
                 ->where('vaccine_name', $scheduleDose->antigen_label)
                 ->where('dose_number', $validated['dose_number'])
@@ -154,6 +159,20 @@ class ImmunizationController extends Controller
                     'given_date' => $validated['date_given'],
                     'immunization_record_id' => $record->id,
                 ]);
+            if (! $updated) {
+                VaccinationSchedule::create([
+                    'public_user_id' => $child->id,
+                    'health_unit_id' => $healthUnitId,
+                    'vaccine_name' => $scheduleDose->antigen_label,
+                    'dose_number' => $validated['dose_number'],
+                    'due_date' => $child->birth_date
+                        ? $child->birth_date->copy()->addDays($scheduleDose->min_age_days)->toDateString()
+                        : $validated['date_given'],
+                    'status' => 'given',
+                    'given_date' => $validated['date_given'],
+                    'immunization_record_id' => $record->id,
+                ]);
+            }
         });
 
         return back()->with('success',

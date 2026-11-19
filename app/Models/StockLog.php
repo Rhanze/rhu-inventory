@@ -6,6 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class StockLog extends Model
 {
+    private const ADDITION_TYPES = ['addition', 'receipt', 'transfer_in', 'adjustment_in'];
+
+    private const RELEASE_TYPES = ['dispensing', 'allocation', 'transfer_out', 'adjustment_out'];
+
     protected $table = 'stock_logs';
 
     public $timestamps = false;
@@ -33,7 +37,7 @@ class StockLog extends Model
     // ─── Relationships ───
     public function medicine()
     {
-        return $this->belongsTo(Medicine::class, 'medicine_id');
+        return $this->belongsTo(Medicine::class, 'medicine_id')->withTrashed();
     }
 
     public function healthUnit()
@@ -62,25 +66,78 @@ class StockLog extends Model
     }
 
     // ─── Scopes ───
+    /** Currently effective rows; cancelled transfers and reversed originals are audit evidence. */
+    public function scopeActiveForReporting($query)
+    {
+        return $query->whereNull('stock_logs.voided_at')
+            ->where(fn ($row) => $row->whereNull('stock_logs.movement_type')->orWhere('stock_logs.movement_type', '!=', 'reversal'))
+            ->whereDoesntHave('transfer', fn ($transfer) => $transfer->where('status', 'cancelled'));
+    }
+
     public function scopeAdditions($query)
     {
-        return $query->where(function ($q) {
-            $q->whereNull('remarks')
-                ->orWhere('remarks', 'like', 'Added%')
-                ->orWhere('remarks', 'like', 'Stock%');
+        return $this->directionScope($query, self::ADDITION_TYPES, ['added%', 'stock%', 'received%'], true);
+    }
+
+    /** Explicit movement types take precedence over editable legacy descriptions. */
+    public function getMovementDirectionAttribute(): ?string
+    {
+        if ($this->movement_type !== null) {
+            return in_array($this->movement_type, self::ADDITION_TYPES, true) ? 'addition'
+                : (in_array($this->movement_type, self::RELEASE_TYPES, true) ? 'release' : null);
+        }
+
+        $remarks = strtolower($this->remarks ?? '');
+        if ($this->remarks === null || preg_match('/^(added|stock|received)/', $remarks)) {
+            return 'addition';
+        }
+
+        return preg_match('/^(released|dispensed|allocated)/', $remarks) ? 'release' : null;
+    }
+
+    private function directionScope($query, array $types, array $patterns, bool $nullAddition = false)
+    {
+        return $query->where(function ($direction) use ($types, $patterns, $nullAddition) {
+            $direction->whereIn('movement_type', $types)
+                ->orWhere(function ($legacy) use ($patterns, $nullAddition) {
+                    $legacy->whereNull('movement_type')->where(function ($remarks) use ($patterns, $nullAddition) {
+                        if ($nullAddition) {
+                            $remarks->whereNull('remarks');
+                        }
+                        foreach ($patterns as $pattern) {
+                            $remarks->orWhereRaw('LOWER(remarks) LIKE ?', [$pattern]);
+                        }
+                    });
+                });
         });
     }
 
-    /** Patient/local-program releases; supply receipts, logistics and corrections are not usage. */
+    /** Patient dispensing and terminal programs; moving stock to a recipient is not patient usage. */
     public function scopeDemandReleases($query)
     {
-        return $query->whereNull('voided_at')->where('quantity_added', '>', 0)
-            ->where(function ($q) {
-                $q->whereIn('movement_type', ['dispensing', 'allocation'])
-                    ->orWhere(function ($legacy) {
-                        $legacy->whereNull('movement_type')->whereNull('transfer_id')->where(function ($release) {
+        $terminalAllocation = fn ($allocation) => $allocation->whereNull('destination_health_unit_id')
+            ->whereNull('recipient_user_id')
+            ->whereIn('status', ['completed', 'approved', 'received'])
+            ->where(fn ($state) => $state->whereNotExists(fn ($movement) => $movement->selectRaw('1')
+                ->from('stock_movements')->where('owner_type', 'allocations')->whereColumn('owner_id', 'allocations.id')
+                ->whereNull('reverses_id'))
+                ->orWhereExists(fn ($movement) => $movement->selectRaw('1')->from('stock_movements')
+                    ->where('owner_type', 'allocations')->whereColumn('owner_id', 'allocations.id')
+                    ->whereNull('reverses_id')->whereNull('reversed_at')))
+            ->whereDoesntHave('allocatedBy', fn ($user) => $user->where('role', 'midwife')
+                ->whereColumn('users.health_unit_id', 'allocations.health_unit_id'));
+
+        return $query->activeForReporting()->where('quantity_added', '>', 0)
+            ->where(fn ($record) => $record->whereNull('dispensing_record_id')
+                ->orWhereHas('dispensingRecord', fn ($dispensing) => $dispensing->qualifying()))
+            ->where(function ($q) use ($terminalAllocation) {
+                $q->where('movement_type', 'dispensing')
+                    ->orWhere(fn ($issued) => $issued->where('movement_type', 'allocation')
+                        ->where(fn ($link) => $link->whereNull('allocation_id')->orWhereHas('allocation', $terminalAllocation)))
+                    ->orWhere(function ($legacy) use ($terminalAllocation) {
+                        $legacy->whereNull('movement_type')->whereNull('transfer_id')->where(function ($release) use ($terminalAllocation) {
                             $release->whereNotNull('dispensing_record_id')
-                                ->orWhereHas('allocation', fn ($a) => $a->whereNull('destination_health_unit_id'))
+                                ->orWhereHas('allocation', $terminalAllocation)
                                 ->orWhere(function ($unlinked) {
                                     $unlinked->whereNull('dispensing_record_id')->whereNull('allocation_id')->where(function ($text) {
                                         $text->where('remarks', 'like', 'Dispensed%')->orWhere('remarks', 'like', 'Allocated%')
@@ -94,11 +151,7 @@ class StockLog extends Model
 
     public function scopeReleases($query)
     {
-        return $query->where(function ($q) {
-            $q->where('remarks', 'like', 'Released%')
-                ->orWhere('remarks', 'like', 'Dispensed%')
-                ->orWhere('remarks', 'like', 'Allocated%');
-        });
+        return $this->directionScope($query, self::RELEASE_TYPES, ['released%', 'dispensed%', 'allocated%']);
     }
 
     public function scopeInLastDays($query, $days)

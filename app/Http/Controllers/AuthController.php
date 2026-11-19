@@ -11,10 +11,11 @@ use App\Models\Inventory;
 use App\Models\Medicine;
 use App\Models\StockLog;
 use App\Models\User;
+use App\Support\ManagementDeviceAccess;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
 
 class AuthController extends Controller
 {
@@ -45,9 +46,7 @@ class AuthController extends Controller
 
         // ========== 2. THROTTLE BRUTE FORCE ATTEMPTS ==========
         $throttleKey = 'login_attempts_'.$request->ip();
-        $attempts = Cache::get($throttleKey, 0);
-
-        if ($attempts >= 5) {
+        if (RateLimiter::tooManyAttempts($throttleKey, 5)) {
             return back()
                 ->withInput($request->only('username'))
                 ->withErrors(['username' => 'Too many login attempts. Please try again after 15 minutes.']);
@@ -57,9 +56,8 @@ class AuthController extends Controller
         $user = User::where('username', $request->username)->first();
 
         if (! $user || ! Hash::check($request->password, $user->password)) {
-            // Increment failed attempts and store with TTL (15 minutes)
-            $attempts++;
-            Cache::put($throttleKey, $attempts, 900); // 900 seconds = 15 minutes
+            // Shared cache increments preserve competing failures and a fixed retry window.
+            RateLimiter::hit($throttleKey, 900);
 
             return back()
                 ->withInput($request->only('username'))
@@ -73,8 +71,21 @@ class AuthController extends Controller
                 ->withErrors(['username' => 'This account is currently deactivated. Please contact the Provincial Health Office administrator.']);
         }
 
+        if (! in_array($user->role, ['admin', 'staff', 'midwife'], true)
+            || ($user->role === 'midwife' && ! $user->health_unit_id)) {
+            return back()->withInput($request->only('username'))->withErrors([
+                'username' => 'This account needs a valid role and RHU assignment. Please contact your administrator.',
+            ]);
+        }
+
         // ========== 5. LOGIN SUCCESS – CLEAR ATTEMPTS & SET SESSION ==========
-        Cache::forget($throttleKey);
+        if ($user->role !== 'midwife' && ManagementDeviceAccess::isMobile($request)) {
+            return back()->withInput($request->only('username'))->withErrors([
+                'username' => ManagementDeviceAccess::MOBILE_MESSAGE,
+            ]);
+        }
+
+        RateLimiter::clear($throttleKey);
 
         $request->session()->regenerate();
 

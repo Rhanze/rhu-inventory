@@ -14,10 +14,8 @@ class StockTrendService
         $weeks = max(4, min(52, (int) config('forecasting.history_weeks', 12)));
         $today = CarbonImmutable::today();
         $start = $today->subWeeks($weeks);
-        $logs = StockLog::demandReleases()->whereIn('health_unit_id', $unitIds)
-            ->whereDate('date_added', '>=', $start->toDateString())
-            ->whereDate('date_added', '<', $today->toDateString())
-            ->get(['health_unit_id', 'medicine_id', 'date_added', 'quantity_added']);
+        $logs = app(StockDemandHistoryService::class)->events($unitIds, $start->toDateString(),
+            $today->subDay()->toDateString());
         $groups = [];
         foreach ($logs as $log) {
             $index = intdiv((int) $start->diffInDays($log->date_added->toDateString()), 7);

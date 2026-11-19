@@ -23,35 +23,36 @@
         display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;
     ">
         <div>
-            <p style="font-size:13px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#42ad8a; margin:0 0 6px 0;">
+            <p style="font-size:1.0625rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#42ad8a; margin:0 0 6px 0;">
                 Distribution
             </p>
-            <h2 style="font-size:24px; font-weight:700; color:#0f172a; margin:0;">
+            <h2 style="font-size:1.5rem; font-weight:700; color:#0f172a; margin:0;">
                 Direct an RHU to Transfer Stock
             </h2>
         </div>
 
-        <div style="display:flex; gap:8px;">
+        <div style="display:flex; gap:8px;flex-wrap:wrap;">
             <a href="{{ route('transfers.index') }}" style="
                 padding:10px 18px; border-radius:10px; background:white; color:#334155;
-                border:1px solid #e2e8f0; font-size:14px; font-weight:600; text-decoration:none;">
+                border:1px solid #e2e8f0; font-size:1.0625rem; font-weight:600; text-decoration:none;">
                 ← Back to Transfers
             </a>
+            @include('imports._link', ['section' => 'distribution'])
         </div>
     </div>
 
     @if(session('success'))
-        <div style="background:#eaf3de; border:1px solid #c0dd97; border-radius:12px; padding:14px 20px; color:#3b6d11; font-size:14px;">
+        <div style="background:#eaf3de; border:1px solid #c0dd97; border-radius:12px; padding:14px 20px; color:#3b6d11; font-size:1.0625rem;">
             {{ session('success') }}
         </div>
     @endif
     @if(session('error'))
-        <div style="background:#fcebeb; border:1px solid #f7c1c1; border-radius:12px; padding:14px 20px; color:#a32d2d; font-size:14px;">
+        <div style="background:#fcebeb; border:1px solid #f7c1c1; border-radius:12px; padding:14px 20px; color:#a32d2d; font-size:1.0625rem;">
             {{ session('error') }}
         </div>
     @endif
     @if($errors->any())
-        <div style="background:#fcebeb; border:1px solid #f7c1c1; border-radius:12px; padding:14px 20px; color:#a32d2d; font-size:14px;">
+        <div style="background:#fcebeb; border:1px solid #f7c1c1; border-radius:12px; padding:14px 20px; color:#a32d2d; font-size:1.0625rem;">
             <strong>Please fix the following:</strong>
             <ul style="margin:6px 0 0 0; padding-left:20px;">
                 @foreach($errors->all() as $err)
@@ -73,17 +74,17 @@
 
             {{-- ─────────── SECTION: ROUTING ─────────── --}}
             <div>
-                <p style="font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#42ad8a; margin:0 0 16px 0;">
+                <p style="font-size:1.0625rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#42ad8a; margin:0 0 16px 0;">
                     Routing
                 </p>
 
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
                     <div>
-                        <label style="display:block; font-size:14px; font-weight:600; color:#0f172a; margin-bottom:6px;">
+                        <label style="display:block; font-size:1.0625rem; font-weight:600; color:#0f172a; margin-bottom:6px;">
                             Source RHU (sends)
                         </label>
                         <select name="from_health_unit_id" required
-                                style="width:100%; padding:12px 16px; font-size:15px; border:2px solid #bec6cf; border-radius:12px; background:white; color:#0f172a; box-sizing:border-box; appearance:auto; outline:none;"
+                                style="width:100%; padding:12px 16px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:12px; background:white; color:#0f172a; box-sizing:border-box; appearance:auto; outline:none;"
                                 onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                                 onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
                             <option value="">— Select source RHU —</option>
@@ -94,11 +95,11 @@
                     </div>
 
                     <div>
-                        <label style="display:block; font-size:14px; font-weight:600; color:#0f172a; margin-bottom:6px;">
+                        <label style="display:block; font-size:1.0625rem; font-weight:600; color:#0f172a; margin-bottom:6px;">
                             Destination RHU (receives)
                         </label>
                         <select name="to_health_unit_id" required
-                                style="width:100%; padding:12px 16px; font-size:15px; border:2px solid #bec6cf; border-radius:12px; background:white; color:#0f172a; box-sizing:border-box; appearance:auto; outline:none;"
+                                style="width:100%; padding:12px 16px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:12px; background:white; color:#0f172a; box-sizing:border-box; appearance:auto; outline:none;"
                                 onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                                 onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
                             <option value="">— Select destination RHU —</option>
@@ -114,18 +115,18 @@
 
             {{-- ─────────── SECTION: MEDICINE ─────────── --}}
             <div>
-                <p style="font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#42ad8a; margin:0 0 16px 0;">
+                <p style="font-size:1.0625rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#42ad8a; margin:0 0 16px 0;">
                     Medicine Details
                 </p>
 
                 {{-- Row 1: Program Category + Searchable Medicine --}}
                 <div style="display:grid; grid-template-columns:1fr 2fr; gap:16px; margin-bottom:16px;">
                     <div>
-                        <label style="display:block; font-size:14px; font-weight:600; color:#0f172a; margin-bottom:6px;">
+                        <label style="display:block; font-size:1.0625rem; font-weight:600; color:#0f172a; margin-bottom:6px;">
                             Program Category
                         </label>
                         <select id="category-select" onchange="onCategoryChange()"
-                                style="width:100%; padding:12px 16px; font-size:15px; border:2px solid #bec6cf; border-radius:12px; background:white; color:#0f172a; box-sizing:border-box; appearance:auto; outline:none; cursor:pointer;"
+                                style="width:100%; padding:12px 16px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:12px; background:white; color:#0f172a; box-sizing:border-box; appearance:auto; outline:none; cursor:pointer;"
                                 onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                                 onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
                             <option value="">All Categories</option>
@@ -142,7 +143,7 @@
 
                     {{-- Medicine search field --}}
                     <div>
-                        <label style="display:block; font-size:14px; font-weight:600; color:#0f172a; margin-bottom:6px;">
+                        <label style="display:block; font-size:1.0625rem; font-weight:600; color:#0f172a; margin-bottom:6px;">
                             Medicine
                         </label>
 
@@ -155,7 +156,7 @@
                                    onkeydown="onMedicineKeydown(event)"
                                    onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'; if(this.value.length >= 1) onMedicineInput(this.value);"
                                    onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none';"
-                                   style="width:100%; padding:12px 44px 12px 16px; font-size:15px; border:2px solid #bec6cf; border-radius:12px; background:white; color:#0f172a; box-sizing:border-box; outline:none; transition:border-color 0.2s, box-shadow 0.2s;">
+                                   style="width:100%; padding:12px 44px 12px 16px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:12px; background:white; color:#0f172a; box-sizing:border-box; outline:none; transition:border-color 0.2s, box-shadow 0.2s;">
 
                             <button type="button"
                                     id="clear-medicine-btn"
@@ -164,7 +165,7 @@
                                            width:28px; height:28px;
                                            display:none; align-items:center; justify-content:center;
                                            background:transparent; border:none; cursor:pointer;
-                                           border-radius:6px; color:#64748b; font-size:16px; line-height:1; padding:0;">✕</button>
+                                           border-radius:6px; color:#64748b; font-size:1.0625rem; line-height:1; padding:0;">✕</button>
 
                             <div id="medicine-suggestions"
                                  style="display:none; position:absolute; top:calc(100% + 4px); left:0; right:0;
@@ -181,23 +182,23 @@
                 {{-- Row 2: Dosage Strength + Dosage Form --}}
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
                     <div>
-                        <label style="display:block; font-size:14px; font-weight:600; color:#0f172a; margin-bottom:6px;">
+                        <label style="display:block; font-size:1.0625rem; font-weight:600; color:#0f172a; margin-bottom:6px;">
                             Dosage Strength
                         </label>
                         <input type="text" name="dosage" id="dosage-input"
                                placeholder="e.g. 500 mg"
-                               style="width:100%; padding:12px 16px; font-size:15px; border:2px solid #bec6cf; border-radius:12px; background:white; color:#0f172a; box-sizing:border-box; outline:none;"
+                               style="width:100%; padding:12px 16px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:12px; background:white; color:#0f172a; box-sizing:border-box; outline:none;"
                                onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                                onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
                     </div>
 
                     <div>
-                        <label style="display:block; font-size:14px; font-weight:600; color:#0f172a; margin-bottom:6px;">
+                        <label style="display:block; font-size:1.0625rem; font-weight:600; color:#0f172a; margin-bottom:6px;">
                             Dosage Form
                         </label>
                         <input type="text" name="dosage_form" id="dosage_form-input"
                                placeholder="e.g. Capsule, Tablet, Syrup"
-                               style="width:100%; padding:12px 16px; font-size:15px; border:2px solid #bec6cf; border-radius:12px; background:white; color:#0f172a; box-sizing:border-box; outline:none;"
+                               style="width:100%; padding:12px 16px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:12px; background:white; color:#0f172a; box-sizing:border-box; outline:none;"
                                onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                                onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
                     </div>
@@ -209,21 +210,21 @@
 
                 {{-- Snapshot card --}}
                 <div id="medicine-snapshot" style="display:none; background:#E8F7F4; border:1px solid #42ad8a; border-radius:14px; padding:16px 18px;">
-                    <p style="font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#0f5c4b; margin:0 0 12px 0;">
+                    <p style="font-size:1.0625rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#0f5c4b; margin:0 0 12px 0;">
                         Medicine Snapshot
                     </p>
 
-                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px 20px; font-size:14px;">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px 20px; font-size:1.0625rem;">
                         <div>
-                            <div style="font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#64748b;">Medicine Name</div>
+                            <div style="font-size:1.0625rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#64748b;">Medicine Name</div>
                             <div style="font-weight:600; color:#0f172a; margin-top:2px;" id="snap-name">—</div>
                         </div>
                         <div>
-                            <div style="font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#64748b;">Base Unit</div>
+                            <div style="font-size:1.0625rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#64748b;">Base Unit</div>
                             <div style="font-weight:600; color:#0f172a; margin-top:2px;" id="snap-unit">—</div>
                         </div>
                         <div style="grid-column:1/-1;">
-                            <div style="font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#64748b;">Program Category</div>
+                            <div style="font-size:1.0625rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#64748b;">Program Category</div>
                             <div style="font-weight:600; color:#0f172a; margin-top:2px;" id="snap-category">—</div>
                         </div>
                     </div>
@@ -234,31 +235,31 @@
 
             {{-- ─────────── SECTION: QUANTITY & NOTES ─────────── --}}
             <div>
-                <p style="font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#42ad8a; margin:0 0 16px 0;">
+                <p style="font-size:1.0625rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#42ad8a; margin:0 0 16px 0;">
                     Quantity &amp; Notes
                 </p>
 
                 <div style="margin-bottom:16px;">
-                    <label style="display:block; font-size:14px; font-weight:600; color:#0f172a; margin-bottom:6px;">
+                    <label style="display:block; font-size:1.0625rem; font-weight:600; color:#0f172a; margin-bottom:6px;">
                         Quantity <span id="qty-unit-label" style="font-weight:400; color:#64748b;"></span>
                     </label>
                     <input type="number" name="quantity" id="quantity" min="1" required value="10"
                            oninput="renderQtyHelp()"
-                           style="width:100%; padding:12px 16px; font-size:15px; border:2px solid #bec6cf; border-radius:12px; background:white; color:#0f172a; box-sizing:border-box; outline:none;"
+                           style="width:100%; padding:12px 16px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:12px; background:white; color:#0f172a; box-sizing:border-box; outline:none;"
                            onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                            onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
-                    <p id="qty-help" style="font-size:13px; color:#64748b; margin:6px 0 0 0;"></p>
-                    <p style="font-size:12px; color:#94a3b8; margin:6px 0 0 0; font-style:italic;">
+                    <p id="qty-help" style="font-size:1.0625rem; color:#64748b; margin:6px 0 0 0;"></p>
+                    <p style="font-size:1.0625rem; color:#94a3b8; margin:6px 0 0 0; font-style:italic;">
                         The source RHU will reserve a specific batch (FIFO). Pack format (Stub/Box) is determined at that time.
                     </p>
                 </div>
 
                 <div>
-                    <label style="display:block; font-size:14px; font-weight:600; color:#0f172a; margin-bottom:6px;">
+                    <label style="display:block; font-size:1.0625rem; font-weight:600; color:#0f172a; margin-bottom:6px;">
                         Notes (optional)
                     </label>
                     <textarea name="notes" rows="3" maxlength="500"
-                              style="width:100%; padding:12px 16px; font-size:15px; border:2px solid #bec6cf; border-radius:12px; background:white; color:#0f172a; box-sizing:border-box; outline:none; resize:vertical;"
+                              style="width:100%; padding:12px 16px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:12px; background:white; color:#0f172a; box-sizing:border-box; outline:none; resize:vertical;"
                               onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                               onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'"></textarea>
                 </div>
@@ -268,7 +269,7 @@
             <div style="display:flex; gap:10px; padding-top:24px; border-top:1px solid #e2e8f0;">
                 <button type="submit" style="
                     padding:10px 18px; border-radius:10px; background:#42ad8a; color:white;
-                    font-size:14px; font-weight:600; border:none; cursor:pointer;
+                    font-size:1.0625rem; font-weight:600; border:none; cursor:pointer;
                     transition: background 0.2s;
                 " onmouseover="this.style.background='#369f7d'" onmouseout="this.style.background='#42ad8a'">
                     Send Directive
@@ -276,7 +277,7 @@
 
                 <a href="{{ route('transfers.index') }}" style="
                     padding:10px 18px; border-radius:10px; background:white; color:#334155;
-                    border:1px solid #e2e8f0; font-size:14px; font-weight:600; text-decoration:none;
+                    border:1px solid #e2e8f0; font-size:1.0625rem; font-weight:600; text-decoration:none;
                     transition: background 0.2s;
                 " onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='white'">
                     Cancel
@@ -376,7 +377,7 @@ function renderSuggestions(matches, query) {
     const box = document.getElementById('medicine-suggestions');
 
     if (matches.length === 0) {
-        box.innerHTML = `<div style="padding:14px 16px; font-size:14px; color:#94a3b8; text-align:center;">No medicines match "${escapeHtml(query)}"</div>`;
+        box.innerHTML = `<div style="padding:14px 16px; font-size:1.0625rem; color:#94a3b8; text-align:center;">No medicines match "${escapeHtml(query)}"</div>`;
         box.style.display = 'block';
         return;
     }
@@ -387,9 +388,9 @@ function renderSuggestions(matches, query) {
              onclick="pickMedicine(${i})"
              onmouseover="highlightSuggestion(${i})"
              style="padding:12px 16px; cursor:pointer; border-bottom:1px solid #f1f5f9; transition:background 0.1s;">
-            <div style="font-weight:600; color:#0f172a; font-size:14px;">${highlightMatch(m.name, query)}</div>
-            <div style="font-size:12px; color:#64748b; margin-top:2px;">
-                ${m.dosage ? escapeHtml(m.dosage) : ''}${m.unit ? (m.dosage ? ' · ' : '') + capitalize(m.unit) : ''}${m.category ? ((m.dosage || m.unit) ? ' · ' : '') + humanizeCategory(m.category) : ''}
+            <div style="font-weight:600; color:#0f172a; font-size:1.0625rem;">${highlightMatch(m.name, query)}</div>
+            <div style="font-size:1.0625rem; color:#64748b; margin-top:2px;">
+                ${m.dosage ? escapeHtml(m.dosage) : ''}${m.unit ? (m.dosage ? ' · ' : '') + escapeHtml(capitalize(m.unit)) : ''}${m.category ? ((m.dosage || m.unit) ? ' · ' : '') + escapeHtml(humanizeCategory(m.category)) : ''}
             </div>
         </div>
     `).join('');
@@ -503,7 +504,9 @@ function renderQtyHelp() {
     if (qty < 1) { help.textContent = ''; return; }
 
     const unit = pickedMedicine.unit || 'unit';
-    help.innerHTML = `<strong style="color:#0f5c4b;">= ${qty} ${qty === 1 ? unit : unit + 's'}</strong>`;
+    help.textContent = `= ${qty} ${qty === 1 ? unit : unit + 's'}`;
+    help.style.color = '#0f5c4b';
+    help.style.fontWeight = '700';
 }
 
 function escapeHtml(str) {

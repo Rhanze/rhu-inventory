@@ -55,7 +55,7 @@ class PrenatalController extends Controller
         $stats = [
             'total' => PrenatalVisit::whereHas('patient', fn ($q) => $q->forViewer())->where('health_unit_id', $healthUnitId)->count(),
             'this_month' => PrenatalVisit::whereHas('patient', fn ($q) => $q->forViewer())->where('health_unit_id', $healthUnitId)
-                ->whereBetween('visit_date', [now()->startOfMonth(), now()->endOfMonth()])
+                ->whereBetween('visit_date', [today()->startOfMonth()->toDateString(), today()->endOfMonth()->toDateString()])
                 ->count(),
             'pregnant' => PublicUser::forViewer()->where('health_unit_id', $healthUnitId)
                 ->where('is_pregnant', true)

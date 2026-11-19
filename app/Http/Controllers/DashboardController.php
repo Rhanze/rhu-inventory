@@ -59,52 +59,46 @@ class DashboardController extends Controller
         $healthUnitId = session('health_unit_id');
         $isPHOAdmin = is_null($healthUnitId);
 
-        $defaultMinStock = (int) config('inventory.default_min_stock', 50);
-        $defaultMaxStock = (int) config('inventory.default_max_stock', 500);
-
         $phoId = $isPHOAdmin ? HealthUnit::phoId() : null;
-        $transactionScopeId = $isPHOAdmin ? $phoId : $healthUnitId;
+        $transactionScopeId = $isPHOAdmin ? ($phoId ?? -1) : $healthUnitId;
+        $asOfDate = today()->toDateString();
+        $todayOnly = ! $isPHOAdmin && session('role') === 'staff';
+        $transactionDates = $todayOnly ? ['date_from' => $asOfDate, 'date_to' => $asOfDate] : ['date_to' => $asOfDate];
+        $inTransactionPeriod = fn ($query, string $dateColumn) => $query->whereDate($dateColumn, '<=', $asOfDate)
+            ->when($todayOnly, fn ($rows) => $rows->whereDate($dateColumn, '>=', $asOfDate));
+        $stockLogs = $inTransactionPeriod(StockLog::activeForReporting(), 'date_added');
+        $allocations = $inTransactionPeriod(Allocation::query(), 'date_allocated');
+        $dispensing = $inTransactionPeriod(DispensingRecord::qualifying(), 'date_dispensed');
 
         $scopedInventory = fn () => Inventory::query()
             ->when(! $isPHOAdmin, fn ($q) => $q->where('inventory.health_unit_id', $healthUnitId));
+        $nearExpiryFrom = today();
+        $nearExpiryThrough = $nearExpiryFrom->copy()->addDays(Inventory::NEAR_EXPIRY_DAYS);
+        $nearExpiry = $scopedInventory()->expiringWithin(from: $nearExpiryFrom);
 
         // ===================== STATS =====================
         $stats = [
-            'low_stock_count' => (clone $scopedInventory())
-                ->join('medicines', 'medicines.id', '=', 'inventory.medicine_id')
-                ->whereNull('medicines.deleted_at')
-                ->where('inventory.available_stock', '>', 0)
-                ->whereRaw('inventory.available_stock <= COALESCE(medicines.min_stock, ?)', [$defaultMinStock])
-                ->count(),
+            'low_stock_count' => $scopedInventory()->stockLevel('low')->count(),
 
-            'near_expiry_count' => (clone $scopedInventory())
-                ->where('expiration_date', '<=', now()->addDays(180))
-                ->where('expiration_date', '>', now())
-                ->where('available_stock', '>', 0)
-                ->count(),
+            'near_expiry_count' => (clone $nearExpiry)->count(),
 
-            'overstock_count' => (clone $scopedInventory())
-                ->join('medicines', 'medicines.id', '=', 'inventory.medicine_id')
-                ->whereNull('medicines.deleted_at')
-                ->whereRaw('inventory.available_stock > COALESCE(medicines.max_stock, ?)', [$defaultMaxStock])
-                ->count(),
+            'overstock_count' => $scopedInventory()->stockLevel('overstock')->count(),
 
-            'stock_logs_count' => StockLog::query()
-                ->when($transactionScopeId, fn ($q) => $q->where('health_unit_id', $transactionScopeId))
-                ->count(),
+            'stock_logs_count' => (clone $stockLogs)->where('health_unit_id', $transactionScopeId)->count(),
 
-            'allocations_count' => Allocation::query()
-                ->when($transactionScopeId, fn ($q) => $q->where('health_unit_id', $transactionScopeId))
-                ->count(),
+            'allocations_count' => $allocations->where('health_unit_id', $transactionScopeId)->count(),
 
-            'dispensing_count' => DispensingRecord::query()
-                ->when($transactionScopeId, fn ($q) => $q->where('health_unit_id', $transactionScopeId))
-                ->count(),
+            'dispensing_count' => $dispensing->where('health_unit_id', $transactionScopeId)->count(),
 
-            'users_count' => User::count(),
+            'province_stock_logs_count' => $isPHOAdmin ? $stockLogs->count() : null,
+            'province_saved_stock_logs_count' => $isPHOAdmin ? StockLog::whereDate('date_added', '<=', $asOfDate)->count() : null,
+
+            'users_count' => User::where('is_emergency', false)->whereKeyNot($user->id)->count(),
+            'facility_count' => HealthUnit::count(),
             'medicines_count' => Medicine::count(),
 
             'inventory_count' => (clone $scopedInventory())->count(),
+            'usable_batches_count' => $scopedInventory()->stockLevel('available')->count(),
             'total_available_units' => (clone $scopedInventory())->sum('available_stock'),
 
             'rhus_count' => HealthUnit::where('facility_type', 'Rural Health Unit')
@@ -112,51 +106,105 @@ class DashboardController extends Controller
                 ->count(),
         ];
 
+        $transactionRecords = [];
+        if (! $todayOnly) {
+            $stockFilters = $isPHOAdmin ? ['rhu_filter' => 'pho'] : [];
+            $transactionRecords[] = ['label' => 'Active stock log rows', 'count' => $stats['stock_logs_count'],
+                'url' => route('stock_logs.index', $transactionDates + $stockFilters + ['status' => 'active'])];
+        }
+        $allocationFilters = $isPHOAdmin ? ['rhu_filter' => $transactionScopeId] : [];
+        $transactionRecords[] = ['label' => 'Allocation records (all saved statuses)', 'count' => $stats['allocations_count'],
+            'url' => route('reports.allocation', $transactionDates + $allocationFilters)];
+        if (! $isPHOAdmin) {
+            $transactionRecords[] = ['label' => 'Dispensing records', 'count' => $stats['dispensing_count'],
+                'url' => route('dispensing.index', $transactionDates)];
+        }
+
         // ===================== LOW STOCK ITEMS =====================
-        $lowStockItems = Inventory::query()
-            ->when(! $isPHOAdmin, fn ($q) => $q->where('inventory.health_unit_id', $healthUnitId))
-            ->join('medicines', 'medicines.id', '=', 'inventory.medicine_id')
-            ->whereNull('medicines.deleted_at')
-            ->where('inventory.available_stock', '>', 0)
-            ->whereRaw('inventory.available_stock <= COALESCE(medicines.min_stock, ?)', [$defaultMinStock])
+        $lowStockItems = $scopedInventory()->stockLevel('low')
             ->with(['medicine', 'healthUnit'])
             ->orderBy('inventory.available_stock', 'asc')
+            ->orderBy('inventory.id')
             ->paginate(10, ['inventory.*'], 'low_stock_page')
             ->withQueryString()->fragment('dashboard-low-stock');
 
         // ===================== NEAR EXPIRY ITEMS =====================
-        $nearExpiryItems = (clone $scopedInventory())
+        $nearExpiryItems = $nearExpiry
             ->with(['medicine', 'healthUnit'])
-            ->where('expiration_date', '<=', now()->addDays(180))
-            ->where('expiration_date', '>', now())
-            ->where('available_stock', '>', 0)
-            ->orderBy('expiration_date', 'asc')
+            ->fefo()
             ->paginate(10, ['*'], 'near_expiry_page')
             ->withQueryString()->fragment('dashboard-near-expiry');
 
         // ===================== RECENT STOCK LOGS =====================
-        $recentStockLogs = StockLog::with(['medicine', 'addedByUser', 'healthUnit'])
+        $recentFrom = today()->subDays(29)->toDateString();
+        $stockActivity = StockLog::activeForReporting()->with(['medicine', 'healthUnit'])
             ->when(! $isPHOAdmin, fn ($q) => $q->where('health_unit_id', $healthUnitId))
-            ->where('date_added', '>=', now()->subDays(30))
+            ->whereDate('date_added', '>=', $recentFrom)
+            ->whereDate('date_added', '<=', $asOfDate)
             ->orderBy('date_added', 'desc')
+            ->orderByDesc('id');
+        $recentStockLogs = (clone $stockActivity)->with('addedByUser')
             ->paginate(10, ['*'], 'stock_logs_page')
             ->withQueryString()->fragment('dashboard-stock-activity');
 
         // ===================== RECENT DISPENSING =====================
-        $recentDispensing = DispensingRecord::with(['medicine', 'healthUnit'])
+        $dispensingActivity = DispensingRecord::qualifying()->with(['medicine', 'healthUnit'])
             ->when(! $isPHOAdmin, fn ($q) => $q->where('health_unit_id', $healthUnitId))
-            ->where('date_dispensed', '>=', now()->subDays(30))
+            ->whereDate('date_dispensed', '>=', $recentFrom)
+            ->whereDate('date_dispensed', '<=', $asOfDate)
             ->orderBy('date_dispensed', 'desc')
+            ->orderByDesc('id');
+        $recentDispensing = (clone $dispensingActivity)
             ->paginate(10, ['*'], 'dispensing_page')
             ->withQueryString()->fragment('dashboard-dispensing');
 
+        // The summary uses the dispensing record once, even when several batches were issued.
+        $activityLimit = 6;
+        $dispensingEntries = $dispensingActivity->limit($activityLimit)->get()->map(fn ($record) => [
+            'action' => 'Dispensed',
+            'medicine' => $record->medicine,
+            'facility' => $record->healthUnit?->name,
+            'quantity' => $record->quantity_dispensed,
+            'date' => $record->date_dispensed,
+        ]);
+        $stockEntries = $stockActivity->whereNull('dispensing_record_id')
+            ->where(fn ($movement) => $movement->where('movement_type', '<>', 'dispensing')
+                ->orWhere(fn ($legacy) => $legacy->whereNull('movement_type')
+                    ->whereRaw("LOWER(COALESCE(remarks, '')) NOT LIKE ?", ['dispensed%'])
+                    ->whereRaw("LOWER(COALESCE(remarks, '')) NOT LIKE ?", ['released%dispensed%'])))
+            ->limit($activityLimit)->get()->map(fn ($log) => [
+                'action' => match ($log->movement_type) {
+                    'receipt' => 'Stock received',
+                    'transfer_in' => 'Transfer received',
+                    'transfer_out' => 'Transfer sent',
+                    'allocation' => 'Allocated',
+                    'adjustment_in' => 'Stock increased',
+                    'adjustment_out' => 'Stock reduced',
+                    default => match ($log->movement_direction) {
+                        'addition' => 'Stock added',
+                        'release' => 'Stock released',
+                        default => 'Stock movement',
+                    },
+                },
+                'medicine' => $log->medicine,
+                'facility' => $log->healthUnit?->name,
+                'quantity' => $log->quantity_added,
+                'date' => $log->date_added,
+            ]);
+        $recentActivity = $dispensingEntries->concat($stockEntries)->sortByDesc('date')->take($activityLimit);
+
         // ===================== CHART DATA =====================
-        $chartData = $this->dashboardService->getDashboardData($isPHOAdmin, $healthUnitId);
+        $analyticsFilters = request()->validate([
+            'usage_days' => ['nullable', 'integer', 'in:30,90,180'],
+            'usage_ranking' => ['nullable', 'in:usage,trend'],
+        ]);
+        $chartData = $this->dashboardService->getDashboardData($isPHOAdmin, $healthUnitId,
+            (int) ($analyticsFilters['usage_days'] ?? 90), $analyticsFilters['usage_ranking'] ?? 'trend');
 
-        $forecastSummary = $this->dashboardService->getForecastSummary();
+        $forecastSummary = $chartData['forecast'];
 
-        $lowStockChart = $this->buildLowStockChart($isPHOAdmin, $healthUnitId, $defaultMinStock);
-        $overstockChart = $this->buildOverstockChart($isPHOAdmin, $healthUnitId, $defaultMaxStock);
+        $lowStockChart = $this->buildStockLevelChart('low', $healthUnitId);
+        $overstockChart = $this->buildStockLevelChart('overstock', $healthUnitId);
 
         $chartDataJson = json_encode([
             'utilization' => $chartData['utilization'] ?? ['labels' => [], 'data' => []],
@@ -176,7 +224,6 @@ class DashboardController extends Controller
                 ['stock_logs.index', 'Stock Logs', 'Track stock additions', 'M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM14 2v6h6M14 2l0 6 6 0'],
                 ['inventory.index', 'Inventory', 'View all RHU stock', 'M2 3h20v14H2zM8 21h8M12 17v4'],
                 ['allocation.index', 'Allocation', 'Allocate to RHUs', 'M22 12l-4 0-3 9-6-18-3 9-4 0'],
-                ['dispensing.index', 'Dispensing', 'Dispense to patients', 'M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 11.5 5c-.57.55-1.08 1.15-1.5 1.79M5 10c-1.5 1.46-3 3.21-3 5.5a5.5 5.5 0 0 0 10.95 1'],
                 ['transfers.index', 'Distribution', 'Distribute stock to RHUs', $distributionIcon],
                 ['reports.index', 'Reports', 'Province‑wide reports', 'M18 20V10M12 20V4M6 20v-6'],
                 ['activity_logs.index', 'Activity Logs', 'Track user actions', 'M12 12m-10 0a10 10 0 1 0 20 0 10 10 0 1 0-20 0M12 6v6l4 2'],
@@ -208,102 +255,31 @@ class DashboardController extends Controller
 
         return view('dashboard.index', array_merge(
             compact(
-                'user', 'stats', 'lowStockItems', 'nearExpiryItems',
-                'recentStockLogs', 'recentDispensing',
+                'user', 'stats', 'lowStockItems', 'nearExpiryItems', 'nearExpiryFrom', 'nearExpiryThrough',
+                'recentActivity', 'recentStockLogs', 'recentDispensing', 'recentFrom', 'asOfDate', 'todayOnly', 'transactionRecords',
                 'navLinks', 'isPHOAdmin', 'forecastSummary'
             ),
             ['chartDataJson' => $chartDataJson]
         ));
     }
 
-    // ================================================================
-    // LOW STOCK CHART
-    // ================================================================
-    private function buildLowStockChart(bool $isPHOAdmin, ?int $healthUnitId, int $defaultMinStock): array
+    private function buildStockLevelChart(string $level, ?int $healthUnitId): array
     {
-        if ($isPHOAdmin) {
-            $phoId = HealthUnit::phoId();
-
-            $rows = Inventory::query()
-                ->join('medicines', 'medicines.id', '=', 'inventory.medicine_id')
-                ->whereNull('medicines.deleted_at')
-                ->where('inventory.available_stock', '>', 0)
-                ->whereRaw('inventory.available_stock <= COALESCE(medicines.min_stock, ?)', [$defaultMinStock])
-                ->when($phoId, fn ($q) => $q->where('inventory.health_unit_id', '!=', $phoId))
-                ->select('inventory.health_unit_id', DB::raw('COUNT(*) as count'))
-                ->groupBy('inventory.health_unit_id')
-                ->orderByDesc('count')
-                ->limit(10)
-                ->get();
-
-            $rhuNames = HealthUnit::whereIn('id', $rows->pluck('health_unit_id'))
-                ->pluck('name', 'id');
-
-            return [
-                'labels' => $rows->map(fn ($r) => $rhuNames[$r->health_unit_id] ?? 'Unknown RHU')->values()->all(),
-                'data' => $rows->pluck('count')->values()->all(),
-            ];
+        $query = Inventory::query()->stockLevel($level);
+        if ($healthUnitId === null) {
+            $rows = $query->select('inventory.health_unit_id', DB::raw('COUNT(*) as count'))
+                ->groupBy('inventory.health_unit_id')->orderByDesc('count')->orderBy('inventory.health_unit_id')->limit(10)->get();
+            $facilityNames = HealthUnit::whereIn('id', $rows->pluck('health_unit_id'))->pluck('name', 'id');
+            $labels = $rows->map(fn ($row) => $facilityNames[$row->health_unit_id] ?? 'Unknown facility');
+        } else {
+            $rows = $query->join('medicines', 'medicines.id', '=', 'inventory.medicine_id')
+                ->where('inventory.health_unit_id', $healthUnitId)
+                ->select('medicines.category', DB::raw('COUNT(*) as count'))
+                ->groupBy('medicines.category')->orderByDesc('count')->orderBy('medicines.category')->get();
+            $labels = $rows->map(fn ($row) => $this->humanizeCategory($row->category));
         }
 
-        $rows = Inventory::query()
-            ->join('medicines', 'medicines.id', '=', 'inventory.medicine_id')
-            ->where('inventory.health_unit_id', $healthUnitId)
-            ->where('inventory.available_stock', '>', 0)
-            ->whereRaw('inventory.available_stock <= COALESCE(medicines.min_stock, ?)', [$defaultMinStock])
-            ->whereNull('medicines.deleted_at')
-            ->select('medicines.category', DB::raw('COUNT(*) as count'))
-            ->groupBy('medicines.category')
-            ->orderByDesc('count')
-            ->get();
-
-        return [
-            'labels' => $rows->map(fn ($r) => $this->humanizeCategory($r->category))->values()->all(),
-            'data' => $rows->pluck('count')->values()->all(),
-        ];
-    }
-
-    // ================================================================
-    // OVERSTOCK CHART
-    // ================================================================
-    private function buildOverstockChart(bool $isPHOAdmin, ?int $healthUnitId, int $defaultMaxStock): array
-    {
-        if ($isPHOAdmin) {
-            $phoId = HealthUnit::phoId();
-
-            $rows = Inventory::query()
-                ->join('medicines', 'medicines.id', '=', 'inventory.medicine_id')
-                ->whereNull('medicines.deleted_at')
-                ->whereRaw('inventory.available_stock > COALESCE(medicines.max_stock, ?)', [$defaultMaxStock])
-                ->when($phoId, fn ($q) => $q->where('inventory.health_unit_id', '!=', $phoId))
-                ->select('inventory.health_unit_id', DB::raw('COUNT(*) as count'))
-                ->groupBy('inventory.health_unit_id')
-                ->orderByDesc('count')
-                ->limit(10)
-                ->get();
-
-            $rhuNames = HealthUnit::whereIn('id', $rows->pluck('health_unit_id'))
-                ->pluck('name', 'id');
-
-            return [
-                'labels' => $rows->map(fn ($r) => $rhuNames[$r->health_unit_id] ?? 'Unknown RHU')->values()->all(),
-                'data' => $rows->pluck('count')->values()->all(),
-            ];
-        }
-
-        $rows = Inventory::query()
-            ->join('medicines', 'medicines.id', '=', 'inventory.medicine_id')
-            ->where('inventory.health_unit_id', $healthUnitId)
-            ->whereRaw('inventory.available_stock > COALESCE(medicines.max_stock, ?)', [$defaultMaxStock])
-            ->whereNull('medicines.deleted_at')
-            ->select('medicines.category', DB::raw('COUNT(*) as count'))
-            ->groupBy('medicines.category')
-            ->orderByDesc('count')
-            ->get();
-
-        return [
-            'labels' => $rows->map(fn ($r) => $this->humanizeCategory($r->category))->values()->all(),
-            'data' => $rows->pluck('count')->values()->all(),
-        ];
+        return ['labels' => $labels->values()->all(), 'data' => $rows->pluck('count')->values()->all()];
     }
 
     private function humanizeCategory(?string $category): string

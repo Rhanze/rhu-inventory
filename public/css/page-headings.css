@@ -1,0 +1,128 @@
+/* Section headings adapt to their available space, including sidebar and zoom. */
+.main-content .page-heading {
+    position: relative;
+    display: flex !important;
+    align-items: center !important;
+    flex-wrap: nowrap !important;
+    gap: clamp(8px, 1vw, 18px) !important;
+    min-width: 0;
+    max-width: 100%;
+    padding: clamp(12px, 1.8vw, 24px) !important;
+    overflow: visible;
+}
+.main-content .page-heading-main {
+    display: flex !important;
+    align-items: center !important;
+    flex-wrap: nowrap !important;
+    flex: 1 1 0;
+    gap: clamp(8px, 1vw, 18px) !important;
+    min-width: 0;
+    max-width: 100%;
+}
+.page-heading .page-heading-title { flex: 1 1 auto; min-width: 0; }
+.page-heading .page-heading-title :is(h1, h2, h3, p) {
+    display: block !important;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.page-heading .page-heading-title :is(h1, h2, h3) { font-size: clamp(1.125rem, 1.3vw, 1.5rem) !important; }
+.page-heading .page-section-nav {
+    display: inline-flex !important;
+    align-items: center !important;
+    flex: 0 1 auto;
+    flex-wrap: nowrap !important;
+    gap: 4px !important;
+    min-width: 0;
+    max-width: 100%;
+    margin: 0 !important;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+.page-heading .page-section-nav > a {
+    flex: 0 0 auto !important;
+    min-height: 44px;
+    padding: 8px clamp(8px, .8vw, 14px) !important;
+    font-size: 1rem !important;
+    line-height: 1.4;
+    white-space: nowrap !important;
+}
+.page-heading .page-section-nav > a svg { flex-shrink: 0; }
+.page-heading .page-section-select {
+    display: none;
+    width: clamp(5rem, 28vw, 11.5rem);
+    min-width: 0;
+    max-width: 100%;
+    min-height: 44px;
+    border: 1px solid #9db8ad;
+    border-radius: 9px;
+    padding: 8px 28px 8px 10px;
+    background: #fff;
+    color: #0f5c4b;
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 600;
+    text-overflow: ellipsis;
+}
+.page-heading.is-compact-nav .page-section-nav { flex: 0 1 auto; padding: 0; background: transparent; }
+.page-heading.is-compact-nav .page-section-nav > a { display: none !important; }
+.page-heading.is-compact-nav .page-section-select { display: block; }
+.page-heading .page-heading-actions {
+    display: flex !important;
+    align-items: center;
+    flex: 0 1 auto;
+    flex-wrap: nowrap !important;
+    gap: 8px;
+    min-width: 0;
+    max-width: 65%;
+    overflow-x: auto;
+}
+.page-heading.heading-enhanced .page-heading-actions { max-width: none; overflow: visible; }
+.page-heading .page-heading-actions > * { flex-shrink: 0; }
+.page-heading .page-heading-actions :is(a, button) { white-space: nowrap; }
+.page-heading .page-heading-actions-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    gap: 6px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 1px solid #becfc6;
+    border-radius: 10px;
+    background: #fff;
+    color: #334155;
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.page-heading .page-heading-actions-toggle svg { width: 20px; height: 20px; flex-shrink: 0; }
+.page-heading .page-heading-actions-toggle[hidden],
+.page-heading .page-heading-actions[hidden] { display: none !important; }
+.page-heading.is-narrow-heading .page-heading-actions-toggle { width: 44px; padding: 8px; }
+.page-heading.is-narrow-heading .page-heading-actions-toggle span { display: none; }
+.page-heading.is-actions-open { z-index: 50; }
+.page-heading.is-compact-actions .page-heading-actions {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    z-index: 50;
+    width: min(30rem, 100%);
+    max-width: 100%;
+    max-height: min(65dvh, 36rem);
+    padding: 16px;
+    border: 1px solid #cbdad3;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 12px 30px rgba(15, 23, 42, .18);
+    flex-wrap: wrap !important;
+    overflow: auto;
+}
+.page-heading.is-compact-actions .page-heading-actions > form { flex: 1 1 12rem; min-width: 0; }
+.page-heading.is-compact-actions .page-heading-actions :is(input, select) { min-width: 0; max-width: 100% !important; width: 100%; }
+.page-heading.is-compact-actions .page-heading-actions :is(button, a) { min-height: 44px; max-width: 100%; }
+.page-heading :is(.page-heading-actions-toggle, .page-section-select):focus-visible { outline: 3px solid #0f766e; outline-offset: 3px; }
+@media print { .page-heading-actions-toggle, .page-section-select { display: none !important; } }

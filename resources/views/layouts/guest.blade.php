@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('images/web-icon.png') }}">
-    <title>PHO Supply Portal| Login</title>
+    <title>PHO Supply Portal| @yield('title', 'Login')</title>
     <style>
         * {
             box-sizing: border-box;
@@ -15,7 +16,11 @@
             font-family: Arial, sans-serif;
             background: linear-gradient(180deg, #d4f0ea 0%, #85e0b5 100%);
             min-height: 100vh;
+            line-height: 1.5;
         }
+
+        input, select, textarea, button { max-width: 100%; font-family: inherit; }
+        p, h1, h2, label, .error-box, .error-text { overflow-wrap: break-word; }
 
         .page-center {
             min-height: 100vh;
@@ -54,21 +59,21 @@
         }
 
         .logo-placeholder .logo-text {
-            font-size: 28px;
+            font-size: 1.75rem;
             font-weight: 800;
             color: #0f5c4b;
             letter-spacing: -1px;
         }
 
         .title {
-            font-size: 26px;
+            font-size: 1.625rem;
             font-weight: 800;
             color: #0f172a;
             margin: 0 0 4px 0;
         }
 
         .subtitle {
-            font-size: 15px;
+            font-size: 0.9375rem;
             color: #475569;
             margin: 0 0 28px 0;
         }
@@ -81,7 +86,7 @@
         label {
             display: block;
             margin-bottom: 6px;
-            font-size: 14px;
+            font-size: 0.875rem;
             font-weight: 600;
             color: #0f172a;
         }
@@ -89,7 +94,7 @@
         input {
             width: 100%;
             padding: 12px 16px;
-            font-size: 15px;
+            font-size: 0.9375rem;
             border: 2px solid #bec6cf;
             border-radius: 14px;
             outline: none;
@@ -110,7 +115,7 @@
             color: white;
             border: none;
             padding: 14px;
-            font-size: 17px;
+            font-size: 1.0625rem;
             font-weight: 700;
             border-radius: 14px;
             cursor: pointer;
@@ -136,13 +141,13 @@
             padding: 12px;
             border-radius: 12px;
             margin-bottom: 20px;
-            font-size: 14px;
+            font-size: 0.875rem;
             text-align: left;
         }
 
         .error-text {
             color: #dc2626;
-            font-size: 13px;
+            font-size: 0.8125rem;
             margin-top: 4px;
         }
 
@@ -150,7 +155,7 @@
             display: block;
             text-align: left;
             margin-bottom: 24px;
-            font-size: 14px;
+            font-size: 0.875rem;
             color: #42ad8a;
             text-decoration: none;
             font-weight: 500;
@@ -162,7 +167,7 @@
 
         .login-footer {
             margin-top: 28px;
-            font-size: 13px;
+            font-size: 0.8125rem;
             color: #64748b;
         }
     </style>
@@ -171,9 +176,9 @@
     @yield('content')
     <script>
     document.addEventListener('keydown', function (e) {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') {
             e.preventDefault();
-            window.location.href = "{{ route('public.home') }}";
+            window.location.href = {{ Illuminate\Support\Js::from(route('public.home.citizen')) }};
         }
     });
 </script>

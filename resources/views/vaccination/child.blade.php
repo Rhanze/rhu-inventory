@@ -71,12 +71,12 @@
     </a>
 
     {{-- ─────────── CHILD HEADER ─────────── --}}
-    <div class="print-card"
+    <div class="print-card mw-page-card"
          style="background: rgba(255,255,255,0.95); border-radius: 20px;
                 border: 1px solid rgba(66,173,138,0.15); box-shadow: 0 8px 20px rgba(0,0,0,0.06);
                 padding: 24px 28px;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap;">
-            <div style="flex:1; min-width:240px;">
+            <div class="mw-patient-heading" style="flex:1; min-width:240px;">
                 <p style="font-size:13px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#42ad8a; margin:0 0 6px 0;">
                     Immunization Timeline
                 </p>
@@ -103,7 +103,7 @@
     </div>
 
     {{-- ─────────── PROGRESS STATS ─────────── --}}
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px;">
+    <div class="mw-mobile-panels" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px;">
 
         @php
             $tiles = [
@@ -125,7 +125,7 @@
     </div>
 
     {{-- ─────────── SCHEDULE TABLE ─────────── --}}
-    <div class="print-card"
+    <div class="print-card mw-page-card"
          style="background: rgba(255,255,255,0.95); border-radius: 20px;
                 border: 1px solid rgba(66,173,138,0.15); box-shadow: 0 8px 20px rgba(0,0,0,0.06);
                 padding: 24px;">
@@ -140,7 +140,7 @@
         </div>
 
         <div style="overflow-x:auto;">
-            <table style="width:100%; border-collapse:collapse; font-size:14px;">
+            <table class="mw-mobile-records" style="width:100%; border-collapse:collapse; font-size:14px;">
                 <thead>
                     <tr style="background:#f8fafc;">
                         <th style="padding:12px 14px; text-align:left; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#475569; border-bottom:1px solid #e2e8f0;">Vaccine</th>

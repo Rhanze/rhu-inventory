@@ -2,10 +2,17 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class TransferRequest extends Model
 {
+    public const PHO_REVIEW_PENDING = 'pending';
+
+    public const PHO_REVIEW_APPROVED = 'approved';
+
+    public const PHO_REVIEW_REJECTED = 'rejected';
+
     protected $table = 'transfer_requests';
 
     protected $fillable = [
@@ -30,6 +37,9 @@ class TransferRequest extends Model
         'notes',
         'status',
         'requested_by',
+        'pho_review_status',
+        'pho_reviewed_by',
+        'pho_reviewed_at',
         'approved_by',
         'rejected_by',
         'approved_at',
@@ -48,6 +58,7 @@ class TransferRequest extends Model
 
     protected $casts = [
         'stock_reserved' => 'boolean',
+        'pho_reviewed_at' => 'datetime',
         'approved_at' => 'datetime',
         'rejected_at' => 'datetime',
         'completed_at' => 'datetime',
@@ -90,6 +101,11 @@ class TransferRequest extends Model
         return $this->belongsTo(User::class, 'approved_by');
     }
 
+    public function phoReviewer()
+    {
+        return $this->belongsTo(User::class, 'pho_reviewed_by');
+    }
+
     public function rejectedBy()
     {
         return $this->belongsTo(User::class, 'rejected_by');
@@ -100,11 +116,46 @@ class TransferRequest extends Model
         return $this->belongsTo(User::class, 'received_by');
     }
 
+    public function scopeVisibleToViewer(Builder $query, ?int $healthUnitId, ?string $role): Builder
+    {
+        if ($healthUnitId === null) {
+            return $role === 'admin' ? $query : $this->scopeVisibleToSource($query);
+        }
+
+        return $query->where(fn (Builder $units) => $units
+            ->where('to_health_unit_id', $healthUnitId)
+            ->orWhere(fn (Builder $source) => $source
+                ->where('from_health_unit_id', $healthUnitId)
+                ->visibleToSource()));
+    }
+
+    public function scopeVisibleToSource(Builder $query): Builder
+    {
+        return $query->where(fn (Builder $review) => $review
+            ->whereNull('pho_review_status')
+            ->orWhere('pho_review_status', self::PHO_REVIEW_APPROVED));
+    }
+
     // ─── Status helpers ───
 
     public function isPending(): bool
     {
         return $this->status === 'pending';
+    }
+
+    public function isAwaitingPhoReview(): bool
+    {
+        return $this->isPending() && $this->pho_review_status === self::PHO_REVIEW_PENDING;
+    }
+
+    public function isAwaitingSourceResponse(): bool
+    {
+        return $this->isPending() && $this->isVisibleToSource();
+    }
+
+    public function isVisibleToSource(): bool
+    {
+        return in_array($this->pho_review_status, [null, self::PHO_REVIEW_APPROVED], true);
     }
 
     public function isAccepted(): bool

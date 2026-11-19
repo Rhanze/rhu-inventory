@@ -76,12 +76,13 @@ class SupplyRequestController extends Controller
 
         $stockLevels = Inventory::where('health_unit_id', $healthUnitId)
             ->where('available_stock', '>', 0)
+            ->where(fn ($q) => $q->whereNull('expiration_date')->orWhereDate('expiration_date', '>=', today()))
             ->get()
             ->groupBy('medicine_id')
             ->map(function ($batches) {
                 $nearExpiry = $batches
                     ->filter(fn ($b) => $b->expiration_date &&
-                        $b->expiration_date >= now() &&
+                        $b->expiration_date >= today() &&
                         $b->expiration_date <= now()->addMonths(3)
                     )
                     ->sortBy('expiration_date')
@@ -121,18 +122,20 @@ class SupplyRequestController extends Controller
 
         $healthUnitId = session('health_unit_id');
 
+        $urgencyTag = match ($request->input('urgency')) {
+            'urgent' => '[URGENT] ',
+            'emergency' => '[EMERGENCY] ',
+            default => '',
+        };
+
         $validated = $request->validate([
             'medicine_id' => 'required|exists:medicines,id',
             'quantity' => 'required|integer|min:1',
-            'purpose' => 'required|string|max:255',
+            'purpose' => 'required|string|max:'.(255 - strlen($urgencyTag)),
             'urgency' => 'required|in:normal,urgent,emergency',
         ]);
 
         $medicine = Medicine::findOrFail($validated['medicine_id']);
-
-        $urgencyTag = $validated['urgency'] !== 'normal'
-            ? '['.strtoupper($validated['urgency']).'] '
-            : '';
 
         $allocation = Allocation::create([
             'medicine_id' => $medicine->id,
@@ -143,6 +146,7 @@ class SupplyRequestController extends Controller
             'quantity_allocated' => $validated['quantity'],
             'date_allocated' => now()->toDateString(),
             'allocated_by' => session('user_id'),
+            'recipient_user_id' => session('user_id'),
             'status' => 'pending',
         ]);
 

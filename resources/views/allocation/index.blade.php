@@ -4,7 +4,7 @@
 <div style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
 
     {{-- Header Card --}}
-    <div class="no-print" style="
+    <div class="no-print page-heading" style="
         background: rgba(255,255,255,0.9);
         backdrop-filter: blur(12px);
         border-radius: 20px;
@@ -17,24 +17,24 @@
         flex-wrap: wrap;
         gap: 16px;
     ">
-        <div style="display:flex; align-items:center; gap:24px; flex-wrap:wrap;">
-            <div>
-                <p style="font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #42ad8a; margin: 0 0 6px 0;">Allocation &amp; Dispensing</p>
-                <h2 style="font-size: 24px; font-weight: 700; color: #0f172a; margin: 0;">Manage Allocations</h2>
+        <div class="page-heading-main" style="display:flex; align-items:center; gap:24px; flex-wrap:wrap;">
+            <div class="page-heading-title">
+                <p style="font-size:1.0625rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #42ad8a; margin: 0 0 6px 0;">Allocation &amp; Dispensing</p>
+                <h2 style="font-size:1.5rem; font-weight: 700; color: #0f172a; margin: 0;">Manage Allocations</h2>
             </div>
 
             @if(session('health_unit_id'))
-                <div style="
+                <div class="page-section-nav" role="navigation" aria-label="Allocation and dispensing sections" style="
                     background: #f1f5f9;
                     border-radius: 12px;
                     padding: 4px;
                     display: inline-flex;
                     gap: 4px;
                 ">
-                    <a href="{{ route('allocation.index', request()->only('rhu_filter')) }}" style="
+                    <a href="{{ route('allocation.index', request()->only('rhu_filter', 'year', 'date_from', 'date_to')) }}" aria-current="page" style="
                         display: inline-flex; align-items: center; gap: 8px;
                         padding: 8px 18px; border-radius: 9px;
-                        font-size: 14px; font-weight: 600; text-decoration: none;
+                        font-size:1.0625rem; font-weight: 600; text-decoration: none;
                         background: #42ad8a; color: #ffffff;
                         box-shadow: 0 2px 6px rgba(66,173,138,0.25);
                     ">
@@ -44,10 +44,10 @@
                         Allocation
                     </a>
 
-                    <a href="{{ route('dispensing.index', request()->only('rhu_filter')) }}" style="
+                    <a href="{{ route('dispensing.index', request()->only('rhu_filter', 'year', 'date_from', 'date_to')) }}" style="
                         display: inline-flex; align-items: center; gap: 8px;
                         padding: 8px 18px; border-radius: 9px;
-                        font-size: 14px; font-weight: 600; text-decoration: none;
+                        font-size:1.0625rem; font-weight: 600; text-decoration: none;
                         background: transparent; color: #475569;
                         transition: all 0.2s;
                     " onmouseover="this.style.background='rgba(255,255,255,0.7)'; this.style.color='#0f5c4b';"
@@ -62,17 +62,19 @@
             @endif
         </div>
 
-        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <div class="page-heading-actions" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             @if(is_null(session('health_unit_id')))
                 <form method="GET" action="{{ route('allocation.index') }}" style="display: flex; gap: 8px; align-items: center;">
-                    @if(request('search'))
-                        <input type="hidden" name="search" value="{{ request('search') }}">
-                    @endif
+                    @foreach(request()->except('rhu_filter', 'page') as $filterName => $filterValue)
+                        @if(is_scalar($filterValue))
+                            <input type="hidden" name="{{ $filterName }}" value="{{ $filterValue }}">
+                        @endif
+                    @endforeach
                     <select name="rhu_filter" style="
-                        height: 40px; padding: 0 12px; font-size: 14px;
+                        min-height:2.75rem;height:auto; padding: 0 12px; font-size:1.0625rem;
                         border: 2px solid #bec6cf; border-radius: 10px; outline: none;
                         background: white; color: #0f172a; appearance: auto;
-                    " onchange="this.form.submit()">
+                    " onchange="this.form.requestSubmit()">
                         <option value="">All RHUs</option>
                         <option value="pho" {{ request('rhu_filter') === 'pho' ? 'selected' : '' }}>Your PHO Allocations</option>
                         @foreach($healthUnits as $rhu)
@@ -86,7 +88,7 @@
 
             <button type="button" onclick="openAllocExportModal()" style="
                 display:inline-flex; align-items:center; gap:6px;
-                font-size:14px; font-weight:600;
+                font-size:1.0625rem; font-weight:600;
                 padding:9px 18px; border-radius:10px;
                 background:#42ad8a; color:#ffffff;
                 border:none; cursor:pointer; transition: background 0.2s;
@@ -99,10 +101,11 @@
                 </svg>
                 Export
             </button>
+            @include('imports._link', ['section' => session('health_unit_id') ? (session('role') === 'midwife' ? 'supply_requests' : 'allocations') : 'provincial_allocations', 'fallback' => true])
 
-            @if(session('health_unit_id'))
-                <a href="{{ route('allocation.create') }}" style="
-                    display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600;
+            @if(session('health_unit_id') || session('role') === 'admin')
+                <a href="{{ route(session('health_unit_id') ? 'allocation.create' : 'allocation.province') }}" style="
+                    display: inline-flex; align-items: center; gap: 6px; font-size:1.0625rem; font-weight: 600;
                     padding: 9px 16px; border-radius: 10px; background: #42ad8a; color: #ffffff;
                     text-decoration: none; border: none; cursor: pointer; transition: all 0.2s;
                 " onmouseover="this.style.background='#369f7d'" onmouseout="this.style.background='#42ad8a'">
@@ -112,6 +115,10 @@
             @endif
         </div>
     </div>
+
+    @include('shared.history_filters')
+    @include('shared.empty_result', ['resultKey' => 'history', 'recordCount' => $allocations->total()])
+    <p style="margin:0; color:#64748b; font-size:1.0625rem;">Showing saved transactions. Cancelled or reversed transactions are excluded.</p>
 
     {{-- Table card --}}
     <div style="
@@ -124,21 +131,19 @@
         overflow: hidden;
     ">
         <div style="width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;">
-            <table style="width:100%; min-width: 1080px; border-collapse: collapse; font-size: 14px; table-layout: auto;">
+            <table class="mw-mobile-records" style="width:100%; min-width: 1080px; border-collapse: collapse; font-size:1.0625rem; table-layout: auto;">
                 <thead>
                     <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                        <th class="no-print" style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">#</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Batch #</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Medicine</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Destination</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Quantity</th>
-                        <th style="padding: 14px 20px; text-align: center; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Status</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Date</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Recipient</th>
-                        @if(is_null(session('health_unit_id')))
-                            <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Source</th>
-                        @endif
-                        <th class="no-print" style="padding: 14px 20px; text-align: center; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Actions</th>
+                        <th class="no-print" style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">#</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Batch #</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Medicine</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Destination</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Quantity</th>
+                        <th style="padding: 14px 20px; text-align: center; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Status</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Date</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Recipient</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Source</th>
+                        <th class="no-print" style="padding: 14px 20px; text-align: center; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Actions</th>
                     </tr>
                 </thead>
 
@@ -162,7 +167,7 @@
 
                             $batchNo = $allocation->inventory->batch_no ?? null;
 
-                            $isSupplyRequest = in_array($allocation->status ?? null, ['pending', 'approved', 'rejected', 'received'], true);
+                            $isSupplyRequest = !$allocation->destination_health_unit_id && in_array($allocation->status ?? null, ['pending', 'approved', 'rejected', 'received'], true);
                             $isPending       = $isSupplyRequest && ($allocation->status === 'pending');
 
                             $statusStyle = match($allocation->status ?? null) {
@@ -193,7 +198,7 @@
 
                             <td style="padding: 14px 20px; color: #334155;">
                                 @if($batchNo)
-                                    <span style="font-family:monospace; font-size:13px; background:#f1f5f9; padding:2px 8px; border-radius:6px;">
+                                    <span style="font-family:monospace; font-size:1.0625rem; background:#f1f5f9; padding:2px 8px; border-radius:6px;">
                                         {{ $batchNo }}
                                     </span>
                                 @else
@@ -210,7 +215,7 @@
                                         display: inline-flex; align-items: center; gap: 6px;
                                         background: #DBEAFE; color: #1E40AF; border: 1px solid #93C5FD;
                                         padding: 4px 12px; border-radius: 10px;
-                                        font-size: 12px; font-weight: 600;
+                                        font-size:1.0625rem; font-weight: 600;
                                         max-width: 100%; box-sizing: border-box;
                                         word-break: break-word; white-space: normal;
                                         line-height: 1.4;
@@ -239,7 +244,7 @@
                             <td style="padding: 14px 20px; text-align: center;">
                                 <span style="
                                     display:inline-block; padding:4px 12px; border-radius:999px;
-                                    font-size:12px; font-weight:700; white-space:nowrap;
+                                    font-size:1.0625rem; font-weight:700; white-space:nowrap;
                                     background:{{ $statusStyle['bg'] }};
                                     color:{{ $statusStyle['text'] }};
                                     border:1px solid {{ $statusStyle['border'] }};">
@@ -267,7 +272,7 @@
                                                 display:inline-block;
                                                 padding:2px 10px;
                                                 border-radius:999px;
-                                                font-size:11px;
+                                                font-size:1.0625rem;
                                                 font-weight:700;
                                                 letter-spacing:0.02em;
                                                 width:fit-content;
@@ -283,11 +288,9 @@
                                 @endif
                             </td>
 
-                            @if(is_null(session('health_unit_id')))
-                                <td style="padding: 14px 20px; color: #334155;">
-                                    {{ $allocation->healthUnit->name ?? 'N/A' }}
-                                </td>
-                            @endif
+                            <td style="padding: 14px 20px; color: #334155;">
+                                {{ $allocation->healthUnit->name ?? 'N/A' }}
+                            </td>
 
                             <td class="no-print" style="padding: 14px 20px;">
                                 @if($isPending)
@@ -301,7 +304,7 @@
                                                         display: inline-flex; align-items: center; gap: 4px;
                                                         padding: 7px 12px; border-radius: 8px;
                                                         background: #42ad8a; color: #fff;
-                                                        border: none; font-size: 13px; font-weight: 700;
+                                                        border: none; font-size:1.0625rem; font-weight: 700;
                                                         cursor: pointer; transition: all 0.2s;
                                                     "
                                                     onmouseover="this.style.background='#369f7d'" onmouseout="this.style.background='#42ad8a'">
@@ -318,7 +321,7 @@
                                                     display: inline-flex; align-items: center; gap: 4px;
                                                     padding: 7px 12px; border-radius: 8px;
                                                     background: #fee2e2; color: #991b1b;
-                                                    border: 1px solid #fca5a5; font-size: 13px; font-weight: 700;
+                                                    border: 1px solid #fca5a5; font-size:1.0625rem; font-weight: 700;
                                                     cursor: pointer; transition: all 0.2s;
                                                 "
                                                 onmouseover="this.style.background='#fecaca'" onmouseout="this.style.background='#fee2e2'">
@@ -401,10 +404,10 @@
                         <tr>
                             <td colspan="@php
                                 $cols = 9;
-                                if (is_null(session('health_unit_id'))) $cols += 1;
+                                $cols += 1;
                                 echo $cols;
                             @endphp" style="padding: 40px 20px; text-align: center; color: #64748b; border-bottom: 1px solid #f1f5f9;">
-                                No allocation records found.
+                                No saved allocation records match the selected period and filters.
                             </td>
                         </tr>
                     @endforelse
@@ -429,9 +432,9 @@
             flex-wrap: wrap;
         ">
             @if ($allocations->onFirstPage())
-                <span style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">← Previous</span>
+                <span style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">← Previous</span>
             @else
-                <a href="{{ $allocations->previousPageUrl() }}" style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
+                <a href="{{ $allocations->previousPageUrl() }}" style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
                    onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#42ad8a';" onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0';">
                     ← Previous
                 </a>
@@ -439,9 +442,9 @@
 
             @foreach ($allocations->getUrlRange(1, $allocations->lastPage()) as $page => $url)
                 @if ($page == $allocations->currentPage())
-                    <span style="font-size: 14px; font-weight: 600; padding: 8px 14px; border-radius: 8px; background: #42ad8a; color: #ffffff; border: 1px solid #42ad8a; cursor: default;">{{ $page }}</span>
+                    <span style="font-size:1.0625rem; font-weight: 600; padding: 8px 14px; border-radius: 8px; background: #42ad8a; color: #ffffff; border: 1px solid #42ad8a; cursor: default;">{{ $page }}</span>
                 @else
-                    <a href="{{ $url }}" style="font-size: 14px; font-weight: 500; padding: 8px 14px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
+                    <a href="{{ $url }}" style="font-size:1.0625rem; font-weight: 500; padding: 8px 14px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
                        onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#42ad8a';" onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0';">
                         {{ $page }}
                     </a>
@@ -449,12 +452,12 @@
             @endforeach
 
             @if ($allocations->hasMorePages())
-                <a href="{{ $allocations->nextPageUrl() }}" style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
+                <a href="{{ $allocations->nextPageUrl() }}" style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
                    onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#42ad8a';" onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0';">
                     Next →
                 </a>
             @else
-                <span style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">Next →</span>
+                <span style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">Next →</span>
             @endif
         </div>
     @endif
@@ -477,10 +480,10 @@
         max-height:90vh; overflow-y:auto;
     ">
         <div style="padding:22px 26px 14px; border-bottom:1px solid #f1f5f9;">
-            <h3 style="font-size:19px; font-weight:700; color:#0f172a; margin:0 0 4px 0;">
+            <h3 style="font-size:1.1875rem; font-weight:700; color:#0f172a; margin:0 0 4px 0;">
                 Export Allocation Records
             </h3>
-            <p style="font-size:13px; color:#64748b; margin:0;">
+            <p style="font-size:1.0625rem; color:#64748b; margin:0;">
                 Choose what to include, then pick an action.
             </p>
         </div>
@@ -488,7 +491,7 @@
         <div style="padding:20px 26px;">
             <div>
                 <label for="batchInput-allocExportModal"
-                       style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                       style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Batch Number(s)
                 </label>
                 <input type="text"
@@ -496,28 +499,28 @@
                        placeholder="e.g. BT-001, BT-002, 1-8"
                        value="{{ request('batch_input', '') }}"
                        style="
-                           width:100%; height:44px;
-                           padding:0 14px; font-size:14px;
+                           width:100%; min-height:2.75rem;height:auto;
+                           padding:0 14px; font-size:1.0625rem;
                            border:2px solid #bec6cf; border-radius:10px;
                            outline:none; box-sizing:border-box;
                            background:#ffffff; color:#0f172a;
                        "
                        onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                        onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
-                <p style="font-size:12px; color:#64748b; margin:6px 0 0 0;">
+                <p style="font-size:1.0625rem; color:#64748b; margin:6px 0 0 0;">
                     Separate multiple batch numbers with commas. Leave blank to include all batches.
                 </p>
             </div>
 
             <div style="margin-bottom:22px; margin-top:22px;">
                 <label for="category-allocExportModal"
-                       style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                       style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Program Category
                 </label>
                 <select id="category-allocExportModal"
                         style="
-                            width:100%; height:44px;
-                            padding:0 14px; font-size:14px;
+                            width:100%; min-height:2.75rem;height:auto;
+                            padding:0 14px; font-size:1.0625rem;
                             border:2px solid #bec6cf; border-radius:10px;
                             outline:none; box-sizing:border-box;
                             background:#ffffff; color:#0f172a; appearance:auto; cursor:pointer;
@@ -539,13 +542,13 @@
             @if(is_null(session('health_unit_id')))
                 <div style="margin-bottom:22px;">
                     <label for="rhu-allocExportModal"
-                           style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                           style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                         Health Unit (RHU)
                     </label>
                     <select id="rhu-allocExportModal"
                             style="
-                                width:100%; height:44px;
-                                padding:0 14px; font-size:14px;
+                                width:100%; min-height:2.75rem;height:auto;
+                                padding:0 14px; font-size:1.0625rem;
                                 border:2px solid #bec6cf; border-radius:10px;
                                 outline:none; box-sizing:border-box;
                                 background:#ffffff; color:#0f172a; appearance:auto; cursor:pointer;
@@ -560,28 +563,28 @@
                             </option>
                         @endforeach
                     </select>
-                    <p style="font-size:12px; color:#64748b; margin:6px 0 0 0;">
+                    <p style="font-size:1.0625rem; color:#64748b; margin:6px 0 0 0;">
                         Choose a specific RHU, or leave as "All RHUs" for province-wide.
                     </p>
                 </div>
             @endif
 
             <div style="margin-bottom:22px;">
-                <label style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                <label style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Date Range
                 </label>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
                     <div>
                         <label for="dateFrom-allocExportModal"
-                               style="font-size:12px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">
+                               style="font-size:1.0625rem; font-weight:600; color:#475569; display:block; margin-bottom:4px;">
                             From
                         </label>
                         <input type="date"
                                id="dateFrom-allocExportModal"
                                value="{{ request('date_from', '') }}"
                                style="
-                                   width:100%; height:44px;
-                                   padding:0 12px; font-size:14px;
+                                   width:100%; min-height:2.75rem;height:auto;
+                                   padding:0 12px; font-size:1.0625rem;
                                    border:2px solid #bec6cf; border-radius:10px;
                                    outline:none; box-sizing:border-box;
                                    background:#ffffff; color:#0f172a;
@@ -591,15 +594,15 @@
                     </div>
                     <div>
                         <label for="dateTo-allocExportModal"
-                               style="font-size:12px; font-weight:600; color:#475569; display:block; margin-bottom:4px;">
+                               style="font-size:1.0625rem; font-weight:600; color:#475569; display:block; margin-bottom:4px;">
                             To
                         </label>
                         <input type="date"
                                id="dateTo-allocExportModal"
                                value="{{ request('date_to', '') }}"
                                style="
-                                   width:100%; height:44px;
-                                   padding:0 12px; font-size:14px;
+                                   width:100%; min-height:2.75rem;height:auto;
+                                   padding:0 12px; font-size:1.0625rem;
                                    border:2px solid #bec6cf; border-radius:10px;
                                    outline:none; box-sizing:border-box;
                                    background:#ffffff; color:#0f172a;
@@ -608,7 +611,7 @@
                                onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
                     </div>
                 </div>
-                <p style="font-size:12px; color:#64748b; margin:6px 0 0 0;">
+                <p style="font-size:1.0625rem; color:#64748b; margin:6px 0 0 0;">
                     Leave both blank to include all dates.
                 </p>
             </div>
@@ -624,7 +627,7 @@
             <button type="button"
                     onclick="closeAllocExportModal()"
                     style="
-                        font-size:14px; font-weight:600;
+                        font-size:1.0625rem; font-weight:600;
                         padding:10px 18px; border-radius:10px;
                         background:#ffffff; color:#334155;
                         border:1px solid #e2e8f0; cursor:pointer;
@@ -638,7 +641,7 @@
                     onclick="runAllocExport('print')"
                     style="
                         display:inline-flex; align-items:center; gap:6px;
-                        font-size:14px; font-weight:600;
+                        font-size:1.0625rem; font-weight:600;
                         padding:10px 18px; border-radius:10px;
                         background:#ffffff; color:#334155;
                         border:1px solid #e2e8f0; cursor:pointer;
@@ -657,7 +660,7 @@
                     onclick="runAllocExport('csv')"
                     style="
                         display:inline-flex; align-items:center; gap:6px;
-                        font-size:14px; font-weight:600;
+                        font-size:1.0625rem; font-weight:600;
                         padding:10px 18px; border-radius:10px;
                         background:#42ad8a; color:#ffffff;
                         border:none; cursor:pointer;
@@ -686,6 +689,7 @@ function rejectFromAllocation(id) {
     form.innerHTML = '@csrf<input type="hidden" name="rejection_reason" value="' +
                      reason.replace(/"/g, '&quot;') + '">';
     document.body.appendChild(form);
+    window.RhuNavigation?.remember(document.getElementById('main-content'));
     form.submit();
 }
 

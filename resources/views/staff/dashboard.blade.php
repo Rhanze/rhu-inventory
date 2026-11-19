@@ -1,10 +1,10 @@
 @extends('layouts.app')
 
 @section('content')
-<div style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
+<div class="dashboard-page" style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
 
     {{-- Alert Row --}}
-    <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px;">
+    <div class="dashboard-alerts-grid" style="gap:10px;">
         <div style="background:#FAEEDA; border:1px solid #FAC775; border-radius:14px; padding:18px;">
             <p style="font-size:13px; font-weight:600; color:#854F0B;">Low Stock Alerts</p>
             <p style="font-size:32px; font-weight:700; color:#633806; margin-top:6px;">{{ $stats['low_stock_count'] ?? 0 }}</p>
@@ -33,7 +33,7 @@
         border:1px solid rgba(66,173,138,0.2);
         box-shadow:0 12px 24px rgba(0,0,0,0.08);
     ">
-        <div style="display:grid; grid-template-columns:1.5fr 1fr; gap:32px;">
+        <div class="dashboard-welcome-grid" style="gap:32px;">
             {{-- Left column: Welcome + quick actions --}}
             <div>
                 <p style="font-size:13px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#42ad8a; margin-bottom:10px;">Staff Dashboard</p>
@@ -125,7 +125,7 @@
     </div>
 
     {{-- Stats Row --}}
-    <div style="display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:10px;">
+    <div class="dashboard-stats-grid" style="gap:10px;">
         @foreach (['Medicine List' => $stats['medicines_count'] ?? 0, 'Inventory Records' => $stats['inventory_count'] ?? 0, 'Available Stock' => number_format($stats['total_available_units'] ?? 0), 'Barangays' => $stats['barangays_count'] ?? 0, 'Transactions' => ($stats['stock_logs_count'] ?? 0) + ($stats['allocations_count'] ?? 0) + ($stats['dispensing_count'] ?? 0)] as $label => $value)
         <div style="background:rgba(255,255,255,0.95); border:1px solid rgba(66,173,138,0.15); border-radius:14px; padding:16px; box-shadow:0 4px 12px rgba(0,0,0,0.04);">
             <p style="font-size:13px; font-weight:600; color:#475569;">{{ $label }}</p>
@@ -139,7 +139,7 @@
         <p style="font-size:18px; font-weight:700; color:#0f172a;">System Navigation</p>
         <p style="font-size:14px; color:#64748b; margin-top:3px; margin-bottom:20px;">Quick access to core staff functions</p>
 
-        <div style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px;">
+        <div class="dashboard-actions-grid" style="gap:10px;">
             @foreach([
                 ['medicine.index', 'Medicines', 'Medicines & vaccines'],
                 ['stock_logs.index', 'Stock Logs', 'Track stock additions'],
@@ -168,19 +168,19 @@
     </div>
 
     {{-- Bottom panels --}}
-    <div style="display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px;">
+    <div class="dashboard-panels-grid" style="gap:16px;">
         <!-- Low Stock -->
         <div style="background:rgba(255,255,255,0.95); border:1px solid rgba(66,173,138,0.15); border-radius:20px; padding:20px; box-shadow:0 4px 12px rgba(0,0,0,0.04);">
             <p style="font-size:16px;font-weight:700;color:#0f172a;">Low Stock Priority</p>
             <p style="font-size:12px;color:#64748b;margin-top:2px;margin-bottom:14px;">Items needing replenishment soon</p>
             <div style="display:flex;flex-direction:column;gap:8px;">
                 @forelse($lowStockItems as $item)
-                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#f8fafc;border:0.5px solid #e2e8f0;border-radius:10px;">
+                <div class="dashboard-record-row" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#f8fafc;border:0.5px solid #e2e8f0;border-radius:10px;">
                     <div>
                         <p style="font-size:14px;font-weight:600;color:#0f172a;">{{ $item->medicine->medicine_name ?? 'N/A' }}</p>
                         <p style="font-size:12px;color:#64748b;margin-top:2px;">{{ $item->medicine->medicine_brand ?? 'N/A' }}</p>
                     </div>
-                    <span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:6px;background:#FAEEDA;color:#854F0B;border:1px solid #FAC775;white-space:nowrap;">{{ $item->available_stock }} units</span>
+                    <span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:6px;background:#FAEEDA;color:#854F0B;border:1px solid #FAC775;white-space:normal;">{{ $item->available_stock }} units</span>
                 </div>
                 @empty
                 <div style="padding:16px;text-align:center;font-size:13px;color:#64748b;border:0.5px dashed #cbd5e1;border-radius:10px;">No low stock items right now.</div>
@@ -194,12 +194,12 @@
             <p style="font-size:12px;color:#64748b;margin-top:2px;margin-bottom:14px;">Items expiring within 30 days</p>
             <div style="display:flex;flex-direction:column;gap:8px;">
                 @forelse($nearExpiryItems as $item)
-                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#f8fafc;border:0.5px solid #e2e8f0;border-radius:10px;">
+                <div class="dashboard-record-row" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#f8fafc;border:0.5px solid #e2e8f0;border-radius:10px;">
                     <div>
                         <p style="font-size:14px;font-weight:600;color:#0f172a;">{{ $item->medicine->medicine_name ?? 'N/A' }}</p>
                         <p style="font-size:12px;color:#64748b;margin-top:2px;">{{ $item->medicine->medicine_brand ?? 'N/A' }}</p>
                     </div>
-                    <span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:6px;background:#FCEBEB;color:#A32D2D;border:1px solid #F7C1C1;white-space:nowrap;">{{ $item->expiration_date }}</span>
+                    <span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:6px;background:#FCEBEB;color:#A32D2D;border:1px solid #F7C1C1;white-space:normal;">{{ $item->expiration_date }}</span>
                 </div>
                 @empty
                 <div style="padding:16px;text-align:center;font-size:13px;color:#64748b;border:0.5px dashed #cbd5e1;border-radius:10px;">No near expiry items right now.</div>
@@ -213,12 +213,12 @@
             <p style="font-size:12px;color:#64748b;margin-top:2px;margin-bottom:14px;">Latest stock additions in your RHU</p>
             <div style="display:flex;flex-direction:column;gap:8px;">
                 @forelse($recentStockLogs as $log)
-                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#f8fafc;border:0.5px solid #e2e8f0;border-radius:10px;">
+                <div class="dashboard-record-row" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#f8fafc;border:0.5px solid #e2e8f0;border-radius:10px;">
                     <div>
                         <p style="font-size:14px;font-weight:600;color:#0f172a;">{{ $log->medicine->medicine_name ?? 'N/A' }}</p>
                         <p style="font-size:12px;color:#64748b;margin-top:2px;">{{ $log->date_added }} · {{ $log->addedByUser->name ?? 'N/A' }}</p>
                     </div>
-                    <span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:6px;background:#E8F7F4;color:#0f5c4b;border:1px solid #42AD8A;white-space:nowrap;">+{{ $log->quantity_added }} units</span>
+                    <span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:6px;background:#E8F7F4;color:#0f5c4b;border:1px solid #42AD8A;white-space:normal;">+{{ $log->quantity_added }} units</span>
                 </div>
                 @empty
                 <div style="padding:16px;text-align:center;font-size:13px;color:#64748b;border:0.5px dashed #cbd5e1;border-radius:10px;">No recent stock log activity.</div>
@@ -232,12 +232,12 @@
             <p style="font-size:12px;color:#64748b;margin-top:2px;margin-bottom:14px;">Latest dispensing records</p>
             <div style="display:flex;flex-direction:column;gap:8px;">
                 @forelse($recentDispensing as $record)
-                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#f8fafc;border:0.5px solid #e2e8f0;border-radius:10px;">
+                <div class="dashboard-record-row" style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#f8fafc;border:0.5px solid #e2e8f0;border-radius:10px;">
                     <div>
                         <p style="font-size:14px;font-weight:600;color:#0f172a;">{{ $record->patient_name }}</p>
                         <p style="font-size:12px;color:#64748b;margin-top:2px;">{{ $record->medicine->medicine_name ?? 'N/A' }} · {{ $record->date_dispensed }}</p>
                     </div>
-                    <span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:6px;background:#EAF3DE;color:#3B6D11;border:1px solid #C0DD97;white-space:nowrap;">{{ $record->quantity_dispensed }} units</span>
+                    <span style="font-size:12px;font-weight:600;padding:3px 10px;border-radius:6px;background:#EAF3DE;color:#3B6D11;border:1px solid #C0DD97;white-space:normal;">{{ $record->quantity_dispensed }} units</span>
                 </div>
                 @empty
                 <div style="padding:16px;text-align:center;font-size:13px;color:#64748b;border:0.5px dashed #cbd5e1;border-radius:10px;">No recent dispensing activity.</div>

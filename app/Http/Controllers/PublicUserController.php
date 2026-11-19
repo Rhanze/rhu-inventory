@@ -7,6 +7,7 @@ use App\Models\PublicUser;
 use App\Models\User;
 use App\Models\VaccinationSchedule;
 use App\Services\VaccinationScheduleService;
+use App\Support\BarangayDemandScope;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -37,32 +38,48 @@ class PublicUserController extends Controller
     /**
      * Figure out which midwife a patient belongs to, based on barangay.
      * Priority:
-     *   1. The primary midwife for that barangay
-     *   2. Any midwife assigned to that barangay
-     *   3. The current user (if they're a midwife)
+     *   1. The current midwife, after assigned-barangay validation
+     *   2. The primary midwife for that barangay
+     *   3. Any midwife assigned to that barangay
      *   4. null
      */
     private function resolveMidwifeForBarangay(?string $barangay): ?int
     {
+        // Midwife inputs have already passed assigned-area validation. Keep the
+        // patient with that account even when colleagues cover the same area.
+        if (session('role') === 'midwife') {
+            return (int) session('user_id');
+        }
+
         if ($barangay) {
-            $primary = MidwifeBarangay::where('barangay', $barangay)
+            $assignments = MidwifeBarangay::where('barangay', $barangay)
+                ->whereHas('user', fn ($q) => $q->where('health_unit_id', session('health_unit_id'))
+                    ->where('role', 'midwife')->where('is_active', true));
+            $primary = (clone $assignments)
                 ->where('is_primary', true)
+                ->orderBy('user_id')
                 ->value('user_id');
             if ($primary) {
                 return (int) $primary;
             }
 
-            $any = MidwifeBarangay::where('barangay', $barangay)->value('user_id');
+            $any = $assignments->orderBy('user_id')->value('user_id');
             if ($any) {
                 return (int) $any;
             }
         }
 
+        return null;
+    }
+
+    private function barangayOptions()
+    {
         if (session('role') === 'midwife') {
-            return (int) session('user_id');
+            return BarangayDemandScope::options((int) session('health_unit_id'), (int) session('user_id'));
         }
 
-        return null;
+        return PublicUser::where('health_unit_id', session('health_unit_id'))->whereNotNull('barangay')
+            ->where('barangay', '!=', '')->distinct()->orderBy('barangay')->pluck('barangay');
     }
 
     public function index(Request $request)
@@ -72,7 +89,11 @@ class PublicUserController extends Controller
         }
 
         $search = $request->search;
-        $barangay = $request->barangay;
+        $request->validate(['barangay' => 'nullable|string|max:100']);
+        $barangay = BarangayDemandScope::validateForViewer((int) session('health_unit_id'), $request->input('barangay'));
+        if (session('role') === 'midwife' && $barangay !== null) {
+            $request->merge(['barangay' => $barangay]);
+        }
         $rawAgeGroup = $request->age_group;
         $assignedFilter = $request->assigned_midwife_id;   // ← NEW
         $healthUnitId = session('health_unit_id');
@@ -136,13 +157,7 @@ class PublicUserController extends Controller
                 'assigned_midwife_id' => $assignedFilter,
             ]);
 
-        $barangays = PublicUser::where('health_unit_id', $healthUnitId)
-            ->when($isMidwife, fn ($q) => $q->where('assigned_midwife_id', session('user_id')))
-            ->whereNotNull('barangay')
-            ->where('barangay', '!=', '')
-            ->distinct()
-            ->orderBy('barangay')
-            ->pluck('barangay');
+        $barangays = $this->barangayOptions();
 
         // ← NEW: dropdown of midwives for admin/staff filter
         $midwifeList = $isMidwife
@@ -165,13 +180,7 @@ class PublicUserController extends Controller
 
         $isMidwife = session('role') === 'midwife';
 
-        $barangays = PublicUser::where('health_unit_id', session('health_unit_id'))
-            ->when($isMidwife, fn ($q) => $q->where('assigned_midwife_id', session('user_id')))
-            ->whereNotNull('barangay')
-            ->where('barangay', '!=', '')
-            ->distinct()
-            ->orderBy('barangay')
-            ->pluck('barangay');
+        $barangays = $this->barangayOptions();
 
         return view('public_users.create', compact('barangays'));
     }
@@ -203,6 +212,7 @@ class PublicUserController extends Controller
         if (! $request->has('is_pregnant')) {
             $validated['is_pregnant'] = false;
         }
+        $validated['barangay'] = BarangayDemandScope::validateForViewer((int) session('health_unit_id'), $validated['barangay'], 'barangay', true);
 
         // ← NEW: auto-assign the midwife for this barangay
         $assignedMidwifeId = $this->resolveMidwifeForBarangay($validated['barangay']);
@@ -252,13 +262,7 @@ class PublicUserController extends Controller
 
         $isMidwife = session('role') === 'midwife';
 
-        $barangays = PublicUser::where('health_unit_id', session('health_unit_id'))
-            ->when($isMidwife, fn ($q) => $q->where('assigned_midwife_id', session('user_id')))
-            ->whereNotNull('barangay')
-            ->where('barangay', '!=', '')
-            ->distinct()
-            ->orderBy('barangay')
-            ->pluck('barangay');
+        $barangays = $this->barangayOptions();
 
         // ← NEW: list of midwives for the reassign dropdown (admin/staff only)
         $midwifeList = $isMidwife
@@ -284,6 +288,8 @@ class PublicUserController extends Controller
 
         $oldBirthDate = $member->birth_date ? $member->birth_date->toDateString() : null;
         $oldBarangay = $member->barangay;
+        $keepHistoricalBarangay = session('role') === 'midwife' && ! $request->filled('barangay')
+            && ! $this->barangayOptions()->containsStrict($oldBarangay);
 
         $validated = $request->validate([
             'philhealth_id' => [
@@ -293,7 +299,7 @@ class PublicUserController extends Controller
             'first_name' => 'required|string|max:100',
             'last_name' => 'required|string|max:100',
             'birth_date' => 'required|date|before_or_equal:today',
-            'barangay' => 'required|string|max:100',
+            'barangay' => $keepHistoricalBarangay ? 'nullable|string|max:100' : 'required|string|max:100',
             'address' => 'required|string|max:255',
             'contact_number' => 'nullable|string|max:20',
             'household_id' => 'nullable|string|max:50',
@@ -309,6 +315,8 @@ class PublicUserController extends Controller
         if (! $request->has('is_pregnant')) {
             $validated['is_pregnant'] = false;
         }
+        $validated['barangay'] = $keepHistoricalBarangay ? $oldBarangay
+            : BarangayDemandScope::validateForViewer((int) session('health_unit_id'), $validated['barangay'], 'barangay', true);
 
         // ← NEW: figure out the assigned midwife
         if (! $member->assigned_midwife_id && session('role') !== 'midwife' && ! $request->filled('assigned_midwife_id')) {
@@ -346,12 +354,14 @@ class PublicUserController extends Controller
         ]);
 
         $newBirthDate = $member->fresh()->birth_date?->toDateString();
-        if ($oldBirthDate !== $newBirthDate && $member->is_under_five) {
+        if ($oldBirthDate !== $newBirthDate) {
             VaccinationSchedule::where('public_user_id', $member->id)
-                ->where('status', 'pending')
+                ->whereIn('status', ['pending', 'missed'])
                 ->delete();
 
-            $this->scheduleService->generateFor($member);
+            if ($member->is_under_five) {
+                $this->scheduleService->generateFor($member);
+            }
         }
 
         return redirect()->route('public_users.index')
@@ -371,9 +381,11 @@ class PublicUserController extends Controller
         $member = PublicUser::where('health_unit_id', session('health_unit_id'))
             ->findOrFail($id);
 
-        if ($member->immunizationRecords()->exists()) {
+        if ($member->immunizationRecords()->exists() || $member->prenatalVisits()->exists()
+            || $member->postpartumVisits()->exists() || $member->familyPlanning()->exists()
+            || $member->vaccinationSchedules()->where('status', 'given')->exists()) {
             return back()->with('error',
-                'Cannot delete — this patient has immunization records. Preserve the history instead.');
+                'Cannot delete — this patient has clinical records. Preserve the history instead.');
         }
 
         VaccinationSchedule::where('public_user_id', $member->id)->delete();

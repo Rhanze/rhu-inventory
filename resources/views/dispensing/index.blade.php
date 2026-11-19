@@ -4,7 +4,7 @@
 <div style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
 
     {{-- Header Card --}}
-    <div class="no-print" style="
+    <div class="no-print page-heading" style="
         background: rgba(255,255,255,0.9);
         backdrop-filter: blur(12px);
         border-radius: 20px;
@@ -17,24 +17,24 @@
         flex-wrap: wrap;
         gap: 16px;
     ">
-        <div style="display:flex; align-items:center; gap:24px; flex-wrap:wrap;">
-            <div>
+        <div class="page-heading-main" style="display:flex; align-items:center; gap:24px; flex-wrap:wrap;">
+            <div class="page-heading-title">
                 @if(session('role') === 'midwife')
-                    <p style="font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #42ad8a; margin: 0 0 6px 0;">Clinical</p>
-                    <h2 style="font-size: 24px; font-weight: 700; color: #0f172a; margin: 0;">Dispensing Records</h2>
+                    <p style="font-size:1rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #42ad8a; margin: 0 0 6px 0;">Clinical</p>
+                    <h2 style="font-size:1.5rem; font-weight: 700; color: #0f172a; margin: 0;">Dispensing Records</h2>
                 @else
-                    <p style="font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #42ad8a; margin: 0 0 6px 0;">Allocation &amp; Dispensing</p>
-                    <h2 style="font-size: 24px; font-weight: 700; color: #0f172a; margin: 0;">Dispensing Records</h2>
+                    <p style="font-size:1rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #42ad8a; margin: 0 0 6px 0;">Allocation &amp; Dispensing</p>
+                    <h2 style="font-size:1.5rem; font-weight: 700; color: #0f172a; margin: 0;">Dispensing Records</h2>
                 @endif
             </div>
 
             {{-- Tab bar — hidden for midwives --}}
             @if(session('role') !== 'midwife')
-                <div style="background: #f1f5f9; border-radius: 12px; padding: 4px; display: inline-flex; gap: 4px;">
-                    <a href="{{ route('allocation.index', request()->only('rhu_filter')) }}" style="
+                <div class="page-section-nav" role="navigation" aria-label="Allocation and dispensing sections" style="background: #f1f5f9; border-radius: 12px; padding: 4px; display: inline-flex; gap: 4px;">
+                    <a href="{{ route('allocation.index', request()->only('rhu_filter', 'year', 'date_from', 'date_to')) }}" style="
                         display: inline-flex; align-items: center; gap: 8px;
                         padding: 8px 18px; border-radius: 9px;
-                        font-size: 14px; font-weight: 600; text-decoration: none;
+                        font-size:1rem; font-weight: 600; text-decoration: none;
                         background: transparent; color: #475569;
                         transition: all 0.2s;
                     " onmouseover="this.style.background='rgba(255,255,255,0.7)'; this.style.color='#0f5c4b';"
@@ -45,10 +45,10 @@
                         Allocation
                     </a>
 
-                    <a href="{{ route('dispensing.index', request()->only('rhu_filter')) }}" style="
+                    <a href="{{ route('dispensing.index', request()->only('rhu_filter', 'year', 'date_from', 'date_to')) }}" aria-current="page" style="
                         display: inline-flex; align-items: center; gap: 8px;
                         padding: 8px 18px; border-radius: 9px;
-                        font-size: 14px; font-weight: 600; text-decoration: none;
+                        font-size:1rem; font-weight: 600; text-decoration: none;
                         background: #42ad8a; color: #ffffff;
                         box-shadow: 0 2px 6px rgba(66,173,138,0.25);
                     ">
@@ -62,17 +62,19 @@
             @endif
         </div>
 
-        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <div class="page-heading-actions" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             @if(is_null(session('health_unit_id')))
                 <form method="GET" action="{{ route('dispensing.index') }}" style="display: flex; gap: 8px; align-items: center;">
-                    @if(request('search'))
-                        <input type="hidden" name="search" value="{{ request('search') }}">
-                    @endif
+                    @foreach(request()->except('rhu_filter', 'page') as $filterName => $filterValue)
+                        @if(is_scalar($filterValue))
+                            <input type="hidden" name="{{ $filterName }}" value="{{ $filterValue }}">
+                        @endif
+                    @endforeach
                     <select name="rhu_filter" style="
-                        height: 40px; padding: 0 12px; font-size: 14px;
+                        min-height:2.75rem;height:auto; padding: 0 12px; font-size:1rem;
                         border: 2px solid #bec6cf; border-radius: 10px; outline: none;
                         background: white; color: #0f172a; appearance: auto;
-                    " onchange="this.form.submit()">
+                    " onchange="this.form.requestSubmit()">
                         <option value="">All RHUs</option>
                         @foreach($healthUnits as $rhu)
                             <option value="{{ $rhu->id }}" {{ request('rhu_filter') == $rhu->id ? 'selected' : '' }}>
@@ -89,10 +91,11 @@
                 'csvRoute'    => 'dispensing.export',
                 'printAction' => route('dispensing.index'),
             ])
+            @include('imports._link', ['section' => 'dispensing', 'fallback' => true])
 
             @if(session('health_unit_id'))
                 <a href="{{ route('dispensing.create') }}" style="
-                    display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600;
+                    display: inline-flex; align-items: center; gap: 6px; font-size:1rem; font-weight: 600;
                     padding: 9px 16px; border-radius: 10px; background: #42ad8a; color: #ffffff;
                     text-decoration: none; border: none; cursor: pointer; transition: all 0.2s;
                 " onmouseover="this.style.background='#369f7d'" onmouseout="this.style.background='#42ad8a'">
@@ -102,6 +105,23 @@
             @endif
         </div>
     </div>
+
+    @if(session('role') === 'midwife')
+        <nav aria-label="Dispensing scope" style="display:flex;gap:12px;flex-wrap:wrap;">
+            @if($assignedAreas->isNotEmpty())
+                <a href="{{ route('dispensing.index', array_merge(request()->except('page', 'barangay'), ['dispensing_scope' => 'area'])) }}" @if($dispensingScope === 'area') aria-current="page" @endif>Assigned barangays</a>
+            @endif
+            <a href="{{ route('dispensing.index', array_merge(request()->except('page', 'barangay'), ['dispensing_scope' => 'personal'])) }}" @if($dispensingScope === 'personal') aria-current="page" @endif>My recorded dispensing</a>
+        </nav>
+        <p style="margin:0;color:#475569;">{{ $dispensingScope === 'area' ? 'Activity for assigned barangays: '.$assignedAreas->join(', ') : 'Your own saved dispensing, including previously served areas.' }}</p>
+    @endif
+    @include('dispensing._read_filters')
+    @include('shared.history_filters')
+    @if(session('role') !== 'midwife')
+        @include('dispensing._barangay_breakdown')
+    @endif
+    @include('shared.empty_result', ['resultKey' => 'history', 'recordCount' => $records->total()])
+    <p style="margin:0; color:#64748b; font-size:1rem;">Showing saved transactions. Cancelled or reversed transactions are excluded. For prescription medicines, Not recorded means the source entry has no saved doctor name.</p>
 
     {{-- Table card --}}
     <div style="
@@ -114,21 +134,23 @@
         overflow: hidden;
     ">
         <div style="width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch;">
-            <table style="width:100%; min-width: 1150px; border-collapse: collapse; font-size: 14px;">
+            <table class="mw-mobile-records" style="width:100%; min-width: 1150px; border-collapse: collapse; font-size:1rem;">
                 <thead>
                     <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                        <th class="no-print" style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">#</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Date</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Batch #</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Medicine</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Prescription</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Qty</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Doctor</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Dispensed By</th>
+                        <th class="no-print" style="padding: 14px 20px; text-align: left; font-size:1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">#</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Date</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Batch #</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Medicine</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Prescription</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Qty</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Doctor</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Dispensed By</th>
                         @if(is_null(session('health_unit_id')))
-                            <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">RHU</th>
+                            <th style="padding: 14px 20px; text-align: left; font-size:1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">RHU</th>
                         @endif
-                        <th class="no-print" style="padding: 14px 20px; text-align: center; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Actions</th>
+                        <th style="padding:14px 20px;text-align:left;font-size:1rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#475569;">Barangay served</th>
+                        <th style="padding:14px 20px;text-align:left;font-size:1rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#475569;">Stock source</th>
+                        <th class="no-print" style="padding: 14px 20px; text-align: center; font-size:1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Actions</th>
                     </tr>
                 </thead>
 
@@ -170,7 +192,7 @@
 
                             <td style="padding: 14px 20px; color: #334155;">
                                 @if($record->batch_no)
-                                    <span style="font-family:monospace; font-size:13px; background:#f1f5f9; padding:2px 8px; border-radius:6px;">
+                                    <span style="font-family:monospace; font-size:1rem; background:#f1f5f9; padding:2px 8px; border-radius:6px;">
                                         {{ $record->batch_no }}
                                     </span>
                                 @else
@@ -181,22 +203,24 @@
                             <td style="padding: 14px 20px; color: #334155; font-weight: 600;">{{ $record->medicine->medicine_name ?? 'N/A' }}</td>
                             <td style="padding: 14px 20px;">
                                 @if($med && $med->requires_prescription)
-                                    <span style="display:inline-block;font-size:11px;font-weight:600;padding:3px 10px;border-radius:999px;background:#FAEEDA;color:#854F0B;border:1px solid #FAC775;">Required</span>
+                                    <span style="display:inline-block;font-size:1rem;font-weight:600;padding:3px 10px;border-radius:999px;background:#FAEEDA;color:#854F0B;border:1px solid #FAC775;">Required</span>
                                 @else
-                                    <span style="display:inline-block;font-size:11px;font-weight:600;padding:3px 10px;border-radius:999px;background:#EAF3DE;color:#3B6D11;border:1px solid #C0DD97;">Not Required</span>
+                                    <span style="display:inline-block;font-size:1rem;font-weight:600;padding:3px 10px;border-radius:999px;background:#EAF3DE;color:#3B6D11;border:1px solid #C0DD97;">Not Required</span>
                                 @endif
                                 @if($hasPrescriptionImage)
-                                    <span title="Prescription image attached" style="margin-left:6px; font-size:14px;">📎</span>
+                                    <span title="Prescription image attached" style="margin-left:6px; font-size:1rem;">📎</span>
                                 @endif
                             </td>
                             <td style="padding: 14px 20px; color: #334155; font-weight: 600;">
                                 {{ $record->quantity_dispensed }}<span style="font-weight: 500; color: #64748b;">{{ $unitLabel }}</span>
                             </td>
-                            <td style="padding: 14px 20px; color: #334155;">{{ $record->doctor_name ?? 'N/A' }}</td>
+                            <td style="padding: 14px 20px; color: #334155;">{{ $record->prescribingDoctorDisplay() }}</td>
                             <td style="padding: 14px 20px; color: #334155;">{{ $record->dispensedByUser->name ?? 'N/A' }}</td>
                             @if(is_null(session('health_unit_id')))
                                 <td style="padding: 14px 20px; color: #334155;">{{ $record->healthUnit->name ?? 'N/A' }}</td>
                             @endif
+                            <td style="padding:14px 20px;color:#334155;">{{ $record->barangay ?: 'Not recorded' }}</td>
+                            <td style="padding:14px 20px;color:#334155;">{{ $record->stock_source === 'allocation' ? 'Midwife received supplies' : 'RHU shared stock' }}</td>
                             <td class="no-print" style="padding: 14px 20px;">
                                 <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
 
@@ -215,7 +239,8 @@
                                             data-quantity="{{ $record->quantity_dispensed }}"
                                             data-batch-no="{{ $record->batch_no ?? '' }}"
                                             data-prescription="{{ $med && $med->requires_prescription ? 'Required' : 'Not Required' }}"
-                                            data-doctor="{{ $record->doctor_name ?? '' }}"
+                                            data-doctor="{{ $record->prescribingDoctorName() ?? '' }}"
+                                            data-doctor-display="{{ $record->prescribingDoctorDisplay() }}"
                                             data-dispensed-by="{{ $record->dispensedByUser->name ?? '' }}"
                                             data-rhu="{{ $record->healthUnit->name ?? '' }}"
                                             data-image-url="{{ $hasPrescriptionImage ? route('dispensing.prescription', $record->id) : '' }}"
@@ -281,11 +306,11 @@
                     @empty
                         <tr>
                             <td colspan="@php
-                                $cols = 9;
+                                $cols = 11;
                                 if (is_null(session('health_unit_id'))) $cols += 1;
                                 echo $cols;
                             @endphp" style="padding: 40px 20px; text-align: center; color: #64748b; border-bottom: 1px solid #f1f5f9;">
-                                No dispensing records found.
+                                No saved dispensing records match the selected period and filters.
                             </td>
                         </tr>
                     @endforelse
@@ -296,7 +321,11 @@
 
     {{-- Pagination --}}
     @if ($records->hasPages())
-        <div class="no-print" style="
+        @php
+            $firstPage = max(1, min($records->currentPage() - 4, $records->lastPage() - 9));
+            $lastPage = min($records->lastPage(), $firstPage + 9);
+        @endphp
+        <nav class="no-print" aria-label="Dispensing pages" style="
             background: rgba(255,255,255,0.9);
             backdrop-filter: blur(8px);
             border-radius: 16px;
@@ -310,19 +339,19 @@
             flex-wrap: wrap;
         ">
             @if ($records->onFirstPage())
-                <span style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">← Previous</span>
+                <span style="font-size:1rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">← Previous</span>
             @else
-                <a href="{{ $records->previousPageUrl() }}" style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
+                <a href="{{ $records->previousPageUrl() }}" style="font-size:1rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
                    onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#42ad8a';" onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0';">
                     ← Previous
                 </a>
             @endif
 
-            @foreach ($records->getUrlRange(1, $records->lastPage()) as $page => $url)
+            @foreach ($records->getUrlRange($firstPage, $lastPage) as $page => $url)
                 @if ($page == $records->currentPage())
-                    <span style="font-size: 14px; font-weight: 600; padding: 8px 14px; border-radius: 8px; background: #42ad8a; color: #ffffff; border: 1px solid #42ad8a; cursor: default;">{{ $page }}</span>
+                    <span data-page-number="{{ $page }}" aria-current="page" style="font-size:1rem; font-weight: 600; padding: 8px 14px; border-radius: 8px; background: #42ad8a; color: #ffffff; border: 1px solid #42ad8a; cursor: default;">{{ $page }}</span>
                 @else
-                    <a href="{{ $url }}" style="font-size: 14px; font-weight: 500; padding: 8px 14px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
+                    <a href="{{ $url }}" data-page-number="{{ $page }}" aria-label="Page {{ $page }}" style="font-size:1rem; font-weight: 500; padding: 8px 14px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
                        onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#42ad8a';" onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0';">
                         {{ $page }}
                     </a>
@@ -330,14 +359,14 @@
             @endforeach
 
             @if ($records->hasMorePages())
-                <a href="{{ $records->nextPageUrl() }}" style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
+                <a href="{{ $records->nextPageUrl() }}" style="font-size:1rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
                    onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#42ad8a';" onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0';">
                     Next →
                 </a>
             @else
-                <span style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">Next →</span>
+                <span style="font-size:1rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">Next →</span>
             @endif
-        </div>
+        </nav>
     @endif
 
 </div>
@@ -353,7 +382,7 @@
                 <h3 id="dm-med-name-title" class="modal-title">—</h3>
             </div>
             <button type="button" onclick="closeDispensingModal()" aria-label="Close"
-                    style="background:transparent; border:none; cursor:pointer; padding:4px 10px; color:#64748b; font-size:26px; line-height:1; border-radius:8px; transition: all 0.2s;"
+                    style="background:transparent; border:none; cursor:pointer; padding:4px 10px; color:#64748b; font-size:1.625rem; line-height:1; border-radius:8px; transition: all 0.2s;"
                     onmouseover="this.style.background='#f1f5f9'; this.style.color='#0f172a';"
                     onmouseout="this.style.background='transparent'; this.style.color='#64748b';">✕</button>
         </div>
@@ -439,7 +468,7 @@
                      style="max-width:100%; max-height:400px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1); display:none; cursor:zoom-in;">
 
                 <div id="dm-image-pdf" style="display:none;">
-                    <a id="dm-image-pdf-link" href="#" target="_blank"
+                    <a id="dm-image-pdf-link" target="_blank" rel="noopener"
                        style="display:inline-flex; align-items:center; gap:8px; padding:12px 20px; background:#42ad8a; color:white; border-radius:10px; text-decoration:none; font-weight:600;">
                         📄 Open Prescription PDF
                     </a>
@@ -455,18 +484,18 @@
                         <circle cx="8.5" cy="8.5" r="1.5"/>
                         <polyline points="21 15 16 10 5 21"/>
                     </svg>
-                    <p style="margin:0; font-size:14px;">No prescription attached</p>
+                    <p style="margin:0; font-size:1rem;">No prescription attached</p>
                 </div>
             </div>
 
-            <p id="dm-image-hint" style="display:none; margin:8px 0 0 0; font-size:12px; color:#64748b; text-align:center;">
+            <p id="dm-image-hint" style="display:none; margin:8px 0 0 0; font-size:1rem; color:#64748b; text-align:center;">
                 Click the image to view it full size
             </p>
         </div>
 
         <div style="display:flex; justify-content:flex-end; margin-top:28px;">
             <button type="button" onclick="closeDispensingModal()"
-                    style="padding:12px 26px; background:#42ad8a; color:white; border:none; border-radius:10px; font-weight:700; font-size:16px; cursor:pointer; transition: background 0.2s;"
+                    style="padding:12px 26px; background:#42ad8a; color:white; border:none; border-radius:10px; font-weight:700; font-size:1rem; cursor:pointer; transition: background 0.2s;"
                     onmouseover="this.style.background='#369f7d'" onmouseout="this.style.background='#42ad8a'">
                 Close
             </button>
@@ -485,7 +514,7 @@
     <button type="button" onclick="event.stopPropagation(); closeFullscreenImage()"
             style="position:absolute; top:20px; right:24px; background:rgba(255,255,255,0.15); color:white;
                    border:1px solid rgba(255,255,255,0.3); border-radius:10px; padding:8px 16px;
-                   font-size:14px; font-weight:600; cursor:pointer; backdrop-filter:blur(8px);">
+                   font-size:1rem; font-weight:600; cursor:pointer; backdrop-filter:blur(8px);">
         Close ✕
     </button>
 </div>
@@ -513,7 +542,7 @@
         box-shadow: 0 20px 40px rgba(0,0,0,0.2);
     }
     #dispensing-info-modal .modal-section-label {
-        font-size: 14px;
+        font-size:1rem;
         font-weight: 700;
         letter-spacing: .1em;
         text-transform: uppercase;
@@ -521,7 +550,7 @@
         margin: 0 0 8px 0;
     }
     #dispensing-info-modal .modal-subsection-label {
-        font-size: 14px;
+        font-size:1rem;
         font-weight: 700;
         letter-spacing: .1em;
         text-transform: uppercase;
@@ -530,7 +559,7 @@
     }
     #dispensing-info-modal .modal-title {
         margin: 0;
-        font-size: 28px;
+        font-size:1.75rem;
         font-weight: 700;
         color: #0f172a;
         line-height: 1.3;
@@ -549,14 +578,14 @@
         grid-column: 1 / -1;
     }
     #dispensing-info-modal .field-grid label {
-        font-size: 13px;
+        font-size:1rem;
         font-weight: 700;
         letter-spacing: 0.06em;
         text-transform: uppercase;
         color: #64748b;
     }
     #dispensing-info-modal .field-grid .value {
-        font-size: 18px;
+        font-size:1.125rem;
         font-weight: 600;
         color: #0f172a;
         line-height: 1.45;
@@ -593,7 +622,7 @@ function openDispensingModal(btn) {
 
     dmSetField('dm-date',          d.date);
     dmSetField('dm-dispensed-by',  d.dispensedBy);
-    dmSetField('dm-doctor',        d.doctor);
+    dmSetField('dm-doctor',        d.doctorDisplay || d.doctor);
     dmSetField('dm-rhu',           d.rhu);
     dmSetField('dm-prescription',  d.prescription);
 
@@ -628,7 +657,7 @@ function openDispensingModal(btn) {
     imgPreview.style.display = 'none';
     imgPreview.src = '';
     pdfBox.style.display = 'none';
-    pdfLink.href = '#';
+    pdfLink.removeAttribute('href');
     loading.style.display = 'none';
     empty.style.display = 'none';
     hint.style.display = 'none';

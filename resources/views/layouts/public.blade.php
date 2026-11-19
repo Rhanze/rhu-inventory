@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Search medicine and vaccine availability at Rural Health Units in the Province of Antique. No staff account is required.">
+    <link rel="canonical" href="{{ request()->routeIs('public.home', 'public.home.citizen') ? route('public.home') : url()->current() }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('images/web-icon.png') }}">
     <title>PHO Supply Portal | Search</title>
     @vite('resources/css/app.css')
@@ -14,23 +16,38 @@
             background: linear-gradient(180deg, #d4f0ea 0%, #85e0b5 100%);
             color: #0f172a;
             font-family: Arial, sans-serif;
-            font-size: 16px;
+            font-size: 1rem;
         }
 
         .login-link {
             display: block;
             text-align: left;
             margin-bottom: 0;
-            font-size: 18px;
+            font-size: 1.125rem;
             color: #42ad8a;
             text-decoration: none;
             font-weight: 500;
             padding: 8px 0;
         }
 
-        .public-entry-nav { display:flex;gap:16px;flex-wrap:wrap;flex-shrink:0; }
-        .public-entry-nav a { color:#0f5c4b;font-size:15px;font-weight:600;padding:10px 0;text-decoration:underline;text-underline-offset:4px; }
-        .public-entry-nav a:focus-visible { outline:3px solid #0f766e;outline-offset:4px; }
+        .public-entry-nav {
+            display:flex;
+            gap:16px;
+            flex-wrap:wrap;
+            flex-shrink:0;
+        }
+        .public-entry-nav a {
+            color:#0f5c4b;
+            font-size: 0.9375rem;
+            font-weight:600;
+            padding:10px 0;
+            text-decoration:underline;
+            text-underline-offset:4px;
+        }
+        .public-entry-nav a:focus-visible {
+            outline:3px solid #0f766e;
+            outline-offset:4px;
+        }
 
         .public-shell {
             min-height: 100vh;
@@ -67,22 +84,31 @@
             display: flex;
             align-items: center;
             gap: 16px;
+            min-width: 0;
+        }
+
+        .brand-wrap > div:last-child {
+            min-width: 0;
+        }
+        .public-main {
+            overflow-wrap: break-word;
         }
 
         .logo-box {
             width: 110px;
             height: 110px;
+            flex-shrink: 0;
             border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 13px;
+            font-size: 0.8125rem;
             color: #475569;
             font-weight: 700;
         }
 
         .brand-title {
-            font-size: 38px;
+            font-size: 2.375rem;
             font-weight: 750;
             margin: 0;
             color: #0f172a;
@@ -90,7 +116,7 @@
         }
 
         .brand-sub {
-            font-size: 22px;
+            font-size: 1.375rem;
             margin: 6px 0 0 0;
             color: #64748b;
             line-height: 1.4;
@@ -104,7 +130,7 @@
         }
 
         .badge {
-            font-size: 13px;
+            font-size: 0.8125rem;
             padding: 6px 12px;
             border-radius: 999px;
             background: #eff6ff;
@@ -120,7 +146,7 @@
             border-radius: 10px;
             cursor: pointer;
             transition: all 0.2s ease;
-            font-size: 16px;
+            font-size: 1rem;
             font-weight: 600;
         }
 
@@ -147,13 +173,14 @@
         .footer-grid {
             padding: 28px 0;
             display: grid;
-            grid-template-columns: 2fr 1fr 1fr;
+            grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr);
             gap: 30px;
         }
 
         .footer-grid > div {
             position: relative;
             padding-right: 20px;
+            min-width: 0;
         }
 
         .footer-grid > div:not(:last-child)::after {
@@ -167,14 +194,14 @@
         }
 
         .footer-title {
-            font-size: 22px;
+            font-size: 1.375rem;
             font-weight: 700;
             color: #0f172a;
             margin: 0 0 14px 0;
         }
 
         .footer-text {
-            font-size: 18px;
+            font-size: 1.125rem;
             color: #64748b;
             line-height: 1.7;
             margin: 0;
@@ -182,7 +209,7 @@
 
         .footer-link {
             display: block;
-            font-size: 18px;
+            font-size: 1.125rem;
             color: #475569;
             text-decoration: none;
             margin-bottom: 10px;
@@ -195,6 +222,7 @@
         .footer-logo-row {
             display: flex;
             gap: 10px;
+            flex-wrap: wrap;
             margin-top: 18px;
             padding-top: 14px;
             border-top: 1px solid #e2e8f0;
@@ -203,13 +231,20 @@
         .mini-logo {
             width: 85px;
             height: 85px;
+            flex-shrink: 0;
             border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 12px;
+            font-size: 0.75rem;
             color: #64748b;
             font-weight: 700;
+        }
+
+        .mini-logo img {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
         }
 
         .footer-bottom {
@@ -222,7 +257,7 @@
         }
 
         .small-muted {
-            font-size: 14px;
+            font-size: 0.875rem;
             color: #64748b;
             margin: 0;
         }
@@ -255,11 +290,11 @@
             }
 
             .brand-title {
-                font-size: 26px;
+                font-size: 1.625rem;
             }
 
             .brand-sub {
-                font-size: 18px;
+                font-size: 1.125rem;
             }
 
             .login-link {
@@ -281,17 +316,18 @@
             }
 
             .footer-title {
-                font-size: 20px;
+                font-size: 1.25rem;
             }
 
             .footer-text,
             .footer-link {
-                font-size: 16px;
+                font-size: 1rem;
             }
 
             .mini-logo {
                 width: 70px;
                 height: 70px;
+                margin-left: 0 !important;
             }
 
             .card,
@@ -316,7 +352,109 @@
                 padding-right: 24px;
             }
         }
+    
+        .public-shell, .public-shell *, .public-shell *::before, .public-shell *::after {
+            box-sizing:border-box;
+        }
+        .public-shell {
+            min-height:100dvh;
+        }
+        .public-main, .public-main > .stack {
+            min-width:0;
+        }
+        .public-main {
+            overflow-wrap:break-word;
+        }
+        .footer-text {
+            overflow-wrap:break-word;
+        }
+        .footer-link:focus-visible, .btn-soft:focus-visible {
+            outline:3px solid #0f766e;
+            outline-offset:3px;
+        }
+        @media (min-width:769px) and (max-height:1024px) {
+            .public-header {
+                padding-block:12px;
+            }
+            .public-header-inner {
+                min-height:80px;
+            }
+            .logo-box {
+                width:80px;
+                height:80px;
+            }
+            .brand-title {
+                font-size:2rem;
+            }
+            .brand-sub {
+                font-size:1.125rem;
+            }
+            .public-main {
+                padding-block:18px;
+            }
+            .footer-grid {
+                padding-block:18px;
+                gap:24px;
+            }
+            .footer-title {
+                font-size:1.25rem;
+                margin-bottom:10px;
+            }
+            .footer-text, .footer-link {
+                font-size:1rem;
+                line-height:1.5;
+            }
+            .footer-logo-row {
+                margin-top:10px;
+                padding-top:10px;
+            }
+            .mini-logo {
+                width:56px;
+                height:56px;
+            }
+            .footer-bottom {
+                padding-block:10px;
+            }
+        }
+        @media (min-width:769px) and (max-height:768px) {
+            .public-header {
+                padding-block:8px;
+            }
+            .public-header-inner {
+                min-height:68px;
+            }
+            .logo-box {
+                width:68px;
+                height:68px;
+            }
+            .brand-title {
+                font-size:1.875rem;
+            }
+            .public-main {
+                padding-block:10px;
+            }
+            .footer-grid {
+                padding-block:12px;
+                gap:20px;
+            }
+            .footer-title {
+                font-size:1.125rem;
+                margin-bottom:8px;
+            }
+            .footer-logo-row {
+                margin-top:8px;
+                padding-top:8px;
+            }
+            .mini-logo {
+                width:40px;
+                height:40px;
+            }
+            .footer-bottom {
+                padding-block:6px;
+            }
+        }
     </style>
+    @stack('head')
 </head>
 
 <body>
@@ -326,7 +464,7 @@
             <div class="public-container public-header-inner">
                 <div class="brand-wrap">
                     <div class="logo-box">
-                        <img src="{{ asset('images/rhu-icon.png') }}" style="width:100%;height:100%;object-fit:contain;">
+                        <img src="{{ asset('images/rhu-icon.png') }}" alt="Rural Health Unit" style="width:100%;height:100%;object-fit:contain;">
                     </div>
                     <div>
                         <h1 class="brand-title">Provincial Health Office Supply Portal</h1>
@@ -336,14 +474,6 @@
                     </div>
                 </div>
 
-                <nav class="public-entry-nav" aria-label="Portal navigation">
-                    <a href="{{ route('public.home') }}">Home</a>
-                    @if(session('user_id'))
-                        <a href="{{ route('dashboard') }}">Your dashboard</a>
-                    @else
-                        <a href="{{ route('login') }}">Staff login</a>
-                    @endif
-                </nav>
             </div>
         </header>
 
@@ -365,13 +495,13 @@
                             <div class="mini-logo">
                                 <img src="{{ asset('images/antique.png') }}" alt="Province of Antique">
                             </div>
-                            <div class="mini-logo" style="margin-left: 20px;">
+                            <div class="mini-logo">
                                 <img src="{{ asset('images/doh.png') }}" alt="DOH">
                             </div>
-                            <div class="mini-logo" style="margin-left: 20px;">
+                            <div class="mini-logo">
                                 <img src="{{ asset('images/pho-icon.png') }}" alt="RHU">
                             </div>
-                            <div class="mini-logo" style="margin-left: 20px;">
+                            <div class="mini-logo">
                                 <img src="{{ asset('images/rhu-icon.png') }}" alt="RHU">
                             </div>
                         </div>
@@ -386,7 +516,7 @@
                         <h3 class="footer-title">Contact Details</h3>
                         <p class="footer-text">
                             Provincial Health Office<br>
-                            San Jose de Buenavista, Antique, Philippines<br><br>
+                            San Jose de Buenavista, Antique, Philippines<br>
                             Facebook: Antique Provincial Health Office
                             Email: iphoantique@gmail.com<br>
                             Phone: +63 36 540 7054
@@ -405,9 +535,9 @@
     {{-- Keyboard shortcut (Ctrl+J / Cmd+J) --}}
     <script>
     document.addEventListener('keydown', function (e) {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'j') {
+        if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'j') {
             e.preventDefault();
-            window.location.href = "{{ route('login') }}";
+            window.location.href = {{ Illuminate\Support\Js::from(route('login')) }};
         }
     });
     </script>

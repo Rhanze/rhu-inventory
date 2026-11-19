@@ -48,11 +48,11 @@
                         <option value="medicine"              {{ old('category') === 'medicine'              ? 'selected' : '' }}>Medicine</option>
                         <option value="vaccine"               {{ old('category') === 'vaccine'               ? 'selected' : '' }}>Vaccine</option>
                         <option value="family_planning"       {{ old('category') === 'family_planning'       ? 'selected' : '' }}>Family Planning</option>
-                        <option value="family_health_nutrition" {{ old('category') === 'family_health_nutrition' ? 'selected' : '' }}>Family Health &amp; Nutrition</option>
-                        <option value="emerging_reemerging"    {{ old('category') === 'emerging_reemerging'    ? 'selected' : '' }}>Emerging &amp; Re-emerging</option>
-                        <option value="non_communicable"         {{ old('category') === 'non_communicable'         ? 'selected' : '' }}>Non-Communicable Disease</option>
-                    <option value="dengue_prevention"       {{ request('category') === 'dengue_prevention' ? 'selected' : '' }}>Dengue Prevention</option>
-                    <option value="tuberculosis"            {{ request('category') === 'tuberculosis' ? 'selected' : '' }}>Tuberculosis</option>
+                        <option value="family_health_nutrition" {{ old('category') === 'family_health_nutrition' ? 'selected' : '' }}>Maternal &amp; Child Health</option>
+                        <option value="emerging_reemerging"    {{ old('category') === 'emerging_reemerging'    ? 'selected' : '' }}>Disease Prevention &amp; Control</option>
+                        <option value="non_communicable"         {{ old('category') === 'non_communicable'         ? 'selected' : '' }}>NCD &amp; Lifestyle</option>
+                        <option value="dengue_prevention"     {{ old('category') === 'dengue_prevention'     ? 'selected' : '' }}>Dengue Prevention</option>
+                        <option value="tuberculosis"          {{ old('category') === 'tuberculosis'          ? 'selected' : '' }}>Tuberculosis</option>
                     </select>
                     @error('category')
                         <p style="margin-top:4px; font-size:14px; color:#dc2626;">{{ $message }}</p>

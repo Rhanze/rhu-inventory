@@ -28,24 +28,25 @@
         gap: 16px;
     ">
         <div>
-            <p style="font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #42ad8a; margin: 0 0 6px 0;">User Management</p>
-            <h2 style="font-size: 24px; font-weight: 700; color: #0f172a; margin: 0;">All User Accounts</h2>
+            <p style="font-size:1.0625rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #42ad8a; margin: 0 0 6px 0;">User Management</p>
+            <h2 style="font-size:1.5rem; font-weight: 700; color: #0f172a; margin: 0;">All User Accounts</h2>
         </div>
 
-        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; max-width: 100%;">
 
             {{-- Filters --}}
-            <form method="GET" action="{{ route('users.index') }}" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <form data-native-select method="GET" action="{{ route('users.index') }}" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; max-width: 100%;">
                 @if(request('search'))
                     <input type="hidden" name="search" value="{{ request('search') }}">
                 @endif
 
                 @if(is_null(session('health_unit_id')))
-                    <select name="rhu_filter" style="
-                        height: 40px; padding: 0 12px; font-size: 14px;
-                        border: 2px solid #bec6cf; border-radius: 10px; outline: none;
+                    <select name="rhu_filter" aria-label="RHU" style="
+                        min-height:2.75rem;height:auto; padding: 0 12px; font-size:1.0625rem;
+                        border: 2px solid #bec6cf; border-radius: 10px;
                         background: white; color: #0f172a; appearance: auto;
-                    " onchange="this.form.submit()">
+                        max-width: min(12rem, 100%);
+                    " onchange="this.form.requestSubmit()">
                         <option value="">All RHUs</option>
                         @foreach($healthUnits as $rhu)
                             <option value="{{ $rhu->id }}" {{ request('rhu_filter') == $rhu->id ? 'selected' : '' }}>
@@ -55,11 +56,12 @@
                     </select>
                 @endif
 
-                <select name="role_filter" style="
-                    height: 40px; padding: 0 12px; font-size: 14px;
-                    border: 2px solid #bec6cf; border-radius: 10px; outline: none;
+                <select name="role_filter" aria-label="Role" style="
+                    min-height:2.75rem;height:auto; padding: 0 12px; font-size:1.0625rem;
+                    border: 2px solid #bec6cf; border-radius: 10px;
                     background: white; color: #0f172a; appearance: auto;
-                " onchange="this.form.submit()">
+                    max-width: 100%;
+                " onchange="this.form.requestSubmit()">
                     <option value="">All Roles</option>
                     @foreach($roleBadges as $key => $meta)
                         <option value="{{ $key }}" {{ request('role_filter') === $key ? 'selected' : '' }}>
@@ -71,8 +73,8 @@
 
             {{-- Add Account --}}
             <a href="{{ route('users.create') }}" style="
-                display: inline-flex; align-items: center; gap: 6px;
-                font-size: 14px; font-weight: 600; padding: 9px 16px;
+                display: inline-flex; align-items: center; gap: 6px; min-height: 2.75rem; white-space: nowrap;
+                font-size:1.0625rem; font-weight: 600; padding: 9px 16px;
                 border-radius: 10px; background: #42ad8a; color: #ffffff;
                 text-decoration: none; border: none; cursor: pointer;
                 transition: all 0.2s;
@@ -80,6 +82,7 @@
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 Add Account
             </a>
+            @include('imports._link', ['section' => 'users'])
         </div>
     </div>
 
@@ -91,17 +94,18 @@
         padding: 0;
         border: 1px solid rgba(255,255,255,0.4);
         box-shadow: 0 8px 20px rgba(0,0,0,0.06);
-        overflow: hidden;
+        overflow-x:auto;
     ">
-        <table style="width:100%; border-collapse: collapse; font-size: 14px;">
+        <table style="width:100%; min-width:58rem; border-collapse: collapse; font-size:1.0625rem;">
             <thead>
                 <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                    <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">#</th>
-                    <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">Name</th>
-                    <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">Username</th>
-                    <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">Role</th>
-                    <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">RHU</th>
-                    <th style="padding: 14px 20px; text-align: center; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">Actions</th>
+                    <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">#</th>
+                    <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">Name</th>
+                    <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">Username</th>
+                    <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">Role</th>
+                    <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">RHU</th>
+                    <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">Assigned Barangays</th>
+                    <th style="padding: 14px 20px; text-align: center; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">Actions</th>
                 </tr>
             </thead>
 
@@ -122,13 +126,27 @@
                         <td style="padding: 14px 20px;">
                             <span style="
                                 display:inline-block; padding: 3px 10px; border-radius: 999px;
-                                font-size: 12px; font-weight: 600;
+                                font-size:1.0625rem; font-weight: 600;
                                 background: {{ $badge['bg'] }};
                                 color: {{ $badge['color'] }};
                                 border: 1px solid {{ $badge['border'] }};
                             ">{{ $badge['label'] }}</span>
                         </td>
                         <td style="padding: 14px 20px; color: #334155;">{{ $user->healthUnit->name ?? 'N/A' }}</td>
+                        <td style="padding:14px 20px;color:#334155;">
+                            @if($user->role === 'midwife')
+                                @forelse($user->assignedBarangays as $assignment)
+                                    <div style="margin-bottom:4px;">
+                                        {{ $assignment->barangay }}
+                                        @if($assignment->is_primary)<span style="font-size:1.0625rem;color:#0f766e;font-weight:600;">Primary</span>@endif
+                                    </div>
+                                @empty
+                                    <span style="color:#b45309;">Not assigned</span>
+                                @endforelse
+                            @else
+                                <span style="color:#64748b;">Not applicable</span>
+                            @endif
+                        </td>
                         <td style="padding: 14px 20px;">
                             <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
 
@@ -176,7 +194,7 @@
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="6" style="padding: 40px 20px; text-align: center; color: #64748b; border-bottom: 1px solid #f1f5f9;">
+                        <td colspan="7" style="padding: 40px 20px; text-align: center; color: #64748b; border-bottom: 1px solid #f1f5f9;">
                             No user records found.
                         </td>
                     </tr>
@@ -194,9 +212,9 @@
             justify-content: center; gap: 10px; flex-wrap: wrap;
         ">
             @if ($users->onFirstPage())
-                <span style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">← Previous</span>
+                <span style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">← Previous</span>
             @else
-                <a href="{{ $users->previousPageUrl() }}" style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
+                <a href="{{ $users->previousPageUrl() }}" style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
                    onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#42ad8a';" onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0';">
                     ← Previous
                 </a>
@@ -204,9 +222,9 @@
 
             @foreach ($users->getUrlRange(1, $users->lastPage()) as $page => $url)
                 @if ($page == $users->currentPage())
-                    <span style="font-size: 14px; font-weight: 600; padding: 8px 14px; border-radius: 8px; background: #42ad8a; color: #ffffff; border: 1px solid #42ad8a; cursor: default;">{{ $page }}</span>
+                    <span style="font-size:1.0625rem; font-weight: 600; padding: 8px 14px; border-radius: 8px; background: #42ad8a; color: #ffffff; border: 1px solid #42ad8a; cursor: default;">{{ $page }}</span>
                 @else
-                    <a href="{{ $url }}" style="font-size: 14px; font-weight: 500; padding: 8px 14px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
+                    <a href="{{ $url }}" style="font-size:1.0625rem; font-weight: 500; padding: 8px 14px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
                        onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#42ad8a';" onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0';">
                         {{ $page }}
                     </a>
@@ -214,12 +232,12 @@
             @endforeach
 
             @if ($users->hasMorePages())
-                <a href="{{ $users->nextPageUrl() }}" style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
+                <a href="{{ $users->nextPageUrl() }}" style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
                    onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#42ad8a';" onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0';">
                     Next →
                 </a>
             @else
-                <span style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">Next →</span>
+                <span style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">Next →</span>
             @endif
         </div>
     @endif

@@ -12,43 +12,42 @@
         @media print { .no-print { display: none !important; } }
     </style>
 
-    {{-- ═══════ HEADER (matches Stock Logs — compact) ═══════ --}}
-    <div class="no-print" style="
+    <div class="no-print page-heading" style="
         background: rgba(255,255,255,0.9); backdrop-filter: blur(12px);
         border-radius:20px; padding:24px 28px; border:1px solid rgba(255,255,255,0.4);
         box-shadow:0 8px 20px rgba(0,0,0,0.06);
         display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:12px;
     ">
-        <div style="display:flex; align-items:flex-end; gap:20px; flex-wrap:wrap;">
-            <div>
-                <p style="font-size:13px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#42ad8a; margin:0 0 6px 0;">Reports</p>
-                <h2 style="font-size:24px; font-weight:700; color:#0f172a; margin:0; line-height:1.2;">Inventory Report</h2>
+        <div class="page-heading-main" style="display:flex; align-items:flex-end; gap:20px; flex-wrap:wrap;">
+            <div class="page-heading-title">
+                <p style="font-size:1.0625rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#42ad8a; margin:0 0 6px 0;">Reports</p>
+                <h2 style="font-size:1.5rem; font-weight:700; color:#0f172a; margin:0; line-height:1.2;">Inventory Report</h2>
             </div>
             @include('reports._tabs')
         </div>
 
-        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+        <div class="page-heading-actions" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
 
-            {{-- Program Category filter — same sizing as Stock Logs --}}
+            {{-- Program Category filter --}}
             <form method="GET" action="{{ route('reports.inventory') }}" style="display:flex; align-items:center;">
                 @foreach(request()->except('category', 'page') as $k => $v)
                     @if(!is_array($v)) <input type="hidden" name="{{ $k }}" value="{{ $v }}"> @endif
                 @endforeach
-                <select name="category" onchange="this.form.submit()" style="
-                    height:40px; padding:0 12px; font-size:14px;
-                    border:2px solid #bec6cf; border-radius:10px; outline:none;
+                <select name="category" data-native-select aria-label="Program category" onchange="this.form.requestSubmit()" style="
+                    min-height:2.75rem;height:auto; padding:0 12px; font-size:1.0625rem;
+                    border:2px solid #bec6cf; border-radius:10px;
                     background:white; color:#0f172a; appearance:auto;
-                    max-width:140px;
+                    max-width:180px;
                 ">
                     <option value="">All Categories</option>
-                    <option value="medicine"              {{ request('category') == 'medicine'              ? 'selected' : '' }}>Medicine</option>
-                    <option value="vaccine"               {{ request('category') == 'vaccine'               ? 'selected' : '' }}>Vaccine</option>
-                    <option value="family_planning"       {{ request('category') == 'family_planning'       ? 'selected' : '' }}>Family Planning</option>
-                    <option value="family_health_nutrition" {{ request('category') == 'family_health_nutrition' ? 'selected' : '' }}>Maternal/Child</option>
-                    <option value="emerging_reemerging"    {{ request('category') == 'emerging_reemerging'    ? 'selected' : '' }}>Disease Prev.</option>
+                    <option value="medicine"                 {{ request('category') == 'medicine'                 ? 'selected' : '' }}>Medicine</option>
+                    <option value="vaccine"                  {{ request('category') == 'vaccine'                  ? 'selected' : '' }}>Vaccine</option>
+                    <option value="family_planning"          {{ request('category') == 'family_planning'          ? 'selected' : '' }}>Family Planning</option>
+                    <option value="family_health_nutrition"  {{ request('category') == 'family_health_nutrition'  ? 'selected' : '' }}>Maternal/Child</option>
+                    <option value="emerging_reemerging"      {{ request('category') == 'emerging_reemerging'      ? 'selected' : '' }}>Disease Prev.</option>
                     <option value="non_communicable"         {{ request('category') == 'non_communicable'         ? 'selected' : '' }}>NCD</option>
-                    <option value="dengue_prevention"       {{ request('category') === 'dengue_prevention' ? 'selected' : '' }}>Dengue Prevention</option>
-                    <option value="tuberculosis"            {{ request('category') === 'tuberculosis' ? 'selected' : '' }}>Tuberculosis</option>
+                    <option value="dengue_prevention"        {{ request('category') === 'dengue_prevention'       ? 'selected' : '' }}>Dengue Prevention</option>
+                    <option value="tuberculosis"             {{ request('category') === 'tuberculosis'            ? 'selected' : '' }}>Tuberculosis</option>
                 </select>
             </form>
 
@@ -58,9 +57,9 @@
                     @foreach(request()->except('rhu_filter', 'page') as $k => $v)
                         @if(!is_array($v)) <input type="hidden" name="{{ $k }}" value="{{ $v }}"> @endif
                     @endforeach
-                    <select name="rhu_filter" onchange="this.form.submit()" style="
-                        height:40px; padding:0 12px; font-size:14px;
-                        border:2px solid #bec6cf; border-radius:10px; outline:none;
+                    <select name="rhu_filter" data-native-select aria-label="RHU" onchange="this.form.requestSubmit()" style="
+                        min-height:2.75rem;height:auto; padding:0 12px; font-size:1.0625rem;
+                        border:2px solid #bec6cf; border-radius:10px;
                         background:white; color:#0f172a; appearance:auto;
                         max-width:130px;
                     ">
@@ -72,10 +71,9 @@
                 </form>
             @endif
 
-            {{-- Export button — opens modal --}}
             <button type="button" onclick="openExportModal('inventoryExportModal')" style="
                 display:inline-flex; align-items:center; gap:6px;
-                font-size:14px; font-weight:600;
+                font-size:1.0625rem; font-weight:600;
                 padding:9px 18px; border-radius:10px;
                 background:#42ad8a; color:#ffffff;
                 border:none; cursor:pointer; transition: background 0.2s;
@@ -88,30 +86,30 @@
                 </svg>
                 Export
             </button>
+            @include('imports._link', ['section' => session('health_unit_id') ? (session('role') === 'admin' ? 'inventory' : 'stock_logs') : 'shipments', 'fallback' => true])
         </div>
     </div>
 
-    {{-- ═══════ TABLE ═══════ --}}
     <div style="
         background: rgba(255,255,255,0.9); backdrop-filter: blur(8px);
         border-radius:20px; padding:0; border:1px solid rgba(255,255,255,0.4);
         box-shadow:0 8px 20px rgba(0,0,0,0.06); overflow:hidden;
     ">
         <div class="table-scroll" style="width:100%; overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch;">
-            <table style="width:100%; min-width:1000px; border-collapse:collapse; font-size:14px;">
+            <table style="width:100%; min-width:1000px; border-collapse:collapse; font-size:1.0625rem;">
                 <thead>
                     <tr style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
-                        <th style="padding:14px 16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">#</th>
-                        <th style="padding:14px 16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Batch No.</th>
-                        <th style="padding:14px 16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Medicine</th>
+                        <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">#</th>
+                        <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Batch No.</th>
+                        <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Medicine</th>
                         @if(is_null(session('health_unit_id')))
-                            <th style="padding:14px 16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Health Unit</th>
+                            <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Health Unit</th>
                         @endif
-                        <th style="padding:14px 16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Dosage</th>
-                        <th style="padding:14px 16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Available</th>
-                        <th style="padding:14px 16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Allocated</th>
-                        <th style="padding:14px 16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Dispensed</th>
-                        <th style="padding:14px 16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Expiration</th>
+                        <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Dosage</th>
+                        <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Available</th>
+                        <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Allocated</th>
+                        <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Dispensed</th>
+                        <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Expiration</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -127,7 +125,7 @@
                             if ($expiry) {
                                 $daysLeft = now()->startOfDay()->diffInDays($expiry->copy()->startOfDay(), false);
                                 if ($daysLeft < 0) $expiryBadge = ['label' => 'Expired', 'bg' => '#FECACA', 'color' => '#991B1B', 'border' => '#FCA5A5'];
-                                elseif ($daysLeft <= 90) $expiryBadge = ['label' => 'Near Expiry', 'bg' => '#FFE4CC', 'color' => '#B85C00', 'border' => '#FFB870'];
+                                elseif ($daysLeft <= \App\Models\Inventory::NEAR_EXPIRY_DAYS) $expiryBadge = ['label' => 'Near Expiry', 'bg' => '#FFE4CC', 'color' => '#B85C00', 'border' => '#FFB870'];
                                 elseif ($daysLeft <= 180) $expiryBadge = ['label' => 'Monitor', 'bg' => '#FEF3C7', 'color' => '#92400E', 'border' => '#FCD34D'];
                                 else $expiryBadge = ['label' => 'Good', 'bg' => '#DCFCE7', 'color' => '#166534', 'border' => '#86EFAC'];
                             }
@@ -144,7 +142,7 @@
                             <td style="padding:14px 16px; color:#334155;">
                                 <div>{{ $med->dosage ?? '—' }}</div>
                                 @if($med && $med->dosage_form)
-                                    <div style="font-size:12px; color:#64748b; margin-top:2px;">{{ $med->dosage_form }}</div>
+                                    <div style="font-size:1.0625rem; color:#64748b; margin-top:2px;">{{ $med->dosage_form }}</div>
                                 @endif
                             </td>
                             <td style="padding:14px 16px; color:#334155; font-weight:600;">{{ $inventory->available_stock }}{{ $unitLabel }}</td>
@@ -154,7 +152,7 @@
                                 @if($expiry)
                                     <div style="font-weight:600;">{{ $expiry->format('m/d/Y') }}</div>
                                     @if($expiryBadge)
-                                        <span style="display:inline-block; margin-top:4px; padding:2px 8px; border-radius:6px; font-size:11px; font-weight:700;
+                                        <span style="display:inline-block; margin-top:4px; padding:2px 8px; border-radius:6px; font-size:1.0625rem; font-weight:700;
                                             background:{{ $expiryBadge['bg'] }}; color:{{ $expiryBadge['color'] }}; border:1px solid {{ $expiryBadge['border'] }};">
                                             {{ $expiryBadge['label'] }}
                                         </span>
@@ -179,9 +177,7 @@
 
 </div>
 
-{{-- ═══════════════════════════════════════════════════════════ --}}
-{{-- EXPORT MODAL — RHU + Program Category + Batch Number(s) + Expiry --}}
-{{-- ═══════════════════════════════════════════════════════════ --}}
+{{-- EXPORT MODAL --}}
 <div id="inventoryExportModal"
      onclick="if(event.target === this) closeExportModal('inventoryExportModal')"
      style="
@@ -196,30 +192,28 @@
         box-shadow: 0 24px 60px rgba(0,0,0,0.25);
         max-height:90vh; overflow-y:auto;
     ">
-        {{-- Header --}}
         <div style="padding:22px 26px 14px; border-bottom:1px solid #f1f5f9;">
-            <h3 style="font-size:19px; font-weight:700; color:#0f172a; margin:0 0 4px 0;">
+            <h3 style="font-size:1.1875rem; font-weight:700; color:#0f172a; margin:0 0 4px 0;">
                 Export Inventory Report
             </h3>
-            <p style="font-size:13px; color:#64748b; margin:0;">
+            <p style="font-size:1.0625rem; color:#64748b; margin:0;">
                 Choose what to include, then pick an action.
             </p>
         </div>
 
-        {{-- Body --}}
         <div style="padding:20px 26px;">
 
             {{-- RHU (PHO admin only) --}}
             @if(is_null(session('health_unit_id')))
                 <div style="margin-bottom:22px;">
                     <label for="rhu-inventoryExportModal"
-                           style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                           style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                         Health Unit (RHU)
                     </label>
                     <select id="rhu-inventoryExportModal"
                             style="
-                                width:100%; height:44px;
-                                padding:0 14px; font-size:14px;
+                                width:100%; min-height:2.75rem;height:auto;
+                                padding:0 14px; font-size:1.0625rem;
                                 border:2px solid #bec6cf; border-radius:10px;
                                 outline:none; box-sizing:border-box;
                                 background:#ffffff; color:#0f172a; appearance:auto; cursor:pointer;
@@ -233,7 +227,7 @@
                             </option>
                         @endforeach
                     </select>
-                    <p style="font-size:12px; color:#64748b; margin:6px 0 0 0;">
+                    <p style="font-size:1.0625rem; color:#64748b; margin:6px 0 0 0;">
                         Choose a specific RHU, or leave as "All RHUs" for province-wide.
                     </p>
                 </div>
@@ -242,13 +236,13 @@
             {{-- PROGRAM CATEGORY --}}
             <div style="margin-bottom:22px;">
                 <label for="category-inventoryExportModal"
-                       style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                       style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Program Category
                 </label>
                 <select id="category-inventoryExportModal"
                         style="
-                            width:100%; height:44px;
-                            padding:0 14px; font-size:14px;
+                            width:100%; min-height:2.75rem;height:auto;
+                            padding:0 14px; font-size:1.0625rem;
                             border:2px solid #bec6cf; border-radius:10px;
                             outline:none; box-sizing:border-box;
                             background:#ffffff; color:#0f172a; appearance:auto; cursor:pointer;
@@ -256,21 +250,21 @@
                         onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                         onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
                     <option value="" {{ !request('category') ? 'selected' : '' }}>All Categories</option>
-                    <option value="medicine"              {{ request('category') == 'medicine'              ? 'selected' : '' }}>Medicine</option>
-                    <option value="vaccine"               {{ request('category') == 'vaccine'               ? 'selected' : '' }}>Vaccine</option>
-                    <option value="family_planning"       {{ request('category') == 'family_planning'       ? 'selected' : '' }}>Family Planning</option>
-                    <option value="family_health_nutrition" {{ request('category') == 'family_health_nutrition' ? 'selected' : '' }}>Family Health &amp; Nutrition</option>
-                    <option value="emerging_reemerging"    {{ request('category') == 'emerging_reemerging'    ? 'selected' : '' }}>Emerging &amp; Re-emerging</option>
-                    <option value="non_communicable"         {{ request('category') == 'non_communicable'         ? 'selected' : '' }}>Non-Communicable Disease</option>
-                    <option value="dengue_prevention"       {{ request('category') === 'dengue_prevention' ? 'selected' : '' }}>Dengue Prevention</option>
-                    <option value="tuberculosis"            {{ request('category') === 'tuberculosis' ? 'selected' : '' }}>Tuberculosis</option>
+                    <option value="medicine"                 {{ request('category') == 'medicine'                 ? 'selected' : '' }}>Medicine</option>
+                    <option value="vaccine"                  {{ request('category') == 'vaccine'                  ? 'selected' : '' }}>Vaccine</option>
+                    <option value="family_planning"          {{ request('category') == 'family_planning'          ? 'selected' : '' }}>Family Planning</option>
+                    <option value="family_health_nutrition"  {{ request('category') == 'family_health_nutrition'  ? 'selected' : '' }}>Maternal &amp; Child Health</option>
+                    <option value="emerging_reemerging"      {{ request('category') == 'emerging_reemerging'      ? 'selected' : '' }}>Disease Prevention &amp; Control</option>
+                    <option value="non_communicable"         {{ request('category') == 'non_communicable'         ? 'selected' : '' }}>NCD &amp; Lifestyle</option>
+                    <option value="dengue_prevention"        {{ request('category') === 'dengue_prevention'       ? 'selected' : '' }}>Dengue Prevention</option>
+                    <option value="tuberculosis"             {{ request('category') === 'tuberculosis'            ? 'selected' : '' }}>Tuberculosis</option>
                 </select>
             </div>
 
             {{-- BATCH NUMBER(S) --}}
             <div style="margin-bottom:22px;">
                 <label for="batchInput-inventoryExportModal"
-                       style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                       style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Batch Number(s)
                 </label>
                 <input type="text"
@@ -278,35 +272,36 @@
                        placeholder="e.g. BT-001, BT-002, 1-8"
                        value="{{ request('batch_input', '') }}"
                        style="
-                           width:100%; height:44px;
-                           padding:0 14px; font-size:14px;
+                           width:100%; min-height:2.75rem;height:auto;
+                           padding:0 14px; font-size:1.0625rem;
                            border:2px solid #bec6cf; border-radius:10px;
                            outline:none; box-sizing:border-box;
                            background:#ffffff; color:#0f172a;
                        "
                        onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                        onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
-                <p style="font-size:12px; color:#64748b; margin:6px 0 0 0;">
+                <p style="font-size:1.0625rem; color:#64748b; margin:6px 0 0 0;">
                     Separate multiple batch numbers with commas, or use a range like <code>1-8</code>. Leave blank to include all batches.
                 </p>
             </div>
 
             {{-- EXPIRY STATUS --}}
             <div>
-                <label style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:10px;">
+                <label style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:10px;">
                     Expiry Status
                 </label>
                 <div style="display:flex; flex-direction:column; gap:8px;">
                     @foreach([
                         ''            => 'All Expiry',
-                        'near_expiry' => 'Near Expiry (≤180 days)',
+                        'near_expiry' => 'Near Expiry (0–30 days)',
+                        'monitor'     => 'Monitor (31–180 days)',
                         'expired'     => 'Expired Only',
-                        'not_expired' => 'Not Expiring Soon',
+                        'not_expired' => 'No expiry within 180 days',
                     ] as $val => $label)
                         <label style="
                             display:flex; align-items:center; gap:10px;
                             padding:9px 12px; border:1px solid #e2e8f0; border-radius:10px;
-                            cursor:pointer; font-size:14px; color:#0f172a;
+                            cursor:pointer; font-size:1.0625rem; color:#0f172a;
                             transition: all .15s;
                         "
                                onmouseover="this.style.borderColor='#42ad8a'; this.style.background='#f0fdf9';"
@@ -323,7 +318,6 @@
             </div>
         </div>
 
-        {{-- Footer --}}
         <div style="
             padding:16px 26px 20px;
             border-top:1px solid #f1f5f9;
@@ -334,7 +328,7 @@
             <button type="button"
                     onclick="closeExportModal('inventoryExportModal')"
                     style="
-                        font-size:14px; font-weight:600;
+                        font-size:1.0625rem; font-weight:600;
                         padding:10px 18px; border-radius:10px;
                         background:#ffffff; color:#334155;
                         border:1px solid #e2e8f0; cursor:pointer;
@@ -348,7 +342,7 @@
                     onclick="runReportExport('inventoryExportModal', '{{ route('reports.inventory') }}', 'print')"
                     style="
                         display:inline-flex; align-items:center; gap:6px;
-                        font-size:14px; font-weight:600;
+                        font-size:1.0625rem; font-weight:600;
                         padding:10px 18px; border-radius:10px;
                         background:#ffffff; color:#334155;
                         border:1px solid #e2e8f0; cursor:pointer;
@@ -367,7 +361,7 @@
                     onclick="runReportExport('inventoryExportModal', '{{ route('reports.inventory.csv') }}', 'csv')"
                     style="
                         display:inline-flex; align-items:center; gap:6px;
-                        font-size:14px; font-weight:600;
+                        font-size:1.0625rem; font-weight:600;
                         padding:10px 18px; border-radius:10px;
                         background:#42ad8a; color:#ffffff;
                         border:none; cursor:pointer;

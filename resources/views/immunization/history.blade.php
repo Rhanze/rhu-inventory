@@ -1,10 +1,11 @@
 @extends('layouts.app')
 
 @section('content')
+@include('shared.empty_result', ['resultKey' => 'history', 'recordCount' => $records->count()])
 <div style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
 
     {{-- ═══════ HEADER ═══════ --}}
-    <div style="
+    <div class="mw-page-card" style="
         background: rgba(255,255,255,0.9); backdrop-filter: blur(12px);
         border-radius: 20px; padding: 24px 28px;
         border: 1px solid rgba(255,255,255,0.4);
@@ -26,7 +27,7 @@
             </p>
         </div>
 
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <div class="mw-form-actions" style="display:flex; gap:8px; flex-wrap:wrap;">
             <a href="{{ route('vaccination.child', $child->id) }}" style="
                 display:inline-flex; align-items:center; gap:6px;
                 padding:10px 18px; border-radius:10px;
@@ -45,7 +46,7 @@
     </div>
 
     {{-- ═══════ SUMMARY STATS ═══════ --}}
-    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px;">
+    <div class="mw-mobile-panels" style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px;">
         <div style="background:#E8F7F4; border:1px solid #42ad8a; border-radius:16px; padding:20px; text-align:center;">
             <p style="font-size:13px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#0f5c4b; margin:0 0 4px 0;">
                 Total Doses Given
@@ -103,7 +104,7 @@
         </div>
 
         <div style="overflow-x:auto;">
-            <table style="width:100%; min-width:900px; border-collapse:collapse; font-size:15px;">
+            <table class="mw-mobile-records" style="width:100%; min-width:900px; border-collapse:collapse; font-size:15px;">
                 <thead>
                     <tr style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
                         <th style="padding:16px; text-align:left; font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#475569;">#</th>
@@ -182,7 +183,7 @@
     </div>
 
     {{-- ═══════ FOOTER ═══════ --}}
-    <div style="display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap;">
+    <div class="mw-form-actions" style="display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap;">
         <a href="{{ route('vaccination.child', $child->id) }}" style="
             padding:10px 20px; border-radius:10px;
             background:#ffffff; color:#334155; border:1px solid #e2e8f0;

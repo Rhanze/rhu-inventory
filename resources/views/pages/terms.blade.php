@@ -37,7 +37,7 @@
 
             <h2 style="font-size: 20px; font-weight: 700; color: #0f172a; margin-top: 30px;">1. Use of the Portal</h2>
             <p>
-                The Portal is provided by the Provincial Health Office of Southern Antique to assist the public in
+                The Portal is provided by the Provincial Health Office of Antique to assist the public in
                 locating available medicines and vaccines at Rural Health Units. The information displayed is for
                 reference and convenience purposes only. While we strive to keep the data accurate and up‑to‑date,
                 the actual availability of medicines may change without prior notice.

@@ -14,7 +14,7 @@
 <div style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
 
     {{-- Header Card with tabs beside title + actions --}}
-    <div class="no-print" style="
+    <div class="no-print page-heading" style="
         background: rgba(255,255,255,0.9);
         backdrop-filter: blur(12px);
         border-radius: 20px;
@@ -28,10 +28,10 @@
         gap: 16px;
     ">
         {{-- Title + Tabs --}}
-        <div style="display:flex; align-items:flex-end; gap:24px; flex-wrap:wrap;">
-            <div>
-                <p style="font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #42ad8a; margin: 0 0 6px 0;">Medicine Management</p>
-                <h2 style="font-size: 24px; font-weight: 700; color: #0f172a; margin: 0; line-height: 1.2;">
+        <div class="page-heading-main" style="display:flex; align-items:flex-end; gap:24px; flex-wrap:wrap;">
+            <div class="page-heading-title">
+                <p style="font-size:1.0625rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #42ad8a; margin: 0 0 6px 0;">Medicine Management</p>
+                <h2 style="font-size:1.5rem; font-weight: 700; color: #0f172a; margin: 0; line-height: 1.2;">
                     @if(is_null(session('health_unit_id')))
                         Provincial Stock on Hand
                     @else
@@ -41,7 +41,7 @@
             </div>
 
             {{-- TAB BAR --}}
-            <div style="
+            <div class="page-section-nav" role="navigation" aria-label="Medicine sections" style="
                 background: #f1f5f9;
                 border-radius: 12px;
                 padding: 4px;
@@ -51,7 +51,7 @@
                 <a href="{{ route('medicine.index', request()->only('rhu_filter')) }}" style="
                     display: inline-flex; align-items: center; gap: 8px;
                     padding: 8px 18px; border-radius: 9px;
-                    font-size: 14px; font-weight: 600; text-decoration: none;
+                    font-size:1.0625rem; font-weight: 600; text-decoration: none;
                     background: transparent; color: #475569;
                     transition: all 0.2s;
                     white-space: nowrap;
@@ -66,10 +66,10 @@
                     Item Masterlist
                 </a>
 
-                <a href="{{ route('medicine.stock_on_hand', request()->only('rhu_filter')) }}" style="
+                <a href="{{ route('medicine.stock_on_hand', request()->only('rhu_filter')) }}" aria-current="page" style="
                     display: inline-flex; align-items: center; gap: 8px;
                     padding: 8px 18px; border-radius: 9px;
-                    font-size: 14px; font-weight: 600; text-decoration: none;
+                    font-size:1.0625rem; font-weight: 600; text-decoration: none;
                     background: #42ad8a; color: #ffffff;
                     box-shadow: 0 2px 6px rgba(66,173,138,0.25);
                     white-space: nowrap;
@@ -85,7 +85,7 @@
         </div>
 
         {{-- Actions --}}
-        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <div class="page-heading-actions" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
 
             {{-- RHU Filter – PHO Admin only --}}
             @if(is_null(session('health_unit_id')))
@@ -99,12 +99,12 @@
                     @if(request('availability'))
                         <input type="hidden" name="availability" value="{{ request('availability') }}">
                     @endif
-                    <select name="rhu_filter" style="
-                        height: 40px; padding: 0 12px; font-size: 14px;
-                        border: 2px solid #bec6cf; border-radius: 10px; outline: none;
+                    <select name="rhu_filter" data-native-select aria-label="RHU" style="
+                        min-height:2.75rem;height:auto; padding: 0 12px; font-size:1.0625rem;
+                        border: 2px solid #bec6cf; border-radius: 10px;
                         background: white; color: #0f172a; appearance: auto;
                         max-width: 160px;
-                    " onchange="this.form.submit()">
+                    " onchange="this.form.requestSubmit()">
                         <option value="">All RHUs</option>
                         @foreach($healthUnits as $rhu)
                             <option value="{{ $rhu->id }}" {{ request('rhu_filter') == $rhu->id ? 'selected' : '' }}>
@@ -126,12 +126,12 @@
                 @if(request('availability'))
                     <input type="hidden" name="availability" value="{{ request('availability') }}">
                 @endif
-                <select name="category" id="stock-category-filter" style="
-                    height: 40px; padding: 0 12px; font-size: 14px;
-                    border: 2px solid #bec6cf; border-radius: 10px; outline: none;
+                <select name="category" id="stock-category-filter" data-native-select aria-label="Category" style="
+                    min-height:2.75rem;height:auto; padding: 0 12px; font-size:1.0625rem;
+                    border: 2px solid #bec6cf; border-radius: 10px;
                     background: white; color: #0f172a; appearance: auto;
                     max-width: 160px;
-                " onchange="this.form.submit()">
+                " onchange="this.form.requestSubmit()">
                     <option value="">All Categories</option>
                     <option value="medicine"              {{ request('category') == 'medicine'              ? 'selected' : '' }}>Medicine</option>
                     <option value="vaccine"               {{ request('category') == 'vaccine'               ? 'selected' : '' }}>Vaccine</option>
@@ -155,12 +155,12 @@
                 @if(request('category'))
                     <input type="hidden" name="category" value="{{ request('category') }}">
                 @endif
-                <select name="availability" style="
-                    height: 40px; padding: 0 12px; font-size: 14px;
-                    border: 2px solid #bec6cf; border-radius: 10px; outline: none;
+                <select name="availability" data-native-select aria-label="Stock availability" style="
+                    min-height:2.75rem;height:auto; padding: 0 12px; font-size:1.0625rem;
+                    border: 2px solid #bec6cf; border-radius: 10px;
                     background: white; color: #0f172a; appearance: auto;
                     max-width: 150px;
-                " onchange="this.form.submit()">
+                " onchange="this.form.requestSubmit()">
                     <option value="">All Stock</option>
                     <option value="available"   {{ request('availability') == 'available'   ? 'selected' : '' }}>✅ Available</option>
                     <option value="unavailable" {{ request('availability') == 'unavailable' ? 'selected' : '' }}>❌ Not Avail.</option>
@@ -170,7 +170,7 @@
             {{-- EXPORT BUTTON — opens inline modal --}}
             <button type="button" onclick="openStockExportModal()" style="
                 display:inline-flex; align-items:center; gap:6px;
-                font-size:14px; font-weight:600;
+                font-size:1.0625rem; font-weight:600;
                 padding:9px 18px; border-radius:10px;
                 background:#42ad8a; color:#ffffff;
                 border:none; cursor:pointer; transition: background 0.2s;
@@ -183,6 +183,7 @@
                 </svg>
                 Export
             </button>
+            @include('imports._link', ['section' => 'medicines'])
         </div>
     </div>
 
@@ -219,9 +220,9 @@
                        autocomplete="off"
                        style="
                            width: 100%;
-                           height: 44px;
+                           min-height:2.75rem;height:auto;
                            padding: 0 40px 0 42px;
-                           font-size: 15px;
+                           font-size:1.0625rem;
                            border: 2px solid #bec6cf;
                            border-radius: 12px;
                            outline: none;
@@ -269,9 +270,9 @@
             </div>
 
             <button type="submit" style="
-                height: 44px;
+                min-height:2.75rem;height:auto;
                 padding: 0 22px;
-                font-size: 15px;
+                font-size:1.0625rem;
                 font-weight: 600;
                 border-radius: 12px;
                 background: #42ad8a;
@@ -285,9 +286,9 @@
 
             @if(request('search') || request('category') || request('availability'))
                 <a href="{{ route('medicine.stock_on_hand', request()->only('rhu_filter')) }}" style="
-                    height: 44px;
+                    min-height:2.75rem;height:auto;
                     padding: 0 22px;
-                    font-size: 15px;
+                    font-size:1.0625rem;
                     font-weight: 600;
                     border-radius: 12px;
                     background: #ffffff;
@@ -307,16 +308,16 @@
     {{-- Summary strip --}}
     <div style="
         display:grid;
-        grid-template-columns:repeat(auto-fit, minmax(240px, 1fr));
+        grid-template-columns:repeat(auto-fit, minmax(min(100%,15rem), 1fr));
         gap:16px;
     ">
         <div style="background:rgba(255,255,255,0.9); border-radius:16px; padding:18px 22px; border:1px solid rgba(255,255,255,0.4); box-shadow:0 4px 12px rgba(0,0,0,0.04);">
-            <p style="font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#64748b; margin:0 0 4px 0;">Total Available</p>
-            <p style="font-size:26px; font-weight:700; color:#0f5c4b; margin:0;">{{ number_format($grandAvailable) }}</p>
+            <p style="font-size:1.0625rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#64748b; margin:0 0 4px 0;">{{ is_null(session('health_unit_id')) ? 'Available medicine items' : 'Total Available' }}</p>
+            <p style="font-size:1.625rem; font-weight:700; color:#0f5c4b; margin:0;">{{ number_format(is_null(session('health_unit_id')) ? $availableMedicineCount : $grandAvailable) }}</p>
         </div>
         <div style="background:rgba(255,255,255,0.9); border-radius:16px; padding:18px 22px; border:1px solid rgba(255,255,255,0.4); box-shadow:0 4px 12px rgba(0,0,0,0.04);">
-            <p style="font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#64748b; margin:0 0 4px 0;">Total Allocated</p>
-            <p style="font-size:26px; font-weight:700; color:#475569; margin:0;">{{ number_format($grandAllocated) }}</p>
+            <p style="font-size:1.0625rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#64748b; margin:0 0 4px 0;">Total Allocated</p>
+            <p style="font-size:1.625rem; font-weight:700; color:#475569; margin:0;">{{ number_format($grandAllocated) }}</p>
         </div>
     </div>
 
@@ -336,16 +337,16 @@
             overflow-y: hidden;
             -webkit-overflow-scrolling: touch;
         ">
-            <table style="width:100%; min-width: 850px; border-collapse: collapse; font-size: 14px;">
+            <table style="width:100%; min-width: 850px; border-collapse: collapse; font-size:1.0625rem;">
                 <thead>
                     <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                        <th class="no-print" style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">#</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Item Name</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Category</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Dosage Strength</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Dosage Form</th>
-                        <th style="padding: 14px 20px; text-align: right; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Available</th>
-                        <th style="padding: 14px 20px; text-align: right; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Allocated</th>
+                        <th class="no-print" style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">#</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Item Name</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Category</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Dosage Strength</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Dosage Form</th>
+                        <th style="padding: 14px 20px; text-align: right; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Available</th>
+                        <th style="padding: 14px 20px; text-align: right; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Allocated</th>
                     </tr>
                 </thead>
 
@@ -373,7 +374,7 @@
                             <td style="padding: 14px 20px; font-weight: 600; color: #0f172a;">{{ $item->medicine_name }}</td>
 
                             <td style="padding: 14px 20px;">
-                                <span style="display:inline-block; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:600; background:{{ $badge['bg'] }}; color:{{ $badge['color'] }}; border:1px solid {{ $badge['border'] }}; white-space:nowrap;">
+                                <span style="display:inline-block; padding:3px 10px; border-radius:999px; font-size:1.0625rem; font-weight:600; background:{{ $badge['bg'] }}; color:{{ $badge['color'] }}; border:1px solid {{ $badge['border'] }}; white-space:nowrap;">
                                     {{ $badge['label'] }}
                                 </span>
                             </td>
@@ -392,10 +393,10 @@
                                 @if($isZero) color:#dc2626;
                                 @elseif($isLow) color:#b45309;
                                 @else color:#0f5c4b; @endif">
-                                {{ number_format($item->available_total) }}<span style="font-weight:500; font-size:13px; color:#64748b;"> (units)</span>
+                                {{ number_format($item->available_total) }}<span style="font-weight:500; font-size:1.0625rem; color:#64748b;"> (units)</span>
                             </td>
                             <td style="padding: 14px 20px; text-align:right; color: #475569;">
-                                {{ number_format($item->allocated_total) }}<span style="font-weight:500; font-size:13px; color:#64748b;"> (units)</span>
+                                {{ number_format($item->allocated_total) }}<span style="font-weight:500; font-size:1.0625rem; color:#64748b;"> (units)</span>
                             </td>
                         </tr>
                     @empty
@@ -427,9 +428,9 @@
             justify-content: center; gap: 10px; flex-wrap: wrap;
         ">
             @if ($items->onFirstPage())
-                <span style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">← Previous</span>
+                <span style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">← Previous</span>
             @else
-                <a href="{{ $items->previousPageUrl() }}" style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
+                <a href="{{ $items->previousPageUrl() }}" style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
                    onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#42ad8a';" 
                    onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0';">
                     ← Previous
@@ -438,9 +439,9 @@
 
             @foreach ($items->getUrlRange(1, $items->lastPage()) as $page => $url)
                 @if ($page == $items->currentPage())
-                    <span style="font-size: 14px; font-weight: 600; padding: 8px 14px; border-radius: 8px; background: #42ad8a; color: #ffffff; border: 1px solid #42ad8a; cursor: default;">{{ $page }}</span>
+                    <span style="font-size:1.0625rem; font-weight: 600; padding: 8px 14px; border-radius: 8px; background: #42ad8a; color: #ffffff; border: 1px solid #42ad8a; cursor: default;">{{ $page }}</span>
                 @else
-                    <a href="{{ $url }}" style="font-size: 14px; font-weight: 500; padding: 8px 14px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
+                    <a href="{{ $url }}" style="font-size:1.0625rem; font-weight: 500; padding: 8px 14px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
                        onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#42ad8a';" 
                        onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0';">
                         {{ $page }}
@@ -449,13 +450,13 @@
             @endforeach
 
             @if ($items->hasMorePages())
-                <a href="{{ $items->nextPageUrl() }}" style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
+                <a href="{{ $items->nextPageUrl() }}" style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
                    onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#42ad8a';" 
                    onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0';">
                     Next →
                 </a>
             @else
-                <span style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">Next →</span>
+                <span style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">Next →</span>
             @endif
         </div>
     @endif
@@ -482,10 +483,10 @@
     ">
         {{-- Header --}}
         <div style="padding:22px 26px 14px; border-bottom:1px solid #f1f5f9;">
-            <h3 style="font-size:19px; font-weight:700; color:#0f172a; margin:0 0 4px 0;">
+            <h3 style="font-size:1.1875rem; font-weight:700; color:#0f172a; margin:0 0 4px 0;">
                 Export Stock on Hand
             </h3>
-            <p style="font-size:13px; color:#64748b; margin:0;">
+            <p style="font-size:1.0625rem; color:#64748b; margin:0;">
                 Choose what to include, then pick an action.
             </p>
         </div>
@@ -496,13 +497,13 @@
             {{-- 1. PROGRAM CATEGORY --}}
             <div style="margin-bottom:22px;">
                 <label for="category-stockExportModal"
-                       style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                       style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Program Category
                 </label>
                 <select id="category-stockExportModal"
                         style="
-                            width:100%; height:44px;
-                            padding:0 14px; font-size:14px;
+                            width:100%; min-height:2.75rem;height:auto;
+                            padding:0 14px; font-size:1.0625rem;
                             border:2px solid #bec6cf; border-radius:10px;
                             outline:none; box-sizing:border-box;
                             background:#ffffff; color:#0f172a; appearance:auto; cursor:pointer;
@@ -523,13 +524,13 @@
             {{-- 2. STOCK STATUS --}}
             <div style="margin-bottom:22px;">
                 <label for="availability-stockExportModal"
-                       style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                       style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Stock Status
                 </label>
                 <select id="availability-stockExportModal"
                         style="
-                            width:100%; height:44px;
-                            padding:0 14px; font-size:14px;
+                            width:100%; min-height:2.75rem;height:auto;
+                            padding:0 14px; font-size:1.0625rem;
                             border:2px solid #bec6cf; border-radius:10px;
                             outline:none; box-sizing:border-box;
                             background:#ffffff; color:#0f172a; appearance:auto; cursor:pointer;
@@ -545,13 +546,13 @@
             {{-- 3. DOSAGE FORM --}}
             <div>
                 <label for="dosageForm-stockExportModal"
-                       style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                       style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Dosage Form
                 </label>
                 <select id="dosageForm-stockExportModal"
                         style="
-                            width:100%; height:44px;
-                            padding:0 14px; font-size:14px;
+                            width:100%; min-height:2.75rem;height:auto;
+                            padding:0 14px; font-size:1.0625rem;
                             border:2px solid #bec6cf; border-radius:10px;
                             outline:none; box-sizing:border-box;
                             background:#ffffff; color:#0f172a; appearance:auto; cursor:pointer;
@@ -579,7 +580,7 @@
             <button type="button"
                     onclick="closeStockExportModal()"
                     style="
-                        font-size:14px; font-weight:600;
+                        font-size:1.0625rem; font-weight:600;
                         padding:10px 18px; border-radius:10px;
                         background:#ffffff; color:#334155;
                         border:1px solid #e2e8f0; cursor:pointer;
@@ -593,7 +594,7 @@
                     onclick="runStockExport('print')"
                     style="
                         display:inline-flex; align-items:center; gap:6px;
-                        font-size:14px; font-weight:600;
+                        font-size:1.0625rem; font-weight:600;
                         padding:10px 18px; border-radius:10px;
                         background:#ffffff; color:#334155;
                         border:1px solid #e2e8f0; cursor:pointer;
@@ -612,7 +613,7 @@
                     onclick="runStockExport('csv')"
                     style="
                         display:inline-flex; align-items:center; gap:6px;
-                        font-size:14px; font-weight:600;
+                        font-size:1.0625rem; font-weight:600;
                         padding:10px 18px; border-radius:10px;
                         background:#42ad8a; color:#ffffff;
                         border:none; cursor:pointer;
@@ -677,7 +678,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const div = document.createElement('div');
             div.className = 'stock-search-item';
             div.dataset.text = item.text;
-            div.style.cssText = 'padding:10px 16px; cursor:pointer; font-size:14px; color:#0f172a; border-bottom:1px solid #f1f5f9; transition:background 0.15s;';
+            div.style.cssText = 'padding:10px 16px; cursor:pointer; font-size:1.0625rem; color:#0f172a; border-bottom:1px solid #f1f5f9; transition:background 0.15s;';
             div.textContent = item.text;
 
             div.addEventListener('mouseenter', () => {
@@ -689,7 +690,7 @@ document.addEventListener('DOMContentLoaded', function () {
             div.addEventListener('click', () => {
                 input.value = item.text;
                 closeDropdown();
-                input.closest('form').submit();
+                input.closest('form').requestSubmit();
             });
 
             dropdown.appendChild(div);
@@ -721,7 +722,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 e.preventDefault();
                 input.value = items[selectedIndex].dataset.text;
                 closeDropdown();
-                input.closest('form').submit();
+                input.closest('form').requestSubmit();
             }
         } else if (e.key === 'Escape') {
             closeDropdown();

@@ -186,12 +186,12 @@
     </a>
 
     {{-- ─────────── PATIENT HEADER ─────────── --}}
-    <div class="print-card print-patient-header"
+    <div class="print-card print-patient-header mw-page-card"
          style="background: rgba(255,255,255,0.95); border-radius: 20px;
                 border: 1px solid rgba(66,173,138,0.15); box-shadow: 0 8px 20px rgba(0,0,0,0.06);
                 padding: 24px 28px;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap;">
-            <div style="flex:1; min-width:240px;">
+            <div class="mw-patient-heading" style="flex:1; min-width:240px;">
                 <p class="no-print" style="font-size:13px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#42ad8a; margin:0 0 6px 0;">
                     Patient Profile
                 </p>
@@ -301,7 +301,7 @@
     {{-- ═══════════════════════════════════════════════════════════ --}}
     {{-- IMMUNIZATION                                                 --}}
     {{-- ═══════════════════════════════════════════════════════════ --}}
-    <div id="immunization" class="print-card"
+    <div id="immunization" class="print-card mw-page-card"
          style="background: rgba(255,255,255,0.95); border-radius: 20px;
                 border: 1px solid rgba(66,173,138,0.15); box-shadow: 0 8px 20px rgba(0,0,0,0.06);
                 padding: 24px;">
@@ -366,14 +366,14 @@
     {{-- ═══════════════════════════════════════════════════════════ --}}
     {{-- MATERNAL CARE                                                --}}
     {{-- ═══════════════════════════════════════════════════════════ --}}
-    <div id="maternal" class="print-card"
+    <div id="maternal" class="print-card mw-page-card"
          style="background: rgba(255,255,255,0.95); border-radius: 20px;
                 border: 1px solid rgba(66,173,138,0.15); box-shadow: 0 8px 20px rgba(0,0,0,0.06);
                 padding: 24px;">
 
         <h3 style="font-size:19px; font-weight:700; color:#0f172a; margin:0 0 16px 0;">🤰 Maternal Care</h3>
 
-        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:16px;">
+        <div class="mw-mobile-panels" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:16px;">
 
             {{-- PRENATAL --}}
             <div>
@@ -468,7 +468,7 @@
     {{-- ═══════════════════════════════════════════════════════════ --}}
     {{-- FAMILY PLANNING                                              --}}
     {{-- ═══════════════════════════════════════════════════════════ --}}
-    <div id="fp" class="print-card"
+    <div id="fp" class="print-card mw-page-card"
          style="background: rgba(255,255,255,0.95); border-radius: 20px;
                 border: 1px solid rgba(66,173,138,0.15); box-shadow: 0 8px 20px rgba(0,0,0,0.06);
                 padding: 24px;">
@@ -512,7 +512,7 @@
     {{-- ═══════════════════════════════════════════════════════════ --}}
     {{-- DISPENSING                                                   --}}
     {{-- ═══════════════════════════════════════════════════════════ --}}
-    <div id="dispensing" class="print-card"
+    <div id="dispensing" class="print-card mw-page-card"
          style="background: rgba(255,255,255,0.95); border-radius: 20px;
                 border: 1px solid rgba(66,173,138,0.15); box-shadow: 0 8px 20px rgba(0,0,0,0.06);
                 padding: 24px;">
@@ -554,7 +554,7 @@
                                     {{ $d->quantity_dispensed ?? '—' }}
                                 </td>
                                 <td style="padding:10px 12px; color:#475569;">
-                                    {{ $d->doctor_name ?? '—' }}
+                                    {{ $d->prescribingDoctorDisplay() }}
                                 </td>
                             </tr>
                         @endforeach

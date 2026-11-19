@@ -14,7 +14,7 @@
 <div style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
 
     {{-- Header Card with tabs beside title + actions --}}
-    <div class="no-print" style="
+    <div class="no-print page-heading" style="
         background: rgba(255,255,255,0.9);
         backdrop-filter: blur(12px);
         border-radius: 20px;
@@ -28,18 +28,18 @@
         gap: 16px;
     ">
         {{-- Title + Tabs --}}
-        <div style="display:flex; align-items:flex-end; gap:24px; flex-wrap:wrap;">
-            <div>
-                <p style="font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #42ad8a; margin: 0 0 6px 0;">Medicine Management</p>
-                <h2 style="font-size: 24px; font-weight: 700; color: #0f172a; margin: 0; line-height: 1.2;">Item Masterlist</h2>
+        <div class="page-heading-main" style="display:flex; align-items:flex-end; gap:24px; flex-wrap:wrap;">
+            <div class="page-heading-title">
+                <p style="font-size:1.0625rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #42ad8a; margin: 0 0 6px 0;">Medicine Management</p>
+                <h2 style="font-size:1.5rem; font-weight: 700; color: #0f172a; margin: 0; line-height: 1.2;">Item Masterlist</h2>
             </div>
 
             {{-- TAB BAR --}}
-            <div style="background: #f1f5f9; border-radius: 12px; padding: 4px; display: inline-flex; gap: 4px;">
-                <a href="{{ route('medicine.index', request()->only('rhu_filter')) }}" style="
+            <div class="page-section-nav" role="navigation" aria-label="Medicine sections" style="background: #f1f5f9; border-radius: 12px; padding: 4px; display: inline-flex; gap: 4px;">
+                <a href="{{ route('medicine.index', request()->only('rhu_filter')) }}" aria-current="page" style="
                     display: inline-flex; align-items: center; gap: 8px;
                     padding: 8px 18px; border-radius: 9px;
-                    font-size: 14px; font-weight: 600; text-decoration: none;
+                    font-size:1.0625rem; font-weight: 600; text-decoration: none;
                     background: #42ad8a; color: #ffffff;
                     box-shadow: 0 2px 6px rgba(66,173,138,0.25);
                     white-space: nowrap;
@@ -56,7 +56,7 @@
                 <a href="{{ route('medicine.stock_on_hand', request()->only('rhu_filter')) }}" style="
                     display: inline-flex; align-items: center; gap: 8px;
                     padding: 8px 18px; border-radius: 9px;
-                    font-size: 14px; font-weight: 600; text-decoration: none;
+                    font-size:1.0625rem; font-weight: 600; text-decoration: none;
                     background: transparent; color: #475569;
                     transition: all 0.2s;
                     white-space: nowrap;
@@ -73,7 +73,7 @@
         </div>
 
         {{-- Actions --}}
-        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <div class="page-heading-actions" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
 
             {{-- RHU Filter – PHO Admin only --}}
             @if(is_null(session('health_unit_id')))
@@ -85,11 +85,11 @@
                         <input type="hidden" name="category" value="{{ request('category') }}">
                     @endif
                     <select name="rhu_filter" style="
-                        height: 40px; padding: 0 12px; font-size: 14px;
+                        min-height:2.75rem;height:auto; padding: 0 12px; font-size:1.0625rem;
                         border: 2px solid #bec6cf; border-radius: 10px; outline: none;
                         background: white; color: #0f172a; appearance: auto;
                         max-width: 160px;
-                    " onchange="this.form.submit()">
+                    " onchange="this.form.requestSubmit()">
                         <option value="">All RHUs</option>
                         @foreach($healthUnits as $rhu)
                             <option value="{{ $rhu->id }}" {{ request('rhu_filter') == $rhu->id ? 'selected' : '' }}>
@@ -109,11 +109,11 @@
                     <input type="hidden" name="rhu_filter" value="{{ request('rhu_filter') }}">
                 @endif
                 <select name="category" style="
-                    height: 40px; padding: 0 12px; font-size: 14px;
+                    min-height:2.75rem;height:auto; padding: 0 12px; font-size:1.0625rem;
                     border: 2px solid #bec6cf; border-radius: 10px; outline: none;
                     background: white; color: #0f172a; appearance: auto;
                     max-width: 210px;
-                " onchange="this.form.submit()">
+                " onchange="this.form.requestSubmit()">
                     <option value="">All Categories</option>
                     <option value="medicine"                 {{ request('category') == 'medicine'                 ? 'selected' : '' }}>Medicine</option>
                     <option value="vaccine"                  {{ request('category') == 'vaccine'                  ? 'selected' : '' }}>Vaccine</option>
@@ -129,7 +129,7 @@
             {{-- Export button — opens inline modal --}}
             <button type="button" onclick="openMedicineExportModal()" style="
                 display:inline-flex; align-items:center; gap:6px;
-                font-size:14px; font-weight:600;
+                font-size:1.0625rem; font-weight:600;
                 padding:9px 18px; border-radius:10px;
                 background:#42ad8a; color:#ffffff;
                 border:none; cursor:pointer; transition: background 0.2s;
@@ -142,11 +142,12 @@
                 </svg>
                 Export
             </button>
+            @include('imports._link', ['section' => 'medicines'])
 
             {{-- Add Item — PHO Admin only --}}
             @if(session('role') === 'admin' && is_null(session('health_unit_id')))
                 <a href="{{ route('medicine.create') }}" style="
-                    display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600;
+                    display: inline-flex; align-items: center; gap: 6px; font-size:1.0625rem; font-weight: 600;
                     padding: 9px 16px; border-radius: 10px; background: #42ad8a; color: #ffffff;
                     text-decoration: none; border: none; cursor: pointer; transition: all 0.2s;
                     white-space: nowrap;
@@ -169,18 +170,18 @@
         overflow: hidden;
     ">
         <div class="table-scroll" style="width: 100%; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;">
-            <table style="width:100%; min-width: 800px; border-collapse: collapse; font-size: 14px;">
+            <table style="width:100%; min-width: 800px; border-collapse: collapse; font-size:1.0625rem;">
                 <thead>
                     <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                        <th class="no-print" style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">#</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Item Name</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Dosage Strength</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Dosage Form</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Category</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Prescription</th>
+                        <th class="no-print" style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">#</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Item Name</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Dosage Strength</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Dosage Form</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Category</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Prescription</th>
 
                         @if(session('role') === 'admin' && is_null(session('health_unit_id')))
-                            <th class="no-print" style="padding: 14px 20px; text-align: center; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Actions</th>
+                            <th class="no-print" style="padding: 14px 20px; text-align: center; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Actions</th>
                         @endif
                     </tr>
                 </thead>
@@ -223,7 +224,7 @@
                             </td>
 
                             <td style="padding: 14px 20px;">
-                                <span style="display:inline-block; padding:3px 10px; border-radius:999px; font-size:12px; font-weight:600; background:{{ $badge['bg'] }}; color:{{ $badge['color'] }}; border:1px solid {{ $badge['border'] }}; white-space:nowrap;">
+                                <span style="display:inline-block; padding:3px 10px; border-radius:999px; font-size:1.0625rem; font-weight:600; background:{{ $badge['bg'] }}; color:{{ $badge['color'] }}; border:1px solid {{ $badge['border'] }}; white-space:nowrap;">
                                     {{ $badge['label'] }}
                                 </span>
                             </td>
@@ -301,9 +302,9 @@
             justify-content: center; gap: 10px; flex-wrap: wrap;
         ">
             @if ($medicines->onFirstPage())
-                <span style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">← Previous</span>
+                <span style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">← Previous</span>
             @else
-                <a href="{{ $medicines->previousPageUrl() }}" style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
+                <a href="{{ $medicines->previousPageUrl() }}" style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
                    onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#42ad8a';"
                    onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0';">
                     ← Previous
@@ -312,9 +313,9 @@
 
             @foreach ($medicines->getUrlRange(1, $medicines->lastPage()) as $page => $url)
                 @if ($page == $medicines->currentPage())
-                    <span style="font-size: 14px; font-weight: 600; padding: 8px 14px; border-radius: 8px; background: #42ad8a; color: #ffffff; border: 1px solid #42ad8a; cursor: default;">{{ $page }}</span>
+                    <span style="font-size:1.0625rem; font-weight: 600; padding: 8px 14px; border-radius: 8px; background: #42ad8a; color: #ffffff; border: 1px solid #42ad8a; cursor: default;">{{ $page }}</span>
                 @else
-                    <a href="{{ $url }}" style="font-size: 14px; font-weight: 500; padding: 8px 14px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
+                    <a href="{{ $url }}" style="font-size:1.0625rem; font-weight: 500; padding: 8px 14px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
                        onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#42ad8a';"
                        onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0';">
                         {{ $page }}
@@ -323,13 +324,13 @@
             @endforeach
 
             @if ($medicines->hasMorePages())
-                <a href="{{ $medicines->nextPageUrl() }}" style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
+                <a href="{{ $medicines->nextPageUrl() }}" style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
                    onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#42ad8a';"
                    onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0';">
                     Next →
                 </a>
             @else
-                <span style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">Next →</span>
+                <span style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">Next →</span>
             @endif
         </div>
     @endif
@@ -352,10 +353,10 @@
         max-height:90vh; overflow-y:auto;
     ">
         <div style="padding:22px 26px 14px; border-bottom:1px solid #f1f5f9;">
-            <h3 style="font-size:19px; font-weight:700; color:#0f172a; margin:0 0 4px 0;">
+            <h3 style="font-size:1.1875rem; font-weight:700; color:#0f172a; margin:0 0 4px 0;">
                 Export Item Masterlist
             </h3>
-            <p style="font-size:13px; color:#64748b; margin:0;">
+            <p style="font-size:1.0625rem; color:#64748b; margin:0;">
                 Choose what to include, then pick an action.
             </p>
         </div>
@@ -365,13 +366,13 @@
             {{-- 1. PROGRAM CATEGORY --}}
             <div style="margin-bottom:22px;">
                 <label for="category-medicineExportModal"
-                       style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                       style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Program Category
                 </label>
                 <select id="category-medicineExportModal"
                         style="
-                            width:100%; height:44px;
-                            padding:0 14px; font-size:14px;
+                            width:100%; min-height:2.75rem;height:auto;
+                            padding:0 14px; font-size:1.0625rem;
                             border:2px solid #bec6cf; border-radius:10px;
                             outline:none; box-sizing:border-box;
                             background:#ffffff; color:#0f172a; appearance:auto; cursor:pointer;
@@ -393,13 +394,13 @@
             {{-- 2. PRESCRIPTION TYPE --}}
             <div style="margin-bottom:22px;">
                 <label for="prescription-medicineExportModal"
-                       style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                       style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Prescription Type
                 </label>
                 <select id="prescription-medicineExportModal"
                         style="
-                            width:100%; height:44px;
-                            padding:0 14px; font-size:14px;
+                            width:100%; min-height:2.75rem;height:auto;
+                            padding:0 14px; font-size:1.0625rem;
                             border:2px solid #bec6cf; border-radius:10px;
                             outline:none; box-sizing:border-box;
                             background:#ffffff; color:#0f172a; appearance:auto; cursor:pointer;
@@ -415,13 +416,13 @@
             {{-- 3. DOSAGE FORM --}}
             <div style="margin-bottom:22px;">
                 <label for="dosageForm-medicineExportModal"
-                       style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                       style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Dosage Form
                 </label>
                 <select id="dosageForm-medicineExportModal"
                         style="
-                            width:100%; height:44px;
-                            padding:0 14px; font-size:14px;
+                            width:100%; min-height:2.75rem;height:auto;
+                            padding:0 14px; font-size:1.0625rem;
                             border:2px solid #bec6cf; border-radius:10px;
                             outline:none; box-sizing:border-box;
                             background:#ffffff; color:#0f172a; appearance:auto; cursor:pointer;
@@ -448,7 +449,7 @@
             <button type="button"
                     onclick="closeMedicineExportModal()"
                     style="
-                        font-size:14px; font-weight:600;
+                        font-size:1.0625rem; font-weight:600;
                         padding:10px 18px; border-radius:10px;
                         background:#ffffff; color:#334155;
                         border:1px solid #e2e8f0; cursor:pointer;
@@ -462,7 +463,7 @@
                     onclick="runMedicineExport('print')"
                     style="
                         display:inline-flex; align-items:center; gap:6px;
-                        font-size:14px; font-weight:600;
+                        font-size:1.0625rem; font-weight:600;
                         padding:10px 18px; border-radius:10px;
                         background:#ffffff; color:#334155;
                         border:1px solid #e2e8f0; cursor:pointer;
@@ -481,7 +482,7 @@
                     onclick="runMedicineExport('csv')"
                     style="
                         display:inline-flex; align-items:center; gap:6px;
-                        font-size:14px; font-weight:600;
+                        font-size:1.0625rem; font-weight:600;
                         padding:10px 18px; border-radius:10px;
                         background:#42ad8a; color:#ffffff;
                         border:none; cursor:pointer;

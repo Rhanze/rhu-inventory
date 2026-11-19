@@ -3,7 +3,9 @@
 <div style="background:white;padding:24px;border-radius:16px;overflow:auto">
     <h1>Redistribution suggestions</h1>
     <p>Compare usable stock and recent consumption before arranging a transfer.</p>
-    <a href="{{ route('redistribution.export') }}">Export CSV</a>
+    <div class="no-print" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><a href="{{ route('redistribution.export') }}">Export CSV</a>
+        @include('imports._link', ['section' => 'distribution', 'fallback' => true])
+    </div>
     <table style="width:100%;margin-top:20px;text-align:left">
         <thead><tr><th>Medicine</th><th>From RHU</th><th>To RHU</th><th>Quantity</th><th>Reason</th></tr></thead>
         <tbody>

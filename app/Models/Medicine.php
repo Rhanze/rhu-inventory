@@ -78,6 +78,13 @@ class Medicine extends Model
         return $query->where('is_dispensable', false);
     }
 
+    /** Preventive vaccine use is not evidence of illness-related medicine demand. */
+    public function scopeNonVaccine($query)
+    {
+        return $query->where(fn ($medicine) => $medicine->whereNull('category')
+            ->orWhereRaw('LOWER(category) <> ?', ['vaccine']));
+    }
+
     // ─── Helpers ───
 
     /**

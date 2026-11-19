@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class UserController extends Controller
 {
@@ -51,9 +52,9 @@ class UserController extends Controller
 
         $search = $request->search;
         $rhuFilter = $request->rhu_filter;
-        $roleFilter = $request->role;
+        $roleFilter = $request->input('role_filter', $request->input('role'));
 
-        $users = User::with('healthUnit')
+        $users = User::with(['healthUnit', 'assignedBarangays' => fn ($q) => $q->orderByDesc('is_primary')->orderBy('barangay')])
             ->when(session('health_unit_id'), function ($query) {
                 $query->where('health_unit_id', session('health_unit_id'));
             })
@@ -73,11 +74,12 @@ class UserController extends Controller
                 });
             })
             ->orderBy('name', 'asc')
+            ->orderBy('id', 'asc')
             ->paginate(config('pagination.inventory', 20))
             ->appends([
                 'search' => $search,
                 'rhu_filter' => $rhuFilter,
-                'role' => $roleFilter,
+                'role_filter' => $roleFilter,
             ]);
 
         $healthUnits = HealthUnit::rhuOnly()->orderBy('name')->get();
@@ -126,6 +128,7 @@ class UserController extends Controller
             'health_unit_id' => 'required|exists:health_units,id',
             'barangays' => 'nullable|array',                      // ← NEW
             'barangays.*' => 'string|max:100',                      // ← NEW
+            'barangay_names' => 'nullable|string|max:10100',
             'primary_barangay' => 'nullable|string|max:100',           // ← NEW
         ]);
 
@@ -146,10 +149,10 @@ class UserController extends Controller
             ]);
 
             // ← NEW: save barangay assignments if the new user is a midwife
-            if ($user->role === 'midwife' && $request->has('barangays')) {
+            if ($user->role === 'midwife') {
                 $this->saveBarangayAssignments(
                     $user,
-                    $request->input('barangays', []),
+                    $this->assignmentNames($request),
                     $request->input('primary_barangay')
                 );
             }
@@ -230,9 +233,10 @@ class UserController extends Controller
             'username' => ['required', 'string', 'max:50', Rule::unique('users', 'username')->ignore($user->id)],
             'role' => ['required', Rule::in($allowedRoles)],
             'password' => CredentialRules::password(),
-            'health_unit_id' => 'required|exists:health_units,id',
+            'health_unit_id' => [Rule::requiredIf(! is_null(session('health_unit_id')) || $request->role === 'midwife'), 'nullable', 'exists:health_units,id'],
             'barangays' => 'nullable|array',                      // ← NEW
             'barangays.*' => 'string|max:100',                      // ← NEW
+            'barangay_names' => 'nullable|string|max:10100',
             'primary_barangay' => 'nullable|string|max:100',           // ← NEW
         ]);
 
@@ -242,24 +246,30 @@ class UserController extends Controller
             ]);
         }
 
-        // Prevent demotion of the last admin
-        $adminCount = User::where('health_unit_id', $request->health_unit_id)
+        // Preserve an active administrator at the facility the account is leaving.
+        $adminCount = User::where('health_unit_id', $user->health_unit_id)
             ->where('role', 'admin')
+            ->where('is_active', true)
             ->where('is_emergency', false)
-            ->when($user->role === 'admin', function ($q) use ($user) {
-                $q->where('id', '!=', $user->id);
-            })
+            ->where('id', '!=', $user->id)
             ->count();
 
-        if ($user->role === 'admin' && $request->role !== 'admin' && $adminCount < 1) {
+        $leavesAdministration = $request->role !== 'admin'
+            || (int) $request->health_unit_id !== (int) $user->health_unit_id;
+        if ($user->role === 'admin' && $leavesAdministration && $adminCount < 1) {
             return redirect()->route('users.index')
-                ->with('error', 'You cannot change the last admin of this RHU into a different role.');
+                ->with('error', 'You cannot remove or reassign the last active admin of this facility.');
         }
 
         $oldName = $user->name;
         $oldRole = $user->role;
 
         DB::transaction(function () use ($user, $request) {
+            if ($user->role === 'midwife' && ($request->role !== 'midwife'
+                || (int) $request->health_unit_id !== (int) $user->health_unit_id)) {
+                PublicUser::where('assigned_midwife_id', $user->id)->update(['assigned_midwife_id' => null]);
+            }
+
             $data = [
                 'name' => $request->name,
                 'username' => $request->username,
@@ -277,7 +287,7 @@ class UserController extends Controller
             if ($user->role === 'midwife') {
                 $this->saveBarangayAssignments(
                     $user,
-                    $request->input('barangays', []),
+                    $this->assignmentNames($request),
                     $request->input('primary_barangay')
                 );
             } else {
@@ -314,30 +324,34 @@ class UserController extends Controller
 
         $adminCount = User::where('health_unit_id', $user->health_unit_id)
             ->where('role', 'admin')
+            ->where('is_active', true)
             ->where('is_emergency', false)
+            ->where('id', '!=', $user->id)
             ->count();
 
-        if ($user->role === 'admin' && $adminCount <= 1) {
+        if ($user->role === 'admin' && $adminCount < 1) {
             return redirect()->route('users.index')
-                ->with('error', 'You cannot delete the last admin of this RHU.');
+                ->with('error', 'You cannot delete the last active admin of this facility.');
         }
 
         try {
-            ActivityLogger::log(
-                'Users',
-                'Delete',
-                'Deleted user account for '.$user->name.' ('.$user->role.').'
-            );
+            DB::transaction(function () use ($user) {
+                ActivityLogger::log(
+                    'Users',
+                    'Delete',
+                    'Deleted user account for '.$user->name.' ('.$user->role.').'
+                );
 
-            // ← NEW: reassign or clear any patients this midwife was handling
-            if ($user->role === 'midwife') {
-                PublicUser::where('assigned_midwife_id', $user->id)
-                    ->update(['assigned_midwife_id' => null]);
-            }
+                // Clear assignments only if deleting the account succeeds.
+                if ($user->role === 'midwife') {
+                    PublicUser::where('assigned_midwife_id', $user->id)
+                        ->update(['assigned_midwife_id' => null]);
+                }
 
-            MidwifeBarangay::where('user_id', $user->id)->delete();
+                MidwifeBarangay::where('user_id', $user->id)->delete();
 
-            $user->delete();
+                $user->delete();
+            });
 
             return redirect()->route('users.index')->with('success', 'User deleted successfully.');
         } catch (QueryException $e) {
@@ -394,13 +408,42 @@ class UserController extends Controller
             return [];
         }
 
-        return PublicUser::where('health_unit_id', $rhuId)
+        $patientBarangays = PublicUser::where('health_unit_id', $rhuId)
             ->whereNotNull('barangay')
             ->where('barangay', '!=', '')
             ->distinct()
             ->orderBy('barangay')
-            ->pluck('barangay')
-            ->toArray();
+            ->pluck('barangay');
+
+        return $patientBarangays->merge(MidwifeBarangay::whereHas('user', fn ($q) => $q->where('health_unit_id', $rhuId))
+            ->pluck('barangay'))->unique()->sort()->values()->all();
+    }
+
+    private function assignmentNames(Request $request): array
+    {
+        $names = array_merge((array) $request->input('barangays', []), preg_split('/\R/u', (string) $request->input('barangay_names', '')));
+        $unique = [];
+        foreach ($names as $name) {
+            if (preg_match('/[,;|\/\t\r\n•‣⁃▪▫◦∙●○]/u', $name)
+                || preg_match('/^\s*(?:[-+*]|\(?\d+[.)\]:-]\s*|\(\d+\)\s*|\d+\s+|[A-Za-z]\)\s*|\([A-Za-z]\)\s*|[IVXLCDM]+[.)]\s+)/u', $name)) {
+                throw ValidationException::withMessages([
+                    'barangay_names' => 'Enter one barangay per line. Replace commas, semicolons, list separators, numbering, and bullets with line breaks.',
+                ]);
+            }
+            $name = preg_replace('/\s+/u', ' ', trim($name));
+            if ($name === '') {
+                continue;
+            }
+            if (mb_strlen($name) > 100) {
+                throw ValidationException::withMessages(['barangay_names' => 'Each barangay name must be 100 characters or fewer.']);
+            }
+            $unique[mb_strtolower($name)] ??= $name;
+        }
+        if (count($unique) > 100) {
+            throw ValidationException::withMessages(['barangay_names' => 'Assign no more than 100 barangays to one midwife.']);
+        }
+
+        return array_values($unique);
     }
 
     /**
@@ -410,6 +453,12 @@ class UserController extends Controller
      */
     private function saveBarangayAssignments(User $user, array $barangays, ?string $primary): void
     {
+        $primary = preg_replace('/\s+/u', ' ', trim((string) $primary));
+        $primaryMatch = collect($barangays)->first(fn ($name) => mb_strtolower($name) === mb_strtolower($primary));
+        if ($primary !== '' && $primaryMatch === null) {
+            throw ValidationException::withMessages(['primary_barangay' => 'The primary barangay must be included in the assigned barangays.']);
+        }
+        $primary = $primaryMatch;
         // Wipe old assignments
         MidwifeBarangay::where('user_id', $user->id)->delete();
 
@@ -424,6 +473,7 @@ class UserController extends Controller
             // Demote any other midwife marked primary for the same barangay
             if ($isPrimary) {
                 MidwifeBarangay::where('barangay', $brgy)
+                    ->whereHas('user', fn ($q) => $q->where('health_unit_id', $user->health_unit_id))
                     ->where('is_primary', true)
                     ->update(['is_primary' => false]);
             }

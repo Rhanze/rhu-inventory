@@ -18,15 +18,16 @@
         gap: 16px;
     ">
         <div>
-            <p style="font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #42ad8a; margin: 0 0 6px 0;">RHU Management</p>
-            <h2 style="font-size: 24px; font-weight: 700; color: #0f172a; margin: 0;">View and manage Rural Health Units</h2>
+            <p style="font-size:1.0625rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #42ad8a; margin: 0 0 6px 0;">RHU Management</p>
+            <h2 style="font-size:1.5rem; font-weight: 700; color: #0f172a; margin: 0;">View and manage Rural Health Units</h2>
         </div>
 
-        <a href="{{ route('rhu.create') }}" style="
+        <div class="no-print" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <a href="{{ route('rhu.create') }}" style="
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            font-size: 14px;
+            font-size:1.0625rem;
             font-weight: 600;
             padding: 9px 16px;
             border-radius: 10px;
@@ -40,6 +41,8 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             Add RHU
         </a>
+            @include('imports._link', ['section' => 'rhus'])
+        </div>
     </div>
 
     {{-- Table card --}}
@@ -50,16 +53,16 @@
         padding: 0;
         border: 1px solid rgba(255,255,255,0.4);
         box-shadow: 0 8px 20px rgba(0,0,0,0.06);
-        overflow: hidden;
+        overflow-x:auto;
     ">
-        <table style="width:100%; border-collapse: collapse; font-size: 14px;">
+        <table style="width:100%; min-width:58rem; border-collapse: collapse; font-size:1.0625rem;">
             <thead>
                 <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                    <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">#</th>
-                    <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">Name</th>
-                    <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">Municipality</th>
-                    <th style="padding: 14px 20px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">Address</th>
-                    <th style="padding: 14px 20px; text-align: center; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">Actions</th>
+                    <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">#</th>
+                    <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">Name</th>
+                    <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">Municipality</th>
+                    <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">Address</th>
+                    <th style="padding: 14px 20px; text-align: center; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569;">Actions</th>
                 </tr>
             </thead>
 
@@ -80,7 +83,7 @@
                         <td style="padding: 14px 20px;">
                             <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
                                 <a href="{{ route('rhu.edit', $unit->id) }}" style="
-                                    font-size: 13px;
+                                    font-size:1.0625rem;
                                     font-weight: 600;
                                     padding: 6px 12px;
                                     border-radius: 8px;
@@ -98,7 +101,7 @@
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit" style="
-                                        font-size: 13px;
+                                        font-size:1.0625rem;
                                         font-weight: 600;
                                         padding: 6px 12px;
                                         border-radius: 8px;
@@ -143,13 +146,13 @@
             {{-- Previous Page Link --}}
             @if ($healthUnits->onFirstPage())
                 <span style="
-                    font-size: 14px; font-weight: 500; padding: 8px 16px;
+                    font-size:1.0625rem; font-weight: 500; padding: 8px 16px;
                     border-radius: 8px; background: #f1f5f9; color: #94a3b8;
                     border: 1px solid #e2e8f0; cursor: default; user-select: none;
                 ">← Previous</span>
             @else
                 <a href="{{ $healthUnits->previousPageUrl() }}" style="
-                    font-size: 14px; font-weight: 500; padding: 8px 16px;
+                    font-size:1.0625rem; font-weight: 500; padding: 8px 16px;
                     border-radius: 8px; background: #ffffff; color: #334155;
                     border: 1px solid #e2e8f0; text-decoration: none;
                     transition: all 0.2s;
@@ -163,13 +166,13 @@
             @foreach ($healthUnits->getUrlRange(1, $healthUnits->lastPage()) as $page => $url)
                 @if ($page == $healthUnits->currentPage())
                     <span style="
-                        font-size: 14px; font-weight: 600; padding: 8px 14px;
+                        font-size:1.0625rem; font-weight: 600; padding: 8px 14px;
                         border-radius: 8px; background: #42ad8a; color: #ffffff;
                         border: 1px solid #42ad8a; cursor: default;
                     ">{{ $page }}</span>
                 @else
                     <a href="{{ $url }}" style="
-                        font-size: 14px; font-weight: 500; padding: 8px 14px;
+                        font-size:1.0625rem; font-weight: 500; padding: 8px 14px;
                         border-radius: 8px; background: #ffffff; color: #334155;
                         border: 1px solid #e2e8f0; text-decoration: none;
                         transition: all 0.2s;
@@ -183,7 +186,7 @@
             {{-- Next Page Link --}}
             @if ($healthUnits->hasMorePages())
                 <a href="{{ $healthUnits->nextPageUrl() }}" style="
-                    font-size: 14px; font-weight: 500; padding: 8px 16px;
+                    font-size:1.0625rem; font-weight: 500; padding: 8px 16px;
                     border-radius: 8px; background: #ffffff; color: #334155;
                     border: 1px solid #e2e8f0; text-decoration: none;
                     transition: all 0.2s;
@@ -193,7 +196,7 @@
                 </a>
             @else
                 <span style="
-                    font-size: 14px; font-weight: 500; padding: 8px 16px;
+                    font-size:1.0625rem; font-weight: 500; padding: 8px 16px;
                     border-radius: 8px; background: #f1f5f9; color: #94a3b8;
                     border: 1px solid #e2e8f0; cursor: default; user-select: none;
                 ">Next →</span>

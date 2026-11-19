@@ -2,6 +2,9 @@
 
 @section('content')
 @php
+    $midwifeRole = session('role') === 'midwife';
+    $noAssignedAreas = $midwifeRole && $barangays->isEmpty();
+    $assignedAreaKeys = $barangays->map(fn ($area) => mb_strtolower(preg_replace('/\s+/u', ' ', trim($area))))->all();
     // ═══════════════════════════════════════════════════════════════
     // Returns the list of barangays that have an EPI session on
     // $dateStr, based on the $epiSchedules collection.
@@ -124,11 +127,29 @@
             .cal-badge { font-size: 9px; padding: 0 4px; }
         }
 
+        @media screen and (max-width: 900px) {
+            body.role-midwife .mw-calendar-scroll { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+            body.role-midwife .mw-calendar-scroll .cal-grid-wrap { min-width: 700px; }
+            body.role-midwife .mw-calendar-scroll .cal-cell { min-height: 110px; padding: 8px 6px; }
+            body.role-midwife .mw-calendar-scroll .cal-chip { font-size: 11px; padding: 2px 6px; }
+            body.role-midwife .mw-calendar-actions { width: 100%; }
+            body.role-midwife .mw-calendar-actions > form { flex-wrap: wrap; max-width: 100%; }
+            body.role-midwife #clear-epi-form { width: 100%; }
+            body.role-midwife #clear-epi-form > * { flex: 1 1 140px; }
+            body.role-midwife .mw-epi-form > div { flex: 1 1 100% !important; }
+            body.role-midwife .mw-calendar-month-controls { width: 100%; display: grid !important; grid-template-columns: 44px minmax(0, 1fr) minmax(0, 1fr) 44px; }
+            body.role-midwife .mw-calendar-month-controls .cal-select { width: 100%; padding: 0 6px; }
+            body.role-midwife #event-modal { padding: 12px; }
+            body.role-midwife #event-modal > div { max-height: calc(100dvh - 24px); }
+            body.role-midwife #event-modal > div > div,
+            body.role-midwife #event-form { padding: 16px !important; }
+        }
+
         @media print { .no-print { display: none !important; } }
     </style>
 
     {{-- HEADER --}}
-    <div class="no-print" style="
+    <div class="no-print mw-page-card" style="
         background: rgba(255,255,255,0.9); backdrop-filter: blur(12px);
         border-radius: 20px; padding: 24px 28px;
         border: 1px solid rgba(255,255,255,0.4);
@@ -144,11 +165,12 @@
             </h2>
         </div>
 
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <div class="mw-calendar-actions mw-form-actions" style="display:flex; gap:8px; flex-wrap:wrap;">
+            @if($midwifeRole)
             <form method="POST" action="{{ route('vaccination.generate_epi_days') }}" style="display:inline;"
-                  onsubmit="return confirmDialog(event, 'Generate EPI day events for all areas for the next 12 months?');">
+                  onsubmit="return confirmDialog(event, 'Generate EPI day events for your assigned areas for the next 12 months?');">
                 @csrf
-                <button type="submit" style="
+                <button type="submit" @disabled($noAssignedAreas) style="
                     display:inline-flex; align-items:center; gap:6px;
                     padding:10px 18px; border-radius:10px;
                     background:#ffffff; color:#0f5c4b; border:1px solid #42ad8a;
@@ -169,14 +191,14 @@
                         border:2px solid #fca5a5; border-radius:10px;
                         background:#ffffff; color:#991b1b; font-weight:700;
                         cursor:pointer; outline:none; appearance:auto;">
-                        <option value="">— All areas —</option>
+                        <option value="">— All assigned areas —</option>
                         @foreach($epiSchedules as $sched)
                             <option value="{{ $sched->area_label }}">{{ $sched->area_label }}</option>
                         @endforeach
                     </select>
                 @endif
 
-                <button type="submit" style="
+                <button type="submit" @disabled($noAssignedAreas) style="
                     display:inline-flex; align-items:center; gap:6px;
                     padding:10px 18px; border-radius:10px;
                     background:#ffffff; color:#991b1b; border:1px solid #fca5a5;
@@ -184,8 +206,9 @@
                     🗑️ Clear EPI Days
                 </button>
             </form>
+            @endif
 
-            <button type="button" onclick="openEventModal()" style="
+            <button type="button" onclick="openEventModal()" @disabled($noAssignedAreas) style="
                 display:inline-flex; align-items:center; gap:6px;
                 padding:10px 18px; border-radius:10px;
                 background:#42ad8a; color:#fff; border:1px solid #42ad8a;
@@ -193,6 +216,8 @@
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 Add Event
             </button>
+
+            @include('imports._link', ['section' => 'calendar_events'])
 
             <a href="{{ route('vaccination.forecast') }}" style="
                 display:inline-flex; align-items:center; gap:6px;
@@ -205,7 +230,8 @@
     </div>
 
     {{-- AREA EPI SCHEDULES --}}
-    <div class="no-print" style="
+    @unless(session('role') === 'admin')
+    <div class="no-print mw-page-card" style="
         background: rgba(255,255,255,0.95); border-radius: 20px;
         border: 1px solid rgba(66,173,138,0.15);
         box-shadow: 0 8px 20px rgba(0,0,0,0.06);
@@ -216,20 +242,29 @@
                 Area EPI Schedules
             </p>
             <p style="font-size:15px; color:#64748b; margin:0; line-height:1.5;">
-                Add one row per barangay you cover. Each area can have its own day.
+                @if($midwifeRole)
+                    Add one row per barangay you cover. Each area can have its own day.
+                @else
+                    Barangay immunization schedules maintained by midwives.
+                @endif
             </p>
         </div>
+        @if($noAssignedAreas)
+            <p role="status" style="margin:0 0 1rem;color:#475569;font-size:1rem;">No barangays are assigned to your account. Ask your RHU administrator to assign an area before adding area schedules or events.</p>
+        @endif
 
         @if($epiSchedules->count() > 0)
             <div style="
                 background:#ffffff; border-radius:12px;
                 border:1px solid #e2e8f0; overflow:hidden; margin-bottom:16px;">
-                <table style="width:100%; border-collapse:collapse; font-size:15px;">
+                <table class="mw-mobile-records" style="width:100%; border-collapse:collapse; font-size:15px;">
                     <thead>
                         <tr style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
                             <th style="padding:10px 14px; text-align:left; font-size:12px; font-weight:700; text-transform:uppercase; color:#475569;">Area / Barangay</th>
                             <th style="padding:10px 14px; text-align:left; font-size:12px; font-weight:700; text-transform:uppercase; color:#475569;">Schedule</th>
-                            <th style="padding:10px 14px; text-align:center; font-size:12px; font-weight:700; text-transform:uppercase; color:#475569; width:100px;">Actions</th>
+                            @if($midwifeRole)
+                                <th style="padding:10px 14px; text-align:center; font-size:12px; font-weight:700; text-transform:uppercase; color:#475569; width:100px;">Actions</th>
+                            @endif
                         </tr>
                     </thead>
                     <tbody>
@@ -241,6 +276,7 @@
                                 <td style="padding:12px 14px; color:#475569;">
                                     {{ $sched->pattern_label }}
                                 </td>
+                                @if($midwifeRole)
                                 <td style="padding:12px 14px; text-align:center;">
                                     <form method="POST"
                                           action="{{ route('vaccination.epi_schedule.destroy', $sched->id) }}"
@@ -258,6 +294,7 @@
                                         </button>
                                     </form>
                                 </td>
+                                @endif
                             </tr>
                         @endforeach
                     </tbody>
@@ -271,13 +308,16 @@
                 <p style="font-size:15px; margin:0; font-weight:600; color:#334155;">
                     No area schedules yet
                 </p>
-                <p style="font-size:13px; margin:4px 0 0 0;">
-                    Add your first area below. Without at least one, "Generate EPI Days" won't create any events.
-                </p>
+                @if($midwifeRole)
+                    <p style="font-size:13px; margin:4px 0 0 0;">
+                        Add your first area below to generate EPI days.
+                    </p>
+                @endif
             </div>
         @endif
 
-        <form method="POST" action="{{ route('vaccination.epi_schedule.store') }}"
+        @if($midwifeRole)
+        <form class="mw-epi-form" method="POST" action="{{ route('vaccination.epi_schedule.store') }}"
               style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;
                      padding:16px; background:#E8F7F4;
                      border-radius:12px; border:1px solid #42ad8a;">
@@ -287,23 +327,15 @@
                 <label style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; display:block; margin-bottom:6px;">
                     Area / Barangay
                 </label>
-                @if(($barangays ?? collect())->count() > 0)
-                    <select name="area_label" required
-                            style="width:100%; height:44px; padding:0 14px; font-size:15px;
-                                   border:2px solid #bec6cf; border-radius:10px;
-                                   background:#fff; box-sizing:border-box;">
-                        <option value="">— Select barangay —</option>
-                        @foreach($barangays as $b)
-                            <option value="{{ $b }}">{{ $b }}</option>
-                        @endforeach
-                    </select>
-                @else
-                    <input type="text" name="area_label" required maxlength="120"
-                           placeholder="e.g., Brgy. Poblacion"
-                           style="width:100%; height:44px; padding:0 14px; font-size:15px;
-                                  border:2px solid #bec6cf; border-radius:10px;
-                                  background:#fff; box-sizing:border-box;">
-                @endif
+                <select name="area_label" required @disabled($noAssignedAreas)
+                        style="width:100%; height:44px; padding:0 14px; font-size:15px;
+                               border:2px solid #bec6cf; border-radius:10px;
+                               background:#fff; box-sizing:border-box;">
+                    <option value="">{{ $noAssignedAreas ? 'No assigned barangays' : '— Select barangay —' }}</option>
+                    @foreach($barangays as $b)
+                        <option value="{{ $b }}">{{ $b }}</option>
+                    @endforeach
+                </select>
             </div>
 
             <div style="flex:1 1 200px; min-width:180px;">
@@ -355,7 +387,7 @@
                 </select>
             </div>
 
-            <button type="submit" style="
+            <button type="submit" @disabled($noAssignedAreas) style="
                 height:44px; padding:0 22px; border-radius:10px;
                 background:#42ad8a; color:#fff; border:none;
                 font-size:15px; font-weight:700; cursor:pointer;
@@ -363,18 +395,20 @@
                 + Add Schedule
             </button>
         </form>
+        @endif
     </div>
+    @endunless
 
     {{-- CONTROLS --}}
-    <div class="no-print" style="
+    <div class="no-print mw-page-card" style="
         background: rgba(255,255,255,0.95); border-radius: 20px;
         border: 1px solid rgba(66,173,138,0.15); box-shadow: 0 8px 20px rgba(0,0,0,0.06);
         padding: 20px 24px;">
         <form method="GET" action="{{ route('vaccination.calendar') }}"
               style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between;">
 
-            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                <a href="{{ route('vaccination.calendar', ['month' => $start->copy()->subMonth()->format('Y-m')]) }}"
+            <div class="mw-calendar-month-controls" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <a href="{{ route('vaccination.calendar', ['month' => $start->copy()->subMonth()->format('Y-m'), 'area_label' => $calendarAreaFilter]) }}"
                    class="cal-nav-btn" title="Previous month">←</a>
 
                 <select name="month_picker" class="cal-select" onchange="onMonthPick(this.value)" id="month-picker">
@@ -398,7 +432,7 @@
                     @endfor
                 </select>
 
-                <a href="{{ route('vaccination.calendar', ['month' => $start->copy()->addMonth()->format('Y-m')]) }}"
+                <a href="{{ route('vaccination.calendar', ['month' => $start->copy()->addMonth()->format('Y-m'), 'area_label' => $calendarAreaFilter]) }}"
                    class="cal-nav-btn" title="Next month">→</a>
             </div>
 
@@ -417,6 +451,9 @@
                 </div>
             </div>
         </form>
+        @if($calendarAreaFilter)
+            <p style="margin:12px 0 0; color:#0f5c4b; font-size:1rem;">Area: {{ $calendarAreaFilter }}</p>
+        @endif
     </div>
 
     {{-- CALENDAR GRID --}}
@@ -430,6 +467,7 @@
             <p style="font-size:14px; color:#64748b; margin:0;">Click any day to view details</p>
         </div>
 
+        <div class="mw-calendar-scroll" role="region" aria-label="Monthly calendar, scroll horizontally to view all days" tabindex="0">
         <div class="cal-grid-wrap" style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
             @foreach(['Sun','Mon','Tue','Wed','Thu','Fri','Sat'] as $dow)
                 <div style="padding:12px 6px; text-align:center; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#475569;">
@@ -449,21 +487,10 @@
                         if ($day['is_today'])  $classes .= ' is-today';
                         if ($isSelected)       $classes .= ' is-selected';
 
-                        // ── Filter doses by EPI barangays on this date ──
-                        $cellEpiBarangays = $epiBarangaysOn($cellDate);
-
+                        // Appointment dates already use each patient's area schedule.
                         $dayItems      = $day['items'];
                         $dayChildCount = $day['child_count'];
                         $dayDoseCount  = $day['count'];
-
-                        if ($cellEpiBarangays !== null && count($cellEpiBarangays) > 0) {
-                            $dayItems = array_values(array_filter(
-                                $dayItems,
-                                fn ($it) => in_array($it['barangay'] ?? '', $cellEpiBarangays, true)
-                            ));
-                            $dayChildCount = count(array_unique(array_column($dayItems, 'child_name')));
-                            $dayDoseCount  = count($dayItems);
-                        }
 
                         $preview = [];
                         foreach (($day['doh']        ?? []) as $dp) $preview[] = ['kind' => 'doh',        'data' => $dp];
@@ -475,7 +502,7 @@
 
                         $totalItems = count($preview);
                     @endphp
-                    <a href="{{ route('vaccination.calendar', ['month' => $month, 'day' => $cellDate]) }}"
+                    <a href="{{ route('vaccination.calendar', ['month' => $month, 'day' => $cellDate, 'area_label' => $calendarAreaFilter]) }}"
                        class="{{ $classes }}">
                         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:4px;">
                             <span class="cal-day-num {{ $day['is_today'] ? 'is-today' : '' }} {{ !$day['in_month'] ? 'is-out' : '' }}">
@@ -542,13 +569,17 @@
                 @endforeach
             </div>
         @endforeach
+        </div>
     </div>
 
     {{-- SELECTED DAY PANEL --}}
-    <div style="
+    <div id="selected-day" class="mw-page-card" style="
         background: rgba(255,255,255,0.95); border-radius: 20px;
         border: 1px solid rgba(66,173,138,0.15); box-shadow: 0 8px 20px rgba(0,0,0,0.06);
         padding: 24px;">
+
+        {{-- Preserve the target used by previously saved preparation notices. --}}
+        <span id="program-preparation" aria-hidden="true"></span>
 
         <div style="margin-bottom:20px;">
             <p style="font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#42ad8a; margin:0 0 4px 0;">
@@ -559,16 +590,9 @@
             </p>
 
             @php
-                // ── Filter selected-day doses to EPI barangays on this date ──
+                // Keep every appointment mapped to the selected session date.
                 $sEpiBarangays = $epiBarangaysOn($selectedDate);
                 $sSchedules    = $selectedSchedules;
-
-                if ($sEpiBarangays !== null && count($sEpiBarangays) > 0) {
-                    $sSchedules = array_values(array_filter(
-                        $sSchedules,
-                        fn ($s) => in_array($s['barangay'] ?? '', $sEpiBarangays, true)
-                    ));
-                }
 
                 $sChildCount = count(array_unique(array_column($sSchedules, 'child_name')));
             @endphp
@@ -577,7 +601,6 @@
                 <p style="font-size:13px; color:#42ad8a; margin:8px 0 0 0; font-weight:600;">
                     📍 EPI session today at:
                     <strong style="color:#0f5c4b;">{{ implode(', ', $sEpiBarangays) }}</strong>
-                    — showing only children from these barangays.
                 </p>
             @endif
 
@@ -636,11 +659,12 @@
                     $pG   = strlen($pHex) === 6 ? hexdec(substr($pHex, 2, 2)) : 130;
                     $pB   = strlen($pHex) === 6 ? hexdec(substr($pHex, 4, 2)) : 246;
                     $isVitA = str_contains($prog['name'], 'Garantisadong Pambata');
+                    $plan = $selectedProgramPlans->get($prog['id']);
                 @endphp
                 <div style="padding:12px 16px; border-left:4px solid {{ $prog['color'] }}; background:rgba({{ $pR }},{{ $pG }},{{ $pB }},0.07); border-radius:12px; margin-bottom:8px;">
                     <p style="font-size:15px; font-weight:700; color:#0f172a; margin:0;">{{ $prog['name'] }}</p>
-                    @if($prog['description'])
-                        <p style="font-size:13px; color:#475569; margin:4px 0 0 0; white-space: pre-line;">{{ $prog['description'] }}</p>
+                    @if($plan)
+                        @include('vaccination._program_stock_reminder', ['plan' => $plan])
                     @endif
                 </div>
 
@@ -655,7 +679,7 @@
                             🧡 Eligible for Vitamin A today
                         </p>
 
-                        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin-bottom:14px;">
+                        <div class="mw-mobile-panels" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:10px; margin-bottom:14px;">
                             <div style="padding:12px 14px; background:#ffffff; border:1px solid #FDBA74; border-radius:10px;">
                                 <p style="font-size:11px; font-weight:700; color:#9A3412; text-transform:uppercase; margin:0 0 4px 0;">Infants 6–11 months</p>
                                 <p style="font-size:24px; font-weight:800; color:#9A3412; margin:0; line-height:1;">{{ $v['infants_6_11m'] }}</p>
@@ -709,6 +733,10 @@
 
         @foreach($selectedEvents as $ev)
             @php
+                $eventAreaIsAssigned = in_array(mb_strtolower(preg_replace('/\s+/u', ' ', trim($ev['area_label'] ?? ''))), $assignedAreaKeys, true);
+                $canManageEventType = $midwifeRole || $ev['type'] !== \App\Models\CalendarEvent::TYPE_EPI_DAY;
+                $canEditEvent = $canManageEventType && (!$midwifeRole || $eventAreaIsAssigned || (int) $ev['created_by'] === (int) session('user_id'));
+                $canDeleteEvent = $canManageEventType && (!$midwifeRole || $eventAreaIsAssigned);
                 $prioStyle = match($ev['priority']) {
                     'emergency' => ['bg' => '#FCEBEB', 'text' => '#991b1b', 'border' => '#DC2626', 'label' => '🚨 EMERGENCY'],
                     'high'      => ['bg' => '#FEF3C7', 'text' => '#92400E', 'border' => '#F59E0B', 'label' => '⚠ High'],
@@ -735,13 +763,16 @@
                         @endif
                     </div>
                     <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:flex-start;">
+                        @if($canEditEvent)
                         <button type="button"
                                 class="js-edit-event"
                                 data-event="{{ json_encode($ev) }}"
                                 style="padding:8px 14px; border-radius:8px; background:#fff; color:#334155; border:1px solid #e2e8f0; font-size:13px; font-weight:700; cursor:pointer;">
                             ✎ Edit
                         </button>
+                        @endif
 
+                        @if($canDeleteEvent)
                         <form method="POST"
                               action="{{ route('calendar_events.destroy', $ev['id']) }}"
                               onsubmit="return confirmDialog(event, 'Delete this event?');"
@@ -752,6 +783,7 @@
                                 ✕
                             </button>
                         </form>
+                        @endif
                     </div>
                 </div>
             </div>
@@ -851,11 +883,14 @@
                 <input type="text" id="ev-title" name="title" required maxlength="200" style="width:100%; height:44px; padding:0 14px; font-size:15px; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
             </div>
 
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
+            <div class="mw-form-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
                 <div>
                     <label style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; display:block; margin-bottom:6px;">Type *</label>
                     <select id="ev-type" name="type" required style="width:100%; height:44px; padding:0 14px; font-size:15px; border:2px solid #bec6cf; border-radius:10px; background:#fff; box-sizing:border-box;">
                         <option value="immunization_drive">Immunization Drive</option>
+                        @if($midwifeRole)
+                            <option value="{{ \App\Models\CalendarEvent::TYPE_EPI_DAY }}">Immunization Day</option>
+                        @endif
                         <option value="outbreak_response">Outbreak Response</option>
                         <option value="training">Training / Meeting</option>
                         <option value="stock_delivery">Stock Delivery</option>
@@ -874,10 +909,22 @@
 
             <div style="margin-bottom:16px;">
                 <label style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; display:block; margin-bottom:6px;">
-                    Area / Barangay <span style="color:#64748b; font-weight:400; text-transform:none;">(optional — for per-area sessions)</span>
+                    Area / Barangay <span style="color:#64748b; font-weight:400; text-transform:none;">{{ $midwifeRole ? '(assigned barangay)' : '(optional — for per-area sessions)' }}</span>
                 </label>
+                @if($midwifeRole)
+                <select id="ev-area" name="area_label" required @disabled($noAssignedAreas)
+                        style="width:100%;height:44px;padding:0 14px;font-size:1rem;border:2px solid #bec6cf;border-radius:10px;background:#fff;box-sizing:border-box;">
+                    <option value="">{{ $noAssignedAreas ? 'No assigned barangays' : '— Select assigned barangay —' }}</option>
+                    @foreach($barangays as $barangay)
+                        <option value="{{ $barangay }}">{{ $barangay }}</option>
+                    @endforeach
+                </select>
+                <p id="ev-area-history" hidden style="margin:.5rem 0 0;color:#475569;font-size:1rem;"></p>
+                @else
                 <input type="text" id="ev-area" name="area_label" maxlength="120" placeholder="e.g., Barangay Poblacion"
                        style="width:100%; height:44px; padding:0 14px; font-size:15px; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
+                @endif
+                @error('area_label')<p style="color:#dc2626;font-size:1rem;">{{ $message }}</p>@enderror
             </div>
 
             <div style="margin-bottom:16px;">
@@ -885,7 +932,7 @@
                 <input type="date" id="ev-date" name="event_date" required value="{{ $selectedDate }}" style="width:100%; height:44px; padding:0 14px; font-size:15px; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
             </div>
 
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
+            <div class="mw-form-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
                 <div>
                     <label style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; display:block; margin-bottom:6px;">Start Time</label>
                     <input type="time" id="ev-start" name="start_time" style="width:100%; height:44px; padding:0 14px; font-size:15px; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
@@ -904,21 +951,47 @@
 
         <div style="padding:16px 26px 20px; border-top:1px solid #f1f5f9; display:flex; gap:10px; justify-content:flex-end; background:#fafbfc; border-radius: 0 0 20px 20px;">
             <button type="button" onclick="closeEventModal()" style="font-size:14px; font-weight:600; padding:10px 18px; border-radius:10px; background:#fff; color:#334155; border:1px solid #e2e8f0; cursor:pointer;">Cancel</button>
-            <button type="submit" form="event-form" style="font-size:14px; font-weight:600; padding:10px 18px; border-radius:10px; background:#42ad8a; color:#fff; border:none; cursor:pointer;">Save Event</button>
+            <button id="event-save-button" type="submit" form="event-form" @disabled($noAssignedAreas) style="font-size:14px; font-weight:600; padding:10px 18px; border-radius:10px; background:#42ad8a; color:#fff; border:none; cursor:pointer;">Save Event</button>
         </div>
     </div>
 </div>
 
 <script>
 const CALENDAR_EVENTS_BASE = '{{ url("/calendar-events") }}';
+const CALENDAR_IS_MIDWIFE = @json($midwifeRole);
+const CALENDAR_ASSIGNED_AREAS = @js($midwifeRole ? $barangays->values()->all() : []);
+const CALENDAR_AREA_FILTER = @js($calendarAreaFilter);
 
-function onMonthPick(m){const y=document.getElementById('year-picker').value;const mm=String(m).padStart(2,'0');window.location.href='{{ route('vaccination.calendar') }}?month='+y+'-'+mm;}
-function onYearPick(y){const m=document.getElementById('month-picker').value;const mm=String(m).padStart(2,'0');window.location.href='{{ route('vaccination.calendar') }}?month='+y+'-'+mm;}
+function calendarMonthUrl(year, month) {
+    const query = new URLSearchParams({month: year + '-' + String(month).padStart(2, '0')});
+    if (CALENDAR_AREA_FILTER) query.set('area_label', CALENDAR_AREA_FILTER);
+    return '{{ route('vaccination.calendar') }}?' + query.toString();
+}
+function onMonthPick(m){window.location.href=calendarMonthUrl(document.getElementById('year-picker').value,m);}
+function onYearPick(y){window.location.href=calendarMonthUrl(y,document.getElementById('month-picker').value);}
 
 function timeInputValue(v) {
     if (!v) return '';
     const m = String(v).match(/(\d{2}):(\d{2})/);
     return m ? (m[1] + ':' + m[2]) : '';
+}
+
+function setEventArea(value, editing) {
+    const field = document.getElementById('ev-area');
+    const history = document.getElementById('ev-area-history');
+    const saveButton = document.getElementById('event-save-button');
+    if (!CALENDAR_IS_MIDWIFE) {
+        field.value = value;
+        return;
+    }
+    const normalizedArea = value.trim().replace(/\s+/g, ' ').toLowerCase();
+    const assigned = CALENDAR_ASSIGNED_AREAS.find(area => area.trim().replace(/\s+/g, ' ').toLowerCase() === normalizedArea);
+    field.value = assigned || '';
+    field.disabled = CALENDAR_ASSIGNED_AREAS.length === 0;
+    field.required = !editing;
+    history.hidden = !editing || !value || Boolean(assigned);
+    history.textContent = history.hidden ? '' : 'Recorded area — ' + value + '. Leave the selection empty to retain this historical area, or choose an assigned area to correct it.';
+    saveButton.disabled = !editing && CALENDAR_ASSIGNED_AREAS.length === 0;
 }
 
 function openEventModal(){
@@ -927,7 +1000,7 @@ function openEventModal(){
     document.getElementById('event-method').value='POST';
     document.getElementById('event-form').reset();
     document.getElementById('ev-date').value='{{ $selectedDate }}';
-    document.getElementById('ev-area').value='';
+    setEventArea('', false);
     document.getElementById('event-modal').style.display='flex';
     document.body.style.overflow='hidden';
 }
@@ -950,7 +1023,7 @@ function openEditEventModal(id, data){
     typeSel.value = typeVal;
 
     document.getElementById('ev-priority').value    = data.priority || 'normal';
-    document.getElementById('ev-area').value        = data.area_label || '';
+    setEventArea(data.area_label || '', true);
     document.getElementById('ev-date').value        = data.event_date || '{{ $selectedDate }}';
     document.getElementById('ev-start').value       = timeInputValue(data.start_time);
     document.getElementById('ev-end').value         = timeInputValue(data.end_time);
@@ -965,6 +1038,7 @@ function closeEventModal(){
     document.body.style.overflow='';
 }
 
+@if($midwifeRole)
 function epiToggle(){
     const p  = document.getElementById('epi-pattern');
     const wn = document.getElementById('epi-weeknum-wrap');
@@ -978,13 +1052,16 @@ function confirmClearEpi(event) {
 
     const msg = area
         ? 'Remove all UPCOMING EPI day events for "' + area + '"? Past EPI days and other event types will be kept.'
-        : 'Remove ALL upcoming EPI day events for ALL areas? Past EPI days and other event types will be kept.';
+        : 'Remove all upcoming EPI day events for your assigned areas? Past EPI days and other event types will be kept.';
 
     return confirmDialog(event, msg);
 }
+@endif
 
 document.addEventListener('DOMContentLoaded', function () {
+    @if($midwifeRole)
     epiToggle();
+    @endif
 
     document.querySelectorAll('.js-edit-event').forEach(function (btn) {
         btn.addEventListener('click', function () {

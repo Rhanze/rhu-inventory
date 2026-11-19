@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\IsolatePortal;
+use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -13,11 +14,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->append(SecurityHeaders::class);
         $middleware->web(prepend: [IsolatePortal::class]);
-        // Vercel terminates TLS before the container. Trust forwarded protocol/port,
-        // never forwarded Host (domain isolation still uses the actual Host header).
+        // Vercel terminates TLS and overwrites X-Forwarded-For at its edge.
+        // Preserve client IPs for login throttling; never trust forwarded Host.
         if (getenv('VERCEL') === '1') {
-            $middleware->trustProxies(at: '*', headers: Request::HEADER_X_FORWARDED_PROTO | Request::HEADER_X_FORWARDED_PORT);
+            $middleware->trustProxies(at: '*', headers: Request::HEADER_X_FORWARDED_FOR | Request::HEADER_X_FORWARDED_PROTO | Request::HEADER_X_FORWARDED_PORT);
         }
     })
     ->withExceptions(function (Exceptions $exceptions): void {

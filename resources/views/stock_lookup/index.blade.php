@@ -362,6 +362,7 @@
         <h2 class="lookup-title">Find Stock Across Partner RHUs</h2>
         <p class="lookup-sub">
             Pick a category, type a medicine name, and see which partner RHUs have it in stock.
+            @if(session('health_unit_id')) The PHO reviews transfer requests before the supplying RHU is notified. @endif
         </p>
     </div>
 
@@ -527,7 +528,7 @@ function renderSuggestions(matches, query) {
              onmouseover="highlightSuggestion(${i})">
             <div class="suggestion-name">${highlightMatch(m.medicine_name, query)}</div>
             <div class="suggestion-meta">
-                ${m.dosage || ''}${m.dosage_form ? ' · ' + m.dosage_form : ''}${m.category ? ' · ' + m.category : ''}
+                ${escapeHtml(m.dosage || '')}${m.dosage_form ? ' · ' + escapeHtml(m.dosage_form) : ''}${m.category ? ' · ' + escapeHtml(m.category) : ''}
             </div>
         </div>
     `).join('');
@@ -684,9 +685,9 @@ function renderResults(data) {
     summary.innerHTML = `
         <div class="result-summary">
             <div>
-                <p class="result-summary-name">${med.medicine_name || 'Medicine'}</p>
+                <p class="result-summary-name">${escapeHtml(med.medicine_name || 'Medicine')}</p>
                 <p class="result-summary-meta">
-                    ${med.dosage || ''}${med.dosage_form ? ' · ' + med.dosage_form : ''}${med.category ? ' · ' + med.category : ''}
+                    ${escapeHtml(med.dosage || '')}${med.dosage_form ? ' · ' + escapeHtml(med.dosage_form) : ''}${med.category ? ' · ' + escapeHtml(med.category) : ''}
                 </p>
             </div>
             <div class="result-summary-count">
@@ -717,18 +718,18 @@ function renderResults(data) {
 
         return `
             <tr>
-                <td class="strong">${r.rhu_name}</td>
-                <td>${r.municipality || '—'}</td>
+                <td class="strong">${escapeHtml(r.rhu_name)}</td>
+                <td>${escapeHtml(r.municipality || '—')}</td>
                 <td class="text-right">
                     <span class="stock-pill" style="background:${stockBg}; color:${stockColor};">
                         ${r.available_stock}
                     </span>
                 </td>
-                <td class="text-right">${dist}</td>
+                <td class="text-right">${escapeHtml(dist)}</td>
                 <td class="text-center">
                     <a class="request-link"
                        href="{{ route('transfers.create') }}?to_rhu=${r.rhu_id}&medicine_id=${med.id}">
-                        Request
+                        Request stock
                     </a>
                 </td>
             </tr>

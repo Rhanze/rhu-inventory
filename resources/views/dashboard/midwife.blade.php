@@ -2,12 +2,6 @@
 
 @section('content')
 
-@php
-    // Fixed window: October 1 → November 30 of the current year
-    $trendStart = \Carbon\Carbon::now()->startOfYear()->addMonths(9)->startOfMonth()->format('Y-m-d');  // Oct 1
-    $trendEnd   = \Carbon\Carbon::now()->startOfYear()->addMonths(10)->endOfMonth()->format('Y-m-d');   // Nov 30
-    $trendLabel = 'October – November ' . \Carbon\Carbon::now()->year;
-@endphp
 
 {{-- ═══════════════════════════════════════════════════════════════ --}}
 {{-- MOBILE-FIRST STYLES                                            --}}
@@ -19,7 +13,8 @@
         display: flex;
         flex-direction: column;
         gap: 14px;
-        padding-bottom: 90px; /* space for sticky bottom bar */
+        min-width: 0;
+        overflow-wrap: anywhere;
     }
 
     /* Welcome header */
@@ -50,6 +45,7 @@
         padding: 18px 18px;
         border: 1px solid rgba(66,173,138,0.2);
         box-shadow: 0 4px 12px rgba(0,0,0,0.04);
+        min-width: 0;
     }
     .mw-section-title {
         font-size: 18px; font-weight: 700; color: #0f172a;
@@ -70,6 +66,7 @@
         border: 1px solid #e2e8f0;
         border-radius: 14px;
         padding: 14px;
+        min-width: 0;
     }
     .mw-stat-label {
         font-size: 13px; font-weight: 700; letter-spacing: .06em;
@@ -82,6 +79,10 @@
     .mw-stat-sub {
         font-size: 13px; color: #64748b; margin: 3px 0 0 0;
     }
+    .mw-kpi-link { color:inherit;text-decoration:none;display:block; }
+    .mw-kpi-link:hover .mw-stat-label,.mw-kpi-link:hover .mw-stat-value { text-decoration:underline; }
+    .mw-kpi-link:focus-visible { outline:3px solid #0f766e;outline-offset:3px;border-radius:8px; }
+    a.mw-stat-sub { display:inline-block;color:inherit; }
     .mw-stat.tone-green   { background:#E8F7F4; border-color:#42ad8a; }
     .mw-stat.tone-green   .mw-stat-label,
     .mw-stat.tone-green   .mw-stat-sub   { color:#0f5c4b; }
@@ -113,10 +114,15 @@
         gap: 8px;
         transition: all 0.15s;
         min-height: 96px;
+        min-width: 0;
     }
     .mw-action:active {
         transform: scale(0.97);
         background: #f8fafc;
+    }
+    .mw-action:focus-visible {
+        outline: 3px solid #0f766e;
+        outline-offset: 3px;
     }
     .mw-action-icon {
         width: 38px; height: 38px; border-radius: 10px;
@@ -180,38 +186,22 @@
         gap: 14px;
     }
 
-    /* Sticky bottom action bar (mobile only) */
-    .mw-bottom-bar {
-        position: fixed;
-        left: 0; right: 0; bottom: 0;
-        background: #ffffff;
-        border-top: 1px solid #e2e8f0;
-        box-shadow: 0 -4px 12px rgba(0,0,0,0.06);
-        display: flex; justify-content: space-around;
-        padding: 8px 4px calc(8px + env(safe-area-inset-bottom));
-        z-index: 50;
-    }
-    .mw-bottom-btn {
-        flex: 1;
-        display: flex; flex-direction: column; align-items: center; gap: 3px;
-        padding: 8px 4px;
-        text-decoration: none;
-        color: #475569;
-        border-radius: 10px;
-        min-height: 52px;
-        -webkit-tap-highlight-color: transparent;
-        transition: background 0.15s;
-    }
-    .mw-bottom-btn:active { background: #f1f5f9; }
-    .mw-bottom-btn.active { color: #42ad8a; }
-    .mw-bottom-btn svg { width: 22px; height: 22px; }
-    .mw-bottom-btn span { font-size: 12px; font-weight: 600; }
-
     /* Chart box */
     .mw-chart-box {
         position: relative;
         height: 220px;
     }
+
+    .mw-demand-signals {
+        max-height: 420px;
+        overflow-y: auto;
+        overscroll-behavior-y: contain;
+        scrollbar-gutter: stable;
+        scrollbar-color: #94a3b8 #f1f5f9;
+        padding-right: 8px;
+    }
+    .mw-demand-signals:focus-visible { outline: 3px solid #0f766e;outline-offset: 3px;border-radius: 8px; }
+    @media print { .mw-demand-signals { max-height: none;overflow: visible;scrollbar-gutter: auto; } }
 
     /* Outbreak pills */
     .mw-outbreak-list {
@@ -222,23 +212,6 @@
         background: #fff; border: 1px solid #fca5a5; border-radius: 8px;
         padding: 4px 10px; font-size: 13px; font-weight: 600; color: #991b1b;
     }
-
-    /* Transfer row */
-    .mw-transfer-row {
-        display: flex; flex-direction: column; gap: 10px;
-        padding: 12px; background: #f8fafc;
-        border: 1px solid #e2e8f0; border-radius: 12px;
-        margin-bottom: 8px;
-    }
-    .mw-transfer-row:last-child { margin-bottom: 0; }
-    .mw-transfer-btn {
-        width: 100%; padding: 12px;
-        background: #0f5c4b; color: #fff;
-        border: none; border-radius: 10px;
-        font-size: 15px; font-weight: 700; cursor: pointer;
-        min-height: 44px;
-    }
-    .mw-transfer-btn:active { background: #0b4638; }
 
     /* Quick report form — stacks on mobile */
     .mw-form-grid {
@@ -270,10 +243,19 @@
     }
     .mw-submit-btn:active { background: #369f7d; }
 
-    /* Hide bottom bar on desktop */
-    @media (min-width: 768px) {
-        .mw-bottom-bar { display: none; }
-        .mw-wrap { padding-bottom: 20px; }
+    @media (max-width: 767px) {
+        .mw-demand-signals { max-height: 320px; }
+        .mw-hero { padding: 18px; }
+        .mw-hero-title { font-size: clamp(22px, 6vw, 26px); }
+        .mw-section { padding: 16px; }
+        .mw-section-title { line-height: 1.35; }
+        .mw-section-heading { flex-wrap: wrap; gap: 8px; }
+        .mw-section-link { display: inline-flex; align-items: center; min-height: 44px; }
+        .mw-alert { flex-wrap: wrap; }
+        .mw-alert-text { flex: 1 1 160px; }
+        .mw-alert-title { white-space: normal; overflow-wrap: anywhere; }
+        .mw-stat-value { font-size: clamp(24px, 7vw, 30px); }
+        .mw-outbreak-pill { max-width: 100%; overflow-wrap: anywhere; }
     }
 
     /* Tablet+ enhancements */
@@ -287,10 +269,6 @@
         .mw-form-grid { grid-template-columns: 2fr 1fr 1fr auto; align-items: end; }
         .mw-form-grid > .full { grid-column: 1 / -1; }
         .mw-submit-btn { width: auto; }
-        .mw-transfer-row {
-            flex-direction: row; align-items: center; justify-content: space-between;
-        }
-        .mw-transfer-btn { width: auto; padding: 9px 18px; }
     }
 
     @media (min-width: 1024px) {
@@ -355,7 +333,7 @@
             </div>
         </a>
 
-        <a href="#report-form" onclick="document.getElementById('report-form')?.scrollIntoView({behavior:'smooth'}); return false;" class="mw-action">
+        <a href="{{ route('disease_reports.index', ['barangay' => $demandBarangay]) }}" class="mw-action">
             <div class="mw-action-icon" style="background:#FCEBEB;">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#991b1b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -365,8 +343,8 @@
                 </svg>
             </div>
             <div>
-                <p class="mw-action-label">Report</p>
-                <p class="mw-action-hint">Disease case</p>
+                <p class="mw-action-label">Disease trends</p>
+                <p class="mw-action-hint">Signals from medicine consumption</p>
             </div>
         </a>
     </div>
@@ -374,20 +352,23 @@
     {{-- ═══════ TODAY'S SNAPSHOT ═══════ --}}
     <div class="mw-stats">
         <div class="mw-stat tone-green">
-            <p class="mw-stat-label">Dispensed Today</p>
-            <p class="mw-stat-value">{{ $dispensedToday }}</p>
-            <p class="mw-stat-sub">{{ $dispensedThisMonth }} this month</p>
+            <a id="midwife-kpi-dispensed-today" class="mw-kpi-link" href="{{ route('dispensing.index', ['dispensing_scope' => 'personal', 'date_from' => $snapshotDate, 'date_to' => $snapshotDate]) }}">
+                <p class="mw-stat-label">Dispensed Today</p>
+                <p class="mw-stat-value">{{ $dispensedToday }}</p>
+            </a>
+            <a id="midwife-kpi-dispensed-month" class="mw-stat-sub" href="{{ route('dispensing.index', ['dispensing_scope' => 'personal', 'date_from' => $snapshotMonthStart, 'date_to' => $snapshotDate]) }}">{{ $dispensedThisMonth }} this month through {{ $snapshotDate }}</a>
+            <p class="mw-stat-sub">Your saved dispensing records at this RHU. Today: {{ $snapshotDate }}.</p>
         </div>
-        <div class="mw-stat">
+        <a id="midwife-kpi-registered" class="mw-stat mw-kpi-link" href="{{ route('public_users.index') }}">
             <p class="mw-stat-label">Registered</p>
             <p class="mw-stat-value">{{ number_format($activePatients) }}</p>
-            <p class="mw-stat-sub">patients in your RHU</p>
-        </div>
-        <div class="mw-stat {{ $pendingRequests > 0 ? 'tone-amber' : '' }}">
+            <p class="mw-stat-sub">As of {{ $snapshotDate }}: patients currently assigned to you at this RHU, across all saved registrations.</p>
+        </a>
+        <a id="midwife-kpi-pending-requests" class="mw-stat mw-kpi-link {{ $pendingRequests > 0 ? 'tone-amber' : '' }}" href="{{ route('supply_requests.index', ['status' => 'pending']) }}">
             <p class="mw-stat-label">Pending Requests</p>
             <p class="mw-stat-value">{{ $pendingRequests }}</p>
-            <p class="mw-stat-sub">{{ $pendingRequests > 0 ? 'awaiting approval' : 'no open requests' }}</p>
-        </div>
+            <p class="mw-stat-sub">As of {{ $snapshotDate }}: your pending supply requests at this RHU. Transfers to other facilities are excluded.</p>
+        </a>
     </div>
 
     {{-- ═══════ IMMUNIZATION DUE TODAY — placeholder until Track 2 ═══════ --}}
@@ -416,158 +397,79 @@
     </div>
     --}}
 
-    {{-- ═══════ INCOMING TRANSFERS ═══════ --}}
-    @if($incomingTransfers->count() > 0)
-        <div class="mw-section">
-            <p class="mw-section-title">📦 Incoming Transfers</p>
-            <p class="mw-section-sub">Confirm receipt once items arrive</p>
-
-            @foreach($incomingTransfers as $t)
-                <div class="mw-transfer-row">
-                    <div style="min-width:0;">
-                        <p style="font-size:16px; font-weight:600; color:#0f172a; margin:0;">
-                            {{ $t->medicine->medicine_name ?? 'Medicine' }}
-                            @if($t->dosage) · {{ $t->dosage }} @endif
-                        </p>
-                        <p style="font-size:14px; color:#64748b; margin:4px 0 0 0;">
-                            From <strong>{{ $t->fromHealthUnit->name ?? 'N/A' }}</strong>
-                            · Qty <strong>{{ $t->quantity }}</strong>
-                            @if($t->batch_no) · Batch {{ $t->batch_no }} @endif
-                        </p>
-                    </div>
-                    <form method="POST" action="{{ route('transfers.receive', $t->id) }}"
-                          onsubmit="return confirm('Confirm you have physically received these items?');">
-                        @csrf
-                        <button type="submit" class="mw-transfer-btn">📦 Confirm Receipt</button>
-                    </form>
+    {{-- AUTOMATIC AREA MEDICINE DEMAND --}}
+    <section class="mw-section" aria-labelledby="midwife-area-demand-heading">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <h2 id="midwife-area-demand-heading" class="mw-section-title">Disease trend signals</h2>
+            <a class="mw-section-link" href="{{ route('disease_reports.index', ['consumption_scope' => $demandBarangay ? 'area' : 'personal', 'barangay' => $demandBarangay, 'period_type' => 'weekly']) }}" style="font-size:14px;font-weight:600;color:#0f766e;">View all trends</a>
+        </div>
+        <p class="mw-section-sub">Possible disease trends from medicine consumption in your assigned barangay.</p>
+        @if($assignedDemandBarangays->isNotEmpty())
+            <p style="font-size:14px;color:#475569;margin:12px 0;">Assigned barangays: <strong>{{ $assignedDemandBarangays->join(', ') }}</strong></p>
+            <p style="font-size:14px;color:#475569;margin:12px 0;">Barangay: <strong>{{ $demandBarangay }}</strong>. Latest completed week: {{ $areaDemand['period_start'] }} to {{ $areaDemand['period_end'] }}. Usual consumption: {{ $areaDemand['baseline_start'] }} to {{ $areaDemand['baseline_end'] }} (four completed weeks). Choose another assigned barangay on the full trends page.</p>
+            @if($areaDemand['comparison_transactions'] === 0 && $areaSavedConsumption->record_count > 0)
+                <p style="font-size:14px;color:#475569;margin:12px 0;">No qualifying records in this comparison period. <a href="{{ route('disease_reports.index', ['consumption_scope' => 'area', 'barangay' => $demandBarangay, 'period_type' => 'weekly', 'date_from' => $areaSavedConsumption->first_date, 'date_to' => $areaSavedConsumption->last_date, 'usage_details' => 1]) }}#recorded-consumption">View saved consumption history</a></p>
+            @endif
+            <div class="mw-stats" style="margin:16px 0;">
+                <div class="mw-stat {{ $areaDemand['overview']['elevated'] > 0 ? 'tone-amber' : '' }}" data-signal-status="elevated">
+                    <p class="mw-stat-label">Elevated disease signals</p>
+                    <p class="mw-stat-value">{{ $areaDemand['overview']['elevated'] }}</p>
+                    <p class="mw-stat-sub">Higher demand in associated medicines</p>
                 </div>
-            @endforeach
-        </div>
-    @endif
-
-    {{-- ═══════ DISEASE TRENDS ═══════ --}}
-    <div class="mw-section">
-        <div class="mw-collapse-head" aria-expanded="true" onclick="toggleCollapse(this)">
-            <div>
-                <p class="mw-section-title">📈 Disease Trends</p>
-                <p class="mw-section-sub">{{ $trendLabel }}</p>
+                <div class="mw-stat" data-signal-status="typical">
+                    <p class="mw-stat-label">Within usual consumption</p>
+                    <p class="mw-stat-value">{{ $areaDemand['overview']['typical'] }}</p>
+                    <p class="mw-stat-sub">disease signals without elevated consumption</p>
+                </div>
+                <div class="mw-stat" data-signal-status="insufficient">
+                    <p class="mw-stat-label">Building history</p>
+                    <p class="mw-stat-value">{{ $areaDemand['overview']['insufficient'] }}</p>
+                    <p class="mw-stat-sub">disease signals needing recent records or more periods</p>
+                </div>
+                <div class="mw-stat">
+                    <p class="mw-stat-label">New consumption signals</p>
+                    <p class="mw-stat-value">{{ $areaDemand['overview']['new'] }}</p>
+                    <p class="mw-stat-sub">disease signals after a zero baseline</p>
+                </div>
             </div>
-            <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-        </div>
-        <div class="mw-collapse-body">
-
-            @if($outbreakAlerts->count() > 0)
-                <div style="background:#FCEBEB; border:1px solid #F7C1C1; border-radius:12px; padding:12px 14px; margin-bottom:14px;">
-                    <p style="font-size:14px; font-weight:700; color:#A32D2D; margin:0 0 8px 0;">🚨 Outbreak Alerts (30 days)</p>
-                    <div class="mw-outbreak-list">
-                        @foreach($outbreakAlerts as $alert)
-                            <span class="mw-outbreak-pill">
-                                {{ $alert->disease->name ?? 'Unknown' }} · {{ $alert->case_count }} cases
-                            </span>
+            <div class="mw-demand-signals" id="midwife-demand-signals" tabindex="0" role="region" aria-labelledby="midwife-area-demand-heading">
+            @forelse($areaDemand['signals'] as $signal)
+                @php
+                    $signalLabels = ['elevated' => 'Higher demand', 'new' => 'New consumption signal', 'typical' => 'Within usual consumption', 'insufficient' => 'Building history'];
+                @endphp
+                <div class="mw-alert" style="align-items:flex-start;gap:12px;flex-wrap:wrap;">
+                    <div class="mw-alert-text">
+                        <p class="mw-alert-title">{{ $signal['name'] }}</p>
+                        @foreach($signal['medicines'] as $medicine)
+                            <p class="mw-alert-sub">{{ $medicine['name'] }} {{ $medicine['dosage'] }} {{ $medicine['dosage_form'] }}: {{ number_format($medicine['current_quantity']) }} {{ $medicine['unit'] }} in the latest completed week; usual {{ $medicine['baseline_average'] === null ? 'Building history' : number_format($medicine['baseline_average'], 1).' '.$medicine['unit'] }}.</p>
                         @endforeach
                     </div>
+                    <span class="mw-badge" style="background:{{ $signal['status'] === 'elevated' ? '#FAEEDA' : '#E8F7F4' }};color:#334155;">{{ $signalLabels[$signal['status']] }}</span>
                 </div>
-            @endif
-
-            <div class="mw-stats" style="grid-template-columns: repeat(3, minmax(0,1fr)); margin-bottom:16px;">
-                <div class="mw-stat">
-                    <p class="mw-stat-label">Diseases</p>
-                    <p class="mw-stat-value">{{ $diseases->count() }}</p>
-                </div>
-                <div class="mw-stat">
-                    <p class="mw-stat-label">Cases / Month</p>
-                    <p class="mw-stat-value" style="color:#0f5c4b;">{{ number_format($totalCasesThisMonth) }}</p>
-                </div>
-                <div class="mw-stat {{ $outbreakAlerts->count() > 0 ? 'tone-red' : '' }}">
-                    <p class="mw-stat-label">Outbreaks</p>
-                    <p class="mw-stat-value">{{ $outbreakAlerts->count() }}</p>
-                </div>
+            @empty
+                <p style="font-size:15px;color:#64748b;margin:16px 0;">No area medicine demand history yet. Record dispensing quantities with the barangay to begin building automatic trends.</p>
+            @endforelse
             </div>
-
-            @if($diseases->count() > 0)
-                <div class="mw-chart-box">
-                    <canvas id="diseaseTrendChart"></canvas>
-                </div>
-            @else
-                <div style="background:#f8fafc; border:1px dashed #cbd5e1; border-radius:12px; padding:24px 16px; text-align:center;">
-                    <p style="font-size:15px; color:#64748b; margin:0;">No disease reports yet</p>
-                </div>
-            @endif
-        </div>
-    </div>
-
-    {{-- ═══════ QUICK REPORT FORM ═══════ --}}
-    <div class="mw-section" id="report-form">
-        <p class="mw-section-title">📝 Quick Report</p>
-        <p class="mw-section-sub">Submit a disease case in seconds</p>
-
-        @if($errors->any())
-            <div style="background:#FCEBEB; border:1px solid #F7C1C1; border-radius:10px; padding:10px 14px; margin-bottom:12px;">
-                @foreach($errors->all() as $err)
-                    <p style="font-size:15px; color:#A32D2D; margin:0;">{{ $err }}</p>
-                @endforeach
-            </div>
+            <p style="font-size:14px;color:#64748b;margin:16px 0;">Higher consumption of medicines linked to a condition highlights that condition for follow-up. Each signal uses the latest completed week and the previous four weeks of consumption.</p>
+        @else
+            <p style="font-size:15px;color:#64748b;margin:16px 0;">No barangay is assigned to your account. Ask your RHU administrator to assign your barangay so automatic local trends can be shown.</p>
         @endif
-
-        <form method="POST" action="{{ route('disease_reports.store') }}" class="mw-form-grid">
-            @csrf
-
-            <div class="full">
-                <label>Disease</label>
-                <select name="disease_id" required>
-                    <option value="">Select disease</option>
-                    @foreach($allDiseases as $d)
-                        <option value="{{ $d->id }}" {{ old('disease_id') == $d->id ? 'selected' : '' }}>
-                            {{ $d->name }}{{ $d->category ? ' · ' . $d->category : '' }}
-                        </option>
-                    @endforeach
-                </select>
-            </div>
-
-            <div>
-                <label>Cases</label>
-                <input type="number" name="case_count" min="0" required value="{{ old('case_count', 1) }}">
-            </div>
-
-            <div>
-                <label>Date</label>
-                <input type="date" name="report_date" required value="{{ old('report_date', now()->startOfWeek()->format('Y-m-d')) }}">
-            </div>
-
-            <div>
-                <label>&nbsp;</label>
-                <button type="submit" class="mw-submit-btn">Submit</button>
-            </div>
-
-            <input type="hidden" name="period_type" value="weekly">
-
-            <div class="full">
-                <label style="display:inline-flex; align-items:center; gap:8px; font-weight:600; color:#334155; cursor:pointer;">
-                    <input type="checkbox" name="is_outbreak" value="1" {{ old('is_outbreak') ? 'checked' : '' }} style="width:18px; height:18px; min-height:18px; accent-color:#dc2626;">
-                    Flag as outbreak
-                </label>
-            </div>
-
-            <div class="full">
-                <label>Remarks (optional)</label>
-                <textarea name="remarks" maxlength="500" placeholder="e.g., Cluster of 5 cases in Barangay Poblacion">{{ old('remarks') }}</textarea>
-            </div>
-        </form>
-    </div>
+        <a class="mw-section-link" href="{{ route('dispensing.create') }}" style="font-size:14px;font-weight:600;color:#0f766e;">Record medicine quantities</a>
+    </section>
 
     {{-- ═══════ RECENT ACTIVITY (2-col on desktop, stacked on mobile) ═══════ --}}
     <div class="mw-2col">
 
         <div class="mw-section">
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+            <div class="mw-section-heading" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
                 <p class="mw-section-title" style="margin:0;">💊 Recent Dispensing</p>
-                <a href="{{ route('dispensing.index') }}" style="font-size:14px; font-weight:600; color:#42ad8a; text-decoration:none;">View all →</a>
+                <a class="mw-section-link" href="{{ route('dispensing.index') }}" data-empty-action="history" style="font-size:14px; font-weight:600; color:#42ad8a; text-decoration:none;">View all →</a>
             </div>
             @forelse($recentDispensing as $r)
                 <div class="mw-alert">
                     <div class="mw-alert-text">
                         <p class="mw-alert-title">{{ $r->medicine->medicine_name ?? 'N/A' }}</p>
-                        <p class="mw-alert-sub">{{ $r->date_dispensed }} · {{ $r->doctor_name ?: 'Walk-in' }}</p>
+                        <p class="mw-alert-sub">{{ $r->date_dispensed }} · {{ $r->prescribingDoctorDisplay() }}</p>
                     </div>
                     <span class="mw-badge" style="background:#EAF3DE; color:#3B6D11; border:1px solid #C0DD97;">
                         {{ $r->quantity_dispensed }}
@@ -579,9 +481,9 @@
         </div>
 
         <div class="mw-section">
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+            <div class="mw-section-heading" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
                 <p class="mw-section-title" style="margin:0;">📋 Recent Requests</p>
-                <a href="{{ route('allocation.index') }}" style="font-size:14px; font-weight:600; color:#42ad8a; text-decoration:none;">View all →</a>
+                <a class="mw-section-link" href="{{ route('supply_requests.index') }}" aria-label="View all supply requests" data-empty-guard="true" data-empty-count="{{ $recentRequests->count() }}" data-empty-message="No supply requests yet." style="font-size:14px; font-weight:600; color:#42ad8a; text-decoration:none;">View all →</a>
             </div>
             @forelse($recentRequests as $r)
                 <div class="mw-alert">
@@ -602,32 +504,7 @@
 
 </div>
 
-{{-- ═══════ STICKY MOBILE BOTTOM BAR ═══════ --}}
-<nav class="mw-bottom-bar" aria-label="Quick navigation">
-    <a href="{{ route('dashboard.midwife') }}" class="mw-bottom-btn active">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
-        <span>Home</span>
-    </a>
-    <a href="{{ route('dispensing.index') }}" class="mw-bottom-btn">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 20.5a7 7 0 0 1-10-10l6-6a7 7 0 0 1 10 10z"/><line x1="8.5" y1="8.5" x2="15.5" y2="15.5"/></svg>
-        <span>Dispense</span>
-    </a>
-    <a href="{{ route('immunization.tcl') }}" class="mw-bottom-btn">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/><circle cx="12" cy="12" r="3"/></svg>
-        <span>Immunize</span>
-    </a>
-    <a href="{{ route('public_users.index') }}" class="mw-bottom-btn">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-        <span>Patients</span>
-    </a>
-    <a href="{{ route('notifications.index') }}" class="mw-bottom-btn">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-        <span>Alerts</span>
-    </a>
-</nav>
-
 {{-- ═══════ SCRIPTS ═══════ --}}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <script>
 function toggleCollapse(head) {
@@ -635,56 +512,5 @@ function toggleCollapse(head) {
     head.setAttribute('aria-expanded', !isOpen);
 }
 
-@if($diseases->count() > 0)
-document.addEventListener('DOMContentLoaded', function () {
-    fetch('{{ route('disease_reports.chart_data') }}?start_date={{ $trendStart }}&end_date={{ $trendEnd }}', {
-        headers: { 'Accept': 'application/json' }
-    })
-    .then(r => r.json())
-    .then(data => {
-        const ctx = document.getElementById('diseaseTrendChart');
-        if (!ctx) return;
-
-        const palette = ['#dc2626', '#eab308', '#3b82f6', '#42ad8a', '#8b5cf6', '#ec4899', '#f97316', '#14b8a6'];
-
-        new Chart(ctx.getContext('2d'), {
-            type: 'line',
-            data: {
-                labels: data.labels,
-                datasets: data.datasets.map((ds, i) => ({
-                    label: ds.label,
-                    data: ds.data,
-                    borderColor: palette[i % palette.length],
-                    backgroundColor: palette[i % palette.length] + '15',
-                    borderWidth: 2,
-                    tension: 0.35,
-                    pointRadius: 2,
-                    pointHoverRadius: 5,
-                })),
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                plugins: {
-                    legend: {
-                        position: 'bottom',
-                        labels: {
-                            boxWidth: 10,
-                            font: { size: 13 },
-                            padding: 8,
-                        }
-                    },
-                },
-                scales: {
-                    y: { beginAtZero: true, ticks: { precision: 0, font: { size: 12 } } },
-                    x: { ticks: { font: { size: 12 } } }
-                }
-            }
-        });
-    })
-    .catch(err => console.error('Failed to load chart:', err));
-});
-@endif
 </script>
 @endsection

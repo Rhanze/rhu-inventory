@@ -70,7 +70,8 @@ class MedicineController extends Controller
             ->when($category, function ($q, $category) {
                 $q->where('category', $category);
             })
-            ->orderBy('medicine_name', 'asc');
+            ->orderBy('medicine_name', 'asc')
+            ->orderBy('id', 'asc');
 
         if (is_null(session('health_unit_id'))) {
             $medicines = $medicines->withCount([
@@ -136,6 +137,13 @@ class MedicineController extends Controller
             ->when($targetUnitId, fn ($q) => $q->where('health_unit_id', $targetUnitId))
             ->sum('available_stock');
 
+        $availableMedicineCount = (clone $baseQuery)->whereHas('inventories', function ($query) use ($targetUnitId) {
+            $query->when($targetUnitId, fn ($query) => $query->where('health_unit_id', $targetUnitId))
+                ->where('available_stock', '>', 0)
+                ->where(fn ($expiry) => $expiry->whereNull('expiration_date')
+                    ->orWhereDate('expiration_date', '>=', today()));
+        })->count();
+
         $grandAllocated = (int) Inventory::query()
             ->whereIn('medicine_id', (clone $baseQuery)->select('id'))
             ->when($targetUnitId, fn ($q) => $q->where('health_unit_id', $targetUnitId))
@@ -177,6 +185,7 @@ class MedicineController extends Controller
             'category',
             'rhuFilter',
             'availability',
+            'availableMedicineCount',
             'grandAvailable',
             'grandAllocated'
         ));
@@ -325,7 +334,7 @@ class MedicineController extends Controller
             'unit'                  => $request->unit,
             'pack_type'             => $request->pack_type,
             'pieces_per_pack'       => $request->pieces_per_pack,
-            'requires_prescription' => $request->has('requires_prescription') ? 1 : 0,
+            'requires_prescription' => $request->boolean('requires_prescription'),
             'is_dispensable'        => true,
         ]);
 
@@ -384,7 +393,7 @@ class MedicineController extends Controller
             'unit'                  => $request->unit,
             'pack_type'             => $request->pack_type,
             'pieces_per_pack'       => $request->pieces_per_pack,
-            'requires_prescription' => $request->has('requires_prescription') ? 1 : 0,
+            'requires_prescription' => $request->boolean('requires_prescription'),
         ]);
 
         ActivityLogger::log(

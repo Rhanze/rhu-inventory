@@ -8,7 +8,7 @@
 
 <button type="button" onclick="openExportModal('{{ $modalId }}')" style="
     display:inline-flex; align-items:center; gap:6px;
-    font-size:14px; font-weight:600;
+    font-size:1.0625rem; font-weight:600;
     padding:9px 18px; border-radius:10px;
     background:#42ad8a; color:#ffffff;
     border:none; cursor:pointer; transition: background .2s;
@@ -35,10 +35,10 @@
         box-shadow: 0 24px 60px rgba(0,0,0,0.25);
     ">
         <div style="padding:22px 26px 14px; border-bottom:1px solid #f1f5f9;">
-            <h3 style="font-size:19px; font-weight:700; color:#0f172a; margin:0 0 4px 0;">
+            <h3 style="font-size:1.1875rem; font-weight:700; color:#0f172a; margin:0 0 4px 0;">
                 {{ $modalTitle }}
             </h3>
-            <p style="font-size:13px; color:#64748b; margin:0;">
+            <p style="font-size:1.0625rem; color:#64748b; margin:0;">
                 Choose what to include, then pick an action.
             </p>
         </div>
@@ -46,7 +46,7 @@
         <div style="padding:20px 26px;">
             <div style="margin-bottom:22px;">
                 <label for="batchInput-{{ $modalId }}"
-                       style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                       style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Batch Number(s)
                 </label>
                 <input type="text"
@@ -54,36 +54,36 @@
                        placeholder="e.g. BT-001, 1-8, BT-020, 25"
                        value="{{ request('batch_input', '') }}"
                        style="
-                           width:100%; height:44px;
-                           padding:0 14px; font-size:14px;
+                           width:100%; min-height:2.75rem;height:auto;
+                           padding:0 14px; font-size:1.0625rem;
                            border:2px solid #bec6cf; border-radius:10px;
                            outline:none; box-sizing:border-box;
                            background:#ffffff; color:#0f172a;
                        "
                        onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                        onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
-                <p style="font-size:12px; color:#64748b; margin:6px 0 0 0; line-height:1.5;">
-                    Separate multiple entries with commas. Use a range like <code style="background:#f1f5f9; padding:1px 5px; border-radius:4px; font-size:11px;">1-8</code> to include batches 1 through 8.
+                <p style="font-size:1.0625rem; color:#64748b; margin:6px 0 0 0; line-height:1.5;">
+                    Separate multiple entries with commas. Use a range like <code style="background:#f1f5f9; padding:1px 5px; border-radius:4px; font-size:1.0625rem;">1-8</code> to include batches 1 through 8.
                     Leave blank to include all batches.
                 </p>
             </div>
 
             @if($showExpiry)
                 <div>
-                    <label style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:10px;">
+                    <label style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:10px;">
                         Expiry Status
                     </label>
                     <div style="display:flex; flex-direction:column; gap:8px;">
                         @foreach([
                             ''            => 'All Expiry',
-                            'near_expiry' => 'Near Expiry (≤180 days)',
+                            'near_expiry' => 'Near Expiry (0–'.\App\Models\Inventory::NEAR_EXPIRY_DAYS.' days)',
                             'expired'     => 'Expired Only',
                             'not_expired' => 'Not Expiring Soon',
                         ] as $val => $label)
                             <label style="
                                 display:flex; align-items:center; gap:10px;
                                 padding:9px 12px; border:1px solid #e2e8f0; border-radius:10px;
-                                cursor:pointer; font-size:14px; color:#0f172a;
+                                cursor:pointer; font-size:1.0625rem; color:#0f172a;
                                 transition: all .15s;
                             "
                                    onmouseover="this.style.borderColor='#42ad8a'; this.style.background='#f0fdf9';"
@@ -110,7 +110,7 @@
         ">
             <button type="button"
                     onclick="closeExportModal('{{ $modalId }}')"
-                    style="font-size:14px; font-weight:600; padding:10px 18px;
+                    style="font-size:1.0625rem; font-weight:600; padding:10px 18px;
                            border-radius:10px; background:#ffffff; color:#334155;
                            border:1px solid #e2e8f0; cursor:pointer;">
                 Cancel
@@ -119,7 +119,7 @@
             <button type="button"
                     onclick="runReportExport('{{ $modalId }}', '{{ $printAction }}', 'print')"
                     style="display:inline-flex; align-items:center; gap:6px;
-                           font-size:14px; font-weight:600; padding:10px 18px;
+                           font-size:1.0625rem; font-weight:600; padding:10px 18px;
                            border-radius:10px; background:#ffffff; color:#334155;
                            border:1px solid #e2e8f0; cursor:pointer;">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -133,7 +133,7 @@
             <button type="button"
                     onclick="runReportExport('{{ $modalId }}', '{{ route($csvRoute) }}', 'csv')"
                     style="display:inline-flex; align-items:center; gap:6px;
-                           font-size:14px; font-weight:600; padding:10px 18px;
+                           font-size:1.0625rem; font-weight:600; padding:10px 18px;
                            border-radius:10px; background:#42ad8a; color:#ffffff;
                            border:none; cursor:pointer;">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

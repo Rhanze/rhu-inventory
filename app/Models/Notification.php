@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class Notification extends Model
 {
+    public const TYPE_TRANSFER_PHO_REVIEW_REQUESTED = 'transfer_pho_review_requested';
+
     protected $table = 'notifications';
 
     public $timestamps = false;
@@ -17,6 +19,7 @@ class Notification extends Model
         'transfer_id',
         'allocation_id',    // ← NEW — links to supply request Approve/Reject
         'type',
+        'dedup_key',
         'link',
         'title',
         'message',
@@ -27,8 +30,8 @@ class Notification extends Model
     ];
 
     protected $casts = [
-        'is_read'     => 'boolean',
-        'created_at'  => 'datetime',
+        'is_read' => 'boolean',
+        'created_at' => 'datetime',
         'archived_at' => 'datetime',
     ];
 
@@ -41,7 +44,7 @@ class Notification extends Model
 
     public function user()
     {
-        return $this->belongsTo(\App\Models\User::class, 'user_id');
+        return $this->belongsTo(User::class, 'user_id');
     }
 
     public function inventory()
@@ -56,7 +59,7 @@ class Notification extends Model
 
     public function allocation()
     {
-        return $this->belongsTo(\App\Models\Allocation::class, 'allocation_id');
+        return $this->belongsTo(Allocation::class, 'allocation_id');
     }
 
     // ─── Scopes ───
@@ -68,8 +71,8 @@ class Notification extends Model
 
     public function scopeForHealthUnit($query, $healthUnitId)
     {
-        return $query->where('health_unit_id', $healthUnitId)
-                     ->orWhereNull('health_unit_id');
+        return $query->where(fn ($q) => $q->where('health_unit_id', $healthUnitId)
+            ->orWhereNull('health_unit_id'));
     }
 
     public function scopeForUser($query, $userId)
@@ -111,6 +114,9 @@ class Notification extends Model
     {
         return in_array($this->type, [
             'transfer_request',
+            self::TYPE_TRANSFER_PHO_REVIEW_REQUESTED,
+            'transfer_pho_approved',
+            'transfer_pho_rejected',
             'transfer_accepted',
             'transfer_rejected',
             'transfer_received',
@@ -124,5 +130,37 @@ class Notification extends Model
     public function isSupplyRequestNotification(): bool
     {
         return str_starts_with((string) $this->type, 'supply_request');
+    }
+
+    public function destinationUrl(?string $role): ?string
+    {
+        if ($this->type === 'disease_outbreak') {
+            return null;
+        }
+
+        if ($this->allocation_id && $this->isSupplyRequestNotification()) {
+            return route($role === 'midwife' ? 'supply_requests.index' : 'allocation.index');
+        }
+
+        $link = trim((string) $this->link);
+        $scheme = parse_url($link, PHP_URL_SCHEME);
+        if ($link !== '' && ! str_starts_with($link, '#')
+            && ($scheme === null || in_array(strtolower((string) $scheme), ['http', 'https'], true))) {
+            // Receipt controls are already on the notification card; opening this page again adds no detail.
+            if ($this->type === 'allocation_to_user' && $link === route('notifications.index')) {
+                return null;
+            }
+
+            return $link;
+        }
+
+        if ($this->inventory_id && $role !== 'midwife') {
+            return route('inventory.index', ['highlight' => $this->inventory_id]).'#inventory-'.$this->inventory_id;
+        }
+        if ($this->transfer_id && $role !== 'midwife') {
+            return route('transfers.index');
+        }
+
+        return null;
     }
 }

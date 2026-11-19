@@ -17,10 +17,12 @@ class StockLookupController extends Controller
     private const CATEGORIES = [
         'medicine' => 'Medicine',
         'vaccine' => 'Vaccine',
-        'family planning' => 'Family Planning',
-        'maternal and child health' => 'Maternal & Child Health',
-        'disease prevention & control' => 'Disease Prevention & Control',
-        'ncd & lifestyle' => 'NCD & Lifestyle',
+        'family_planning' => 'Family Planning',
+        'family_health_nutrition' => 'Family Health & Nutrition',
+        'emerging_reemerging' => 'Emerging & Re-emerging',
+        'non_communicable' => 'Non-Communicable Disease',
+        'dengue_prevention' => 'Dengue Prevention',
+        'tuberculosis' => 'Tuberculosis',
     ];
 
     private function isAuthorized(): bool

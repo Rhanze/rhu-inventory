@@ -1,12 +1,23 @@
 @extends('layouts.app')
 
 @section('content')
-
 {{-- ═══════════════════════════════════════════════════════════════ --}}
 {{-- PRINT STYLES                                                    --}}
 {{-- ═══════════════════════════════════════════════════════════════ --}}
 <style>
     .print-header { display: none; }
+
+    @media screen and (max-width: 900px) {
+        body.role-midwife .mw-clinical-matrix { max-width: 100%; overscroll-behavior-x: contain; }
+        body.role-midwife .mw-clinical-matrix thead tr:first-child > th:first-child,
+        body.role-midwife .mw-clinical-matrix tbody tr > td:first-child {
+            min-width: 170px !important; width: 170px; max-width: 170px;
+            padding: 12px 10px !important;
+        }
+        body.role-midwife .mw-clinical-matrix tbody tr > td:first-child p { white-space: normal !important; overflow-wrap: anywhere; }
+        body.role-midwife #dose-modal { z-index: 10003 !important; padding: 12px !important; }
+        body.role-midwife #dose-modal > div { padding: 18px !important; max-height: calc(100dvh - 24px) !important; }
+    }
 
     @media print {
         @page { margin: 12mm 10mm; }
@@ -110,7 +121,7 @@
     </div>
 
     {{-- ─────────── HEADER ─────────── --}}
-    <div class="no-print" style="
+    <div class="no-print mw-page-card" style="
         background: rgba(255,255,255,0.9); backdrop-filter: blur(12px);
         border-radius: 20px; padding: 24px 28px;
         border: 1px solid rgba(255,255,255,0.4);
@@ -119,27 +130,30 @@
         flex-wrap: wrap; gap: 16px;
     ">
         <div>
-            <p style="font-size:13px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#42ad8a; margin:0 0 6px 0;">
+            <p style="font-size:1.0625rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#42ad8a; margin:0 0 6px 0;">
                 National Immunization Program
             </p>
-            <h2 style="font-size:24px; font-weight:700; color:#0f172a; margin:0;">
+            <h2 style="font-size:1.5rem; font-weight:700; color:#0f172a; margin:0;">
                 Immunization Tracking
             </h2>
         </div>
 
-        <button type="button" onclick="window.print()" style="
+        <div class="no-print" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <button type="button" onclick="window.print()" style="
             display:inline-flex; align-items:center; gap:8px;
-            font-size:15px; font-weight:600; padding:10px 18px;
+            font-size:1.0625rem; font-weight:600; padding:10px 18px;
             border-radius:10px; background:#ffffff; color:#334155;
             border:1px solid #e2e8f0; cursor:pointer;
             box-shadow:0 2px 6px rgba(0,0,0,0.04);
         ">
             🖨 Print
         </button>
+            @include('imports._link', ['section' => 'immunization'])
+        </div>
     </div>
 
     {{-- ─────────── FILTERS + LEGEND ─────────── --}}
-    <div class="no-print" style="
+    <div class="no-print mw-page-card" style="
         background: rgba(255,255,255,0.9); backdrop-filter: blur(8px);
         border-radius: 16px; padding: 18px 22px;
         border: 1px solid rgba(255,255,255,0.4);
@@ -147,28 +161,28 @@
         display: flex; align-items: center; justify-content: space-between;
         flex-wrap: wrap; gap: 14px;
     ">
-        <form method="GET" action="{{ route('immunization.tcl') }}" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <form class="mw-form-actions" method="GET" action="{{ route('immunization.tcl') }}" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <input type="text" name="search" value="{{ request('search') }}"
                    placeholder="Search child name..."
-                   style="height:42px; padding:0 14px; font-size:15px; border:2px solid #bec6cf; border-radius:10px; outline:none; width:230px;">
-            <select name="filter" onchange="this.form.submit()"
-                    style="height:42px; padding:0 14px; font-size:15px; border:2px solid #bec6cf; border-radius:10px; outline:none; background:white;">
+                   style="min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; outline:none; width:230px;">
+            <select name="filter" onchange="this.form.requestSubmit()"
+                    style="min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; outline:none; background:white;">
                 <option value="all"     {{ $filter === 'all'     ? 'selected' : '' }}>All Children</option>
                 <option value="due"     {{ $filter === 'due'     ? 'selected' : '' }}>With Due Doses</option>
                 <option value="overdue" {{ $filter === 'overdue' ? 'selected' : '' }}>With Overdue Doses</option>
             </select>
-            <button type="submit" style="height:42px; padding:0 20px; background:#42ad8a; color:white; border:none; border-radius:10px; font-weight:600; font-size:15px; cursor:pointer;">
+            <button type="submit" style="min-height:2.75rem;height:auto; padding:0 20px; background:#42ad8a; color:white; border:none; border-radius:10px; font-weight:600; font-size:1.0625rem; cursor:pointer;">
                 Apply
             </button>
             @if(request('search') || $filter !== 'all')
-                <a href="{{ route('immunization.tcl') }}" style="font-size:15px; font-weight:600; color:#64748b; text-decoration:none; padding:0 8px;">Reset</a>
+                <a href="{{ route('immunization.tcl') }}" style="font-size:1.0625rem; font-weight:600; color:#64748b; text-decoration:none; padding:0 8px;">Reset</a>
             @endif
         </form>
 
         <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:center;">
             @foreach($statusStyle as $key => $s)
                 @if($key === 'not_due') @continue @endif
-                <span style="display:inline-flex; align-items:center; gap:6px; font-size:14px; color:#475569;">
+                <span style="display:inline-flex; align-items:center; gap:6px; font-size:1.0625rem; color:#475569;">
                     <span style="display:inline-block; width:14px; height:14px; border-radius:4px; background:{{ $s['bg'] }}; border:1px solid {{ $s['border'] }};"></span>
                     {{ $s['label'] }}
                 </span>
@@ -185,15 +199,15 @@
         overflow: hidden;
     ">
         @if($children->count() > 0)
-            <div style="width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch;">
-                <table style="border-collapse: separate; border-spacing: 0; font-size: 14px; min-width: 100%;">
+            <div class="mw-clinical-matrix" role="region" aria-label="Immunization tracking, scroll horizontally to view vaccine doses" tabindex="0" style="width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch;">
+                <table style="border-collapse: separate; border-spacing: 0; font-size:1.0625rem; min-width: 100%;">
                     <thead>
                         <tr style="background:#f8fafc;">
                             <th rowspan="2" style="
                                 position: sticky; left: 0; z-index: 20;
                                 background: #f8fafc;
                                 padding: 14px 16px; text-align: left;
-                                font-size: 13px; font-weight: 700; text-transform: uppercase;
+                                font-size:1.0625rem; font-weight: 700; text-transform: uppercase;
                                 letter-spacing: 0.05em; color: #475569;
                                 border-bottom: 1px solid #e2e8f0; border-right: 2px solid #cbd5e1;
                                 min-width: 260px;
@@ -202,7 +216,7 @@
                             @foreach($groups as $ageLabel => $rows)
                                 <th colspan="{{ $rows->count() }}" style="
                                     padding: 10px 8px; text-align: center;
-                                    font-size: 13px; font-weight: 700; text-transform: uppercase;
+                                    font-size:1.0625rem; font-weight: 700; text-transform: uppercase;
                                     letter-spacing: 0.05em; color: #0f5c4b;
                                     background: #E8F7F4;
                                     border-bottom: 1px solid #e2e8f0;
@@ -218,7 +232,7 @@
                                     <th title="{{ $row->antigen_label }} — Dose {{ $row->dose_number }} ({{ $row->recommended_age_label }})"
                                         style="
                                             padding: 8px 6px; text-align: center;
-                                            font-size: 12px; font-weight: 700;
+                                            font-size:1.0625rem; font-weight: 700;
                                             letter-spacing: 0.03em; color: #475569;
                                             border-bottom: 1px solid #e2e8f0; border-left: 1px solid #eef2f6;
                                             min-width: 52px; max-width: 52px;
@@ -245,10 +259,10 @@
                                     border-right: 2px solid #cbd5e1;
                                     vertical-align: top;
                                 ">
-                                    <p style="font-size: 15px; font-weight: 600; color: #0f172a; margin: 0 0 3px 0; white-space: nowrap;">
+                                    <p style="font-size:1.0625rem; font-weight: 600; color: #0f172a; margin: 0 0 3px 0; white-space: nowrap;">
                                         {{ $child->full_name }}
                                     </p>
-                                    <p style="font-size: 12px; color: #64748b; margin: 0;">
+                                    <p style="font-size:1.0625rem; color: #64748b; margin: 0;">
                                         {{ $child->birth_date ? \Carbon\Carbon::parse($child->birth_date)->format('M d, Y') : 'No DOB' }}
                                         &bull; {{ $formatAge($info['age_days']) }}
                                         @if($info['overall'] === 'has_overdue')
@@ -265,7 +279,7 @@
                                         <a href="{{ route('vaccination.child', $child->id) }}"
                                            title="View full vaccine schedule for {{ $child->full_name }}"
                                            style="display:inline-flex; align-items:center; gap:4px;
-                                                  font-size:12px; font-weight:600; padding:4px 10px;
+                                                  font-size:1.0625rem; font-weight:600; padding:4px 10px;
                                                   border-radius:6px; background:#E8F7F4; color:#0f5c4b;
                                                   border:1px solid #42ad8a; text-decoration:none; white-space:nowrap;
                                                   transition: background 0.15s;"
@@ -274,9 +288,10 @@
                                             📋 Schedule
                                         </a>
                                         <a href="{{ route('immunization.history', $child->id) }}"
+                                           data-empty-action="history"
                                            title="View recorded immunization history for {{ $child->full_name }}"
                                            style="display:inline-flex; align-items:center; gap:4px;
-                                                  font-size:12px; font-weight:600; padding:4px 10px;
+                                                  font-size:1.0625rem; font-weight:600; padding:4px 10px;
                                                   border-radius:6px; background:#EFF6FF; color:#1e40af;
                                                   border:1px solid #93c5fd; text-decoration:none; white-space:nowrap;
                                                   transition: background 0.15s;"
@@ -320,7 +335,7 @@
                                                     background: {{ $style['bg'] }};
                                                     color: {{ $style['color'] }};
                                                     border: 1px solid {{ $style['border'] }};
-                                                    font-size: 12px; font-weight: 700;
+                                                    font-size:1.0625rem; font-weight: 700;
                                                     line-height: 1.1;
                                                     {{ $isClickable ? 'cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;' : '' }}
                                                 "
@@ -350,8 +365,8 @@
             </div>
         @else
             <div style="padding: 60px 24px; text-align: center;">
-                <p style="font-size: 17px; font-weight: 600; color: #334155; margin: 0 0 8px 0;">No children found</p>
-                <p style="font-size: 15px; color: #64748b; margin: 0 0 18px 0;">
+                <p style="font-size:1.0625rem; font-weight: 600; color: #334155; margin: 0 0 8px 0;">No children found</p>
+                <p style="font-size:1.0625rem; color: #64748b; margin: 0 0 18px 0;">
                     @if(request('search') || $filter !== 'all')
                         Try clearing your filters.
                     @else
@@ -361,7 +376,7 @@
                 @if(!request('search') && $filter === 'all')
                     <a href="{{ route('public_users.index') }}" style="
                         display:inline-flex; align-items:center; gap:6px;
-                        font-size:15px; font-weight:600; padding:10px 20px;
+                        font-size:1.0625rem; font-weight:600; padding:10px 20px;
                         border-radius:10px; background:#42ad8a; color:white;
                         text-decoration:none;
                     ">Go to Patient Registry →</a>
@@ -371,7 +386,7 @@
     </div>
 
     @if($children->count() > 0)
-        <p class="no-print" style="text-align:center; font-size:14px; color:#64748b; margin:0;">
+        <p class="no-print" style="text-align:center; font-size:1.0625rem; color:#64748b; margin:0;">
             <strong>{{ $children->count() }}</strong> child{{ $children->count() === 1 ? '' : 'ren' }} shown
             &bull; Cell legend: a date means done &bull; <strong>!</strong> = overdue &bull; <strong>•</strong> = due now &bull; blank = not yet scheduled
             &bull; Click any cell to record
@@ -395,23 +410,23 @@
     ">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; margin-bottom:20px;">
             <div>
-                <p style="font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#42ad8a; margin:0 0 4px 0;">
+                <p style="font-size:1.0625rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:#42ad8a; margin:0 0 4px 0;">
                     Record Immunization
                 </p>
-                <h3 id="dm-vaccine-title" style="font-size:20px; font-weight:700; color:#0f172a; margin:0; line-height:1.25;">
+                <h3 id="dm-vaccine-title" style="font-size:1.25rem; font-weight:700; color:#0f172a; margin:0; line-height:1.25;">
                     Vaccine
                 </h3>
             </div>
             <button type="button" onclick="closeDoseModal()" aria-label="Close"
-                    style="background:transparent; border:none; cursor:pointer; padding:4px 10px; color:#64748b; font-size:24px; line-height:1; border-radius:8px;">
+                    style="background:transparent; border:none; cursor:pointer; padding:4px 10px; color:#64748b; font-size:1.5rem; line-height:1; border-radius:8px;">
                 ✕
             </button>
         </div>
 
         <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:13px; margin-bottom:18px;">
-            <p style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.05em; margin:0 0 4px 0;">Child</p>
-            <p id="dm-child-name" style="font-size:15px; font-weight:600; color:#0f172a; margin:0;">—</p>
-            <p id="dm-age-label" style="font-size:13px; color:#64748b; margin:4px 0 0 0;">—</p>
+            <p style="font-size:1.0625rem; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.05em; margin:0 0 4px 0;">Child</p>
+            <p id="dm-child-name" style="font-size:1.0625rem; font-weight:600; color:#0f172a; margin:0;">—</p>
+            <p id="dm-age-label" style="font-size:1.0625rem; color:#64748b; margin:4px 0 0 0;">—</p>
         </div>
 
         <form id="dose-form" method="POST" action="{{ route('immunization.store') }}">
@@ -423,40 +438,40 @@
 
             <div style="display:grid; gap:14px;">
                 <div>
-                    <label for="dm-date" style="display:block; font-size:12px; font-weight:700; color:#475569; margin-bottom:6px;">
+                    <label for="dm-date" style="display:block; font-size:1.0625rem; font-weight:700; color:#475569; margin-bottom:6px;">
                         Date Given <span style="color:#dc2626;">*</span>
                     </label>
                     <input type="date" name="date_given" id="dm-date" required
                            value="{{ now()->format('Y-m-d') }}"
-                           style="width:100%; height:44px; padding:0 14px; font-size:15px; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box; background:#fff; color:#0f172a;">
+                           style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box; background:#fff; color:#0f172a;">
                 </div>
 
                 <div>
-                    <label for="dm-batch" style="display:block; font-size:12px; font-weight:700; color:#475569; margin-bottom:6px;">
+                    <label for="dm-batch" style="display:block; font-size:1.0625rem; font-weight:700; color:#475569; margin-bottom:6px;">
                         Batch / Lot Number
                     </label>
                     <input type="text" name="batch_no" id="dm-batch" maxlength="50"
                            placeholder="Optional — printed on the vial"
-                           style="width:100%; height:44px; padding:0 14px; font-size:15px; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box; background:#fff; color:#0f172a;">
+                           style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box; background:#fff; color:#0f172a;">
                 </div>
 
                 <div>
-                    <label for="dm-remarks" style="display:block; font-size:12px; font-weight:700; color:#475569; margin-bottom:6px;">
+                    <label for="dm-remarks" style="display:block; font-size:1.0625rem; font-weight:700; color:#475569; margin-bottom:6px;">
                         Remarks
                     </label>
                     <textarea name="remarks" id="dm-remarks" rows="2" maxlength="500"
                               placeholder="Optional — e.g., mild fever after previous dose"
-                              style="width:100%; padding:11px 14px; font-size:15px; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box; resize:vertical; font-family:inherit; background:#fff; color:#0f172a;"></textarea>
+                              style="width:100%; padding:11px 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box; resize:vertical; font-family:inherit; background:#fff; color:#0f172a;"></textarea>
                 </div>
             </div>
 
             <div style="display:flex; gap:10px; margin-top:22px;">
                 <button type="button" onclick="closeDoseModal()"
-                        style="flex:1; height:44px; border-radius:10px; background:#ffffff; color:#334155; border:1px solid #e2e8f0; font-weight:600; font-size:15px; cursor:pointer;">
+                        style="flex:1; min-height:2.75rem;height:auto; border-radius:10px; background:#ffffff; color:#334155; border:1px solid #e2e8f0; font-weight:600; font-size:1.0625rem; cursor:pointer;">
                     Cancel
                 </button>
                 <button type="submit"
-                        style="flex:2; height:44px; border-radius:10px; background:#42ad8a; color:#ffffff; border:none; font-weight:700; font-size:15px; cursor:pointer;">
+                        style="flex:2; min-height:2.75rem;height:auto; border-radius:10px; background:#42ad8a; color:#ffffff; border:none; font-weight:700; font-size:1.0625rem; cursor:pointer;">
                     ✓ Record Dose
                 </button>
             </div>

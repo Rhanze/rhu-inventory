@@ -84,7 +84,7 @@ class SampleStockHistorySeeder extends Seeder
                                 'patient_name' => '[DEMO] Visitor '.$unit->id.'-'.($index + 1).'-'.($eventIndex + 1),
                                 'batch_no' => $batchNo, 'quantity_dispensed' => $event['quantity'],
                                 'date_dispensed' => $event['date'], 'dispensed_by' => $actor->id,
-                                'doctor_name' => '[DEMO] Clinician '.(1 + $index % 3),
+                                'doctor_name' => $medicine->requires_prescription ? '[DEMO] Clinician '.(1 + $index % 3) : null,
                             ]);
                         }
                         $log = StockLog::create([

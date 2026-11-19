@@ -6,16 +6,17 @@ use App\Models\Disease;
 use App\Models\DiseaseMedicineMap;
 use App\Models\DiseaseReport;
 use App\Models\Inventory;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class DiseaseAnalysisService
 {
     /** Build a reporting grid, OLS trend, and Holt forecast for one disease and RHU. */
-    public function analyze(int $diseaseId, ?int $healthUnitId, string $periodType = 'weekly', int $periods = 12): array
+    public function analyze(int $diseaseId, ?int $healthUnitId, string $periodType = 'weekly', int $periods = 12, ?string $fromDate = null, ?string $toDate = null): array
     {
-        $series = app(DiseasePeriodService::class)->series($diseaseId, $healthUnitId, $periodType, $periods);
+        $series = app(DiseasePeriodService::class)->series($diseaseId, $healthUnitId, $periodType, $periods, $fromDate, $toDate);
         $values = array_column($series['periods'], 'cases');
-        $horizon = count($series['future_periods']);
+        $horizon = max(1, count($series['future_periods']));
         $regression = app(DiseaseRegressionModel::class)->fit($values, $horizon);
         $holt = app(HoltDiseaseModel::class)->fit($values, $horizon);
         $observed = array_filter($values, fn ($v) => $v !== null);
@@ -45,12 +46,12 @@ class DiseaseAnalysisService
      */
     public function topDiseases(int $healthUnitId, int $weeks = 12, int $limit = 3): array
     {
-        $since = now()->subWeeks($weeks)->startOfDay()->toDateString();
+        $since = today()->startOfWeek(Carbon::MONDAY)->subWeeks(max(1, min(52, $weeks)))->toDateString();
 
         $rows = DiseaseReport::confirmedPeriods('weekly')
             ->select('disease_id', DB::raw('SUM(case_count) as total_cases'))
             ->where('health_unit_id', $healthUnitId)
-            ->where('report_date', '>=', $since)
+            ->whereDate('period_start', '>=', $since)
             ->groupBy('disease_id')
             ->orderByDesc('total_cases')
             ->limit($limit)
@@ -100,9 +101,7 @@ class DiseaseAnalysisService
                     continue;
                 }
 
-                $stock = (int) Inventory::where('health_unit_id', $healthUnitId)
-                    ->where('medicine_id', $map->medicine_id)
-                    ->sum('available_stock');
+                $stock = (int) Inventory::availableFefo($healthUnitId, $map->medicine_id)->sum('available_stock');
 
                 $threshold = $map->medicine->effectiveMinStock();
 

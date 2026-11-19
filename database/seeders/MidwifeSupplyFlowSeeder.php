@@ -291,7 +291,8 @@ class MidwifeSupplyFlowSeeder extends Seeder
                 $row['inventory_id'] = $inv->id;
 
                 if ($destCol) {
-                    $row[$destCol] = $pho->id ?? null;
+                    // These are internal RHU distributions, not provincial transfers.
+                    $row[$destCol] = null;
                 }
                 if ($hasDestinationText) {
                     $row['destination'] = 'Direct allocation';

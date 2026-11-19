@@ -11,12 +11,15 @@ use Illuminate\Support\Collection;
 class StockSummaryService
 {
     /** One usable-stock total per facility/medicine, including demand-only stockouts. */
-    public function inventories(?array $unitIds = null): Collection
+    public function inventories(?array $unitIds = null, bool $includeRecipientStock = false): Collection
     {
         $batches = Inventory::with(['medicine', 'healthUnit'])->when($unitIds !== null, fn ($q) => $q->whereIn('health_unit_id', $unitIds))->get();
         $groups = $batches->groupBy(fn ($row) => $row->health_unit_id.':'.$row->medicine_id);
-        $demand = StockLog::demandReleases()->whereDate('date_added', '>=', today()->subWeeks(config('forecasting.history_weeks', 12)))->whereDate('date_added', '<', today())
-            ->when($unitIds !== null, fn ($q) => $q->whereIn('health_unit_id', $unitIds))->get(['health_unit_id', 'medicine_id']);
+        $recipientBalances = $includeRecipientStock
+            ? app(AllocationDispensingService::class)->remainingBalances($unitIds)->groupBy(fn ($row) => $row['health_unit_id'].':'.$row['medicine_id'])
+            : collect();
+        $demand = app(StockDemandHistoryService::class)->events($unitIds,
+            today()->subWeeks(config('forecasting.history_weeks', 12))->toDateString(), today()->subDay()->toDateString());
         $medicines = Medicine::whereIn('id', $demand->pluck('medicine_id'))->get()->keyBy('id');
         $units = HealthUnit::whereIn('id', $demand->pluck('health_unit_id'))->get()->keyBy('id');
         foreach ($demand as $row) {
@@ -28,9 +31,11 @@ class StockSummaryService
             }
         }
 
-        return $groups->map(function ($rows) {
+        return $groups->map(function ($rows, $key) use ($includeRecipientStock, $recipientBalances) {
             $summary = clone $rows->first();
-            $summary->available_stock = $rows->filter(fn ($row) => ! $row->expiration_date || $row->expiration_date->gte(today()))->sum('available_stock');
+            $summary->shared_available_stock = (int) $rows->filter(fn ($row) => ! $row->expiration_date || $row->expiration_date->gte(today()))->sum('available_stock');
+            $summary->recipient_available_stock = $includeRecipientStock ? (int) $recipientBalances->get($key, collect())->sum('quantity') : null;
+            $summary->available_stock = $summary->shared_available_stock + ($summary->recipient_available_stock ?? 0);
             $summary->allocated_stock = $rows->sum('allocated_stock');
             $summary->batch_no = null;
             $summary->expiration_date = null;

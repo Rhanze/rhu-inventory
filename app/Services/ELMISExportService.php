@@ -10,7 +10,8 @@ class ELMISExportService
 {
     public function generateInventoryReport(?int $healthUnitId = null, ?string $dateFrom = null, ?string $dateTo = null): array
     {
-        $query = Inventory::with(['medicine', 'healthUnit'])->where('available_stock', '>', 0);
+        $query = Inventory::with(['medicine', 'healthUnit'])
+            ->where(fn ($q) => $q->where('available_stock', '>', 0)->orWhere('allocated_stock', '>', 0));
         if ($healthUnitId) {
             $query->where('health_unit_id', $healthUnitId);
         }
@@ -41,7 +42,7 @@ class ELMISExportService
             'rows' => $rows,
             'summary' => [
                 'total_facilities' => $healthUnitId ? 1 : HealthUnit::count(),
-                'total_medicines' => $inventories->count(),
+                'total_medicines' => $inventories->pluck('medicine_id')->unique()->count(),
                 'total_available' => $totalAvailable,
                 'total_allocated' => $totalAllocated,
                 'generated_at' => now()->format('Y-m-d H:i:s'),
@@ -65,15 +66,15 @@ class ELMISExportService
 
         $rows = [];
         foreach ($logs as $log) {
-            $isAddition = is_null($log->remarks) || str_contains($log->remarks ?? '', 'Added');
-            $isRelease = str_contains($log->remarks ?? '', 'Released') || str_contains($log->remarks ?? '', 'Dispensed');
             $rows[] = [
                 'facility_name' => $log->healthUnit->name ?? 'N/A',
                 'medicine_name' => $log->medicine->medicine_name ?? 'N/A',
                 'batch_number' => $log->batch_no ?? '',
                 'quantity' => $log->quantity_added,
-                'transaction_type' => $isRelease ? 'RELEASE' : ($isAddition ? 'ADDITION' : 'UNKNOWN'),
-                'transaction_date' => $log->date_added,
+                'transaction_type' => match ($log->movement_direction) {
+                    'release' => 'RELEASE', 'addition' => 'ADDITION', default => 'UNKNOWN',
+                },
+                'transaction_date' => $log->date_added?->toDateString(),
                 'performed_by' => $log->addedByUser->name ?? 'N/A',
             ];
         }

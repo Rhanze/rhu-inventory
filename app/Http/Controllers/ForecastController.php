@@ -34,27 +34,36 @@ class ForecastController extends Controller
         }
 
         $healthUnitId = session('health_unit_id');
+        $filters = $request->validate(['stock_filter' => ['nullable', 'in:all,shortage,low,critical,reorder,unknown']]);
+        $stockFilter = $filters['stock_filter'] ?? 'all';
 
         $forecast  = $this->forecastService->getForecast($healthUnitId);
         $planned   = $this->forecastService->getPlannedForecast($healthUnitId, 90);
         $unplanned = $this->forecastService->getUnplannedForecast($healthUnitId, null, 30);
-        $trending  = $this->forecastService->getTrendingDiseases($healthUnitId, 30);
 
         // ─────────────────────────────────────────────────────────
         // Paginate the Stock Analysis items for the table only.
         // The charts still use the full $forecast['items'] data.
         // ─────────────────────────────────────────────────────────
         $allItems = collect($forecast['items'] ?? [])->values();
+        $filteredItems = $allItems->filter(fn ($item) => match ($stockFilter) {
+            'shortage' => $item['shortage'] > 0,
+            'low' => in_array($item['status'], ['low', 'critical'], true),
+            'critical' => $item['status'] === 'critical',
+            'reorder' => $item['reorder_point'] !== null && $item['available_stock'] <= $item['reorder_point'],
+            'unknown' => $item['model']['periods'] === 0,
+            default => true,
+        })->values();
 
         $perPage    = 15;
         $currentPg  = max(1, (int) (Paginator::resolveCurrentPage('forecast_page') ?: 1));
         $offset     = ($currentPg - 1) * $perPage;
 
-        $pageItems = $allItems->slice($offset, $perPage)->values();
+        $pageItems = $filteredItems->slice($offset, $perPage)->values();
 
         $itemsPaginator = new LengthAwarePaginator(
             $pageItems,
-            $allItems->count(),
+            $filteredItems->count(),
             $perPage,
             $currentPg,
             [
@@ -73,7 +82,7 @@ class ForecastController extends Controller
             'forecast',
             'planned',
             'unplanned',
-            'trending'
+            'stockFilter'
         ));
     }
 }

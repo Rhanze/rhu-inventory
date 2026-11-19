@@ -8,6 +8,8 @@ class CalendarEvent extends Model
 {
     protected $table = 'calendar_events';
 
+    public const TYPE_EPI_DAY = 'immunization_day';
+
     /**
      * Event type keys → labels.
      * The controller uses array_keys() for validation rules.
@@ -20,7 +22,7 @@ class CalendarEvent extends Model
         'other'              => 'Other',
 
         // Legacy keys — kept so old rows still validate & render
-        'immunization_day'   => 'Immunization Day',
+        self::TYPE_EPI_DAY   => 'Immunization Day',
         'catch_up_campaign'  => 'Catch-Up Campaign',
         'holiday'            => 'Holiday / No Session',
     ];
@@ -87,6 +89,6 @@ class CalendarEvent extends Model
 
     public function isEpiDay(): bool
     {
-        return $this->type === 'immunization_day';
+        return $this->type === self::TYPE_EPI_DAY;
     }
 }

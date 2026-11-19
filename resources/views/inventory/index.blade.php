@@ -7,9 +7,9 @@
     <style>
         .hidden { display: none !important; }
         .filter-card input, .filter-card select {
-            height: 44px;
+            min-height:2.75rem;height:auto;
             padding: 0 14px;
-            font-size: 16px;
+            font-size:1.0625rem;
             border: 2px solid #bec6cf;
             border-radius: 10px;
             outline: none;
@@ -25,12 +25,12 @@
         .filter-card label {
             display: block;
             margin-bottom: 6px;
-            font-size: 15px;
+            font-size:1.0625rem;
             font-weight: 600;
             color: #0f172a;
         }
         .filter-card .btn-filter {
-            font-size: 15px;
+            font-size:1.0625rem;
             font-weight: 600;
             padding: 8px 22px;
             border-radius: 10px;
@@ -39,11 +39,11 @@
             border: none;
             cursor: pointer;
             transition: background 0.2s;
-            height: 44px;
+            min-height:2.75rem;height:auto;
         }
         .filter-card .btn-filter:hover { background: #369f7d; }
         .filter-card .btn-reset {
-            font-size: 15px;
+            font-size:1.0625rem;
             font-weight: 600;
             padding: 8px 22px;
             border-radius: 10px;
@@ -52,7 +52,7 @@
             border: 1px solid #e2e8f0;
             text-decoration: none;
             transition: all 0.2s;
-            height: 44px;
+            min-height:2.75rem;height:auto;
             display: inline-flex;
             align-items: center;
         }
@@ -95,7 +95,7 @@
             box-shadow: 0 20px 40px rgba(0,0,0,0.2);
         }
         #medicine-info-modal .modal-section-label {
-            font-size: 14px;
+            font-size:1.0625rem;
             font-weight: 700;
             letter-spacing: .1em;
             text-transform: uppercase;
@@ -103,7 +103,7 @@
             margin: 0 0 8px 0;
         }
         #medicine-info-modal .modal-subsection-label {
-            font-size: 14px;
+            font-size:1.0625rem;
             font-weight: 700;
             letter-spacing: .1em;
             text-transform: uppercase;
@@ -112,7 +112,7 @@
         }
         #medicine-info-modal .modal-title {
             margin: 0;
-            font-size: 28px;
+            font-size:1.75rem;
             font-weight: 700;
             color: #0f172a;
             line-height: 1.3;
@@ -131,14 +131,14 @@
             grid-column: 1 / -1;
         }
         #medicine-info-modal .field-grid label {
-            font-size: 13px;
+            font-size:1.0625rem;
             font-weight: 700;
             letter-spacing: 0.06em;
             text-transform: uppercase;
             color: #64748b;
         }
         #medicine-info-modal .field-grid .value {
-            font-size: 18px;
+            font-size:1.125rem;
             font-weight: 600;
             color: #0f172a;
             line-height: 1.45;
@@ -150,7 +150,7 @@
     </style>
 
     {{-- Header Card --}}
-    <div class="no-print" style="
+    <div class="no-print page-heading" style="
         background: rgba(255,255,255,0.9);
         backdrop-filter: blur(12px);
         border-radius: 20px;
@@ -163,13 +163,15 @@
         flex-wrap: wrap;
         gap: 16px;
     ">
-        <div style="display:flex; align-items:center; gap:24px; flex-wrap:wrap;">
-            <div>
-                <p style="font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #42ad8a; margin: 0 0 6px 0;">Inventory Management</p>
+        <div class="page-heading-main" style="display:flex; align-items:center; gap:24px; flex-wrap:wrap; min-width:0; max-width:100%;">
+            <div class="page-heading-title">
+                <p style="font-size:1.0625rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: #42ad8a; margin: 0 0 6px 0;">Inventory Management</p>
                 @if(is_null(session('health_unit_id')))
-                    <h2 style="font-size: 24px; font-weight: 700; color: #0f172a; margin: 0;">
+                    <h2 style="font-size:1.5rem; font-weight: 700; color: #0f172a; margin: 0;">
                         @if(request('rhu_filter') === 'pho')
                             PHO Inventory
+                        @elseif(request('rhu_filter') === 'all')
+                            All Facilities Inventory
                         @elseif(request('rhu_filter'))
                             @php $selectedRhu = $healthUnits->firstWhere('id', request('rhu_filter')); @endphp
                             {{ $selectedRhu->name ?? 'RHU Inventory' }}
@@ -178,48 +180,16 @@
                         @endif
                     </h2>
                 @else
-                    <h2 style="font-size: 24px; font-weight: 700; color: #0f172a; margin: 0;">Inventory Records</h2>
+                    <h2 style="font-size:1.5rem; font-weight: 700; color: #0f172a; margin: 0;">Inventory Records</h2>
                 @endif
             </div>
 
-            {{-- TAB BAR: Inventory / Stock Logs --}}
-            <div style="background: #f1f5f9; border-radius: 12px; padding: 4px; display: inline-flex; gap: 4px;">
-                <a href="{{ route('inventory.index', array_filter(['rhu_filter' => request('rhu_filter')])) }}" style="
-                    display: inline-flex; align-items: center; gap: 8px;
-                    padding: 8px 18px; border-radius: 9px;
-                    font-size: 14px; font-weight: 600; text-decoration: none;
-                    background: #42ad8a; color: #ffffff;
-                    box-shadow: 0 2px 6px rgba(66,173,138,0.25);
-                ">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-                        <line x1="12" y1="22.08" x2="12" y2="12"/>
-                    </svg>
-                    Inventory
-                </a>
+            @include('inventory._navigation', ['activeInventoryTab' => 'inventory'])
 
-                <a href="{{ route('stock_logs.index', array_filter(['rhu_filter' => request('rhu_filter')])) }}" style="
-                    display: inline-flex; align-items: center; gap: 8px;
-                    padding: 8px 18px; border-radius: 9px;
-                    font-size: 14px; font-weight: 600; text-decoration: none;
-                    background: transparent; color: #475569;
-                    transition: all 0.2s;
-                " onmouseover="this.style.background='rgba(255,255,255,0.7)'; this.style.color='#0f5c4b';"
-                   onmouseout="this.style.background='transparent'; this.style.color='#475569';">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                        <polyline points="14 2 14 8 20 8"/>
-                        <line x1="8" y1="13" x2="16" y2="13"/>
-                        <line x1="8" y1="17" x2="16" y2="17"/>
-                    </svg>
-                    Stock Logs
-                </a>
-            </div>
         </div>
 
         {{-- Actions --}}
-        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <div class="page-heading-actions" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
 
             {{-- Location filter (PHO admin only) --}}
             @if(is_null(session('health_unit_id')))
@@ -227,12 +197,14 @@
                     @if(request('search')) <input type="hidden" name="search" value="{{ request('search') }}"> @endif
                     @if(request('storage_location')) <input type="hidden" name="storage_location" value="{{ request('storage_location') }}"> @endif
                     @if(request('expiry_filter')) <input type="hidden" name="expiry_filter" value="{{ request('expiry_filter') }}"> @endif
-                    <select name="rhu_filter" style="
-                        height: 40px; padding: 0 12px; font-size: 14px;
-                        border: 2px solid #bec6cf; border-radius: 10px; outline: none;
+                    @if(request('stock_level')) <input type="hidden" name="stock_level" value="{{ request('stock_level') }}"> @endif
+                    <select name="rhu_filter" data-native-select aria-label="Health unit" style="
+                        min-height:2.75rem;height:auto; padding: 0 12px; font-size:1.0625rem;
+                        border: 2px solid #bec6cf; border-radius: 10px;
                         background: white; color: #0f172a; appearance: auto;
-                    " onchange="this.form.submit()">
+                    " onchange="this.form.requestSubmit()">
                         <option value="">All Health Units</option>
+                        <option value="all" @selected(request('rhu_filter') === 'all')>All Facilities (including PHO)</option>
                         <option value="pho" {{ request('rhu_filter') === 'pho' ? 'selected' : '' }}>Your PHO Inventory</option>
                         @foreach($healthUnits as $rhu)
                             <option value="{{ $rhu->id }}" {{ request('rhu_filter') == $rhu->id ? 'selected' : '' }}>
@@ -248,15 +220,16 @@
                 @if(request('search')) <input type="hidden" name="search" value="{{ request('search') }}"> @endif
                 @if(request('storage_location')) <input type="hidden" name="storage_location" value="{{ request('storage_location') }}"> @endif
                 @if(request('rhu_filter')) <input type="hidden" name="rhu_filter" value="{{ request('rhu_filter') }}"> @endif
-                <select name="expiry_filter" style="
-                    height: 40px; padding: 0 12px; font-size: 14px;
-                    border: 2px solid #bec6cf; border-radius: 10px; outline: none;
+                @if(request('stock_level')) <input type="hidden" name="stock_level" value="{{ request('stock_level') }}"> @endif
+                <select name="expiry_filter" data-native-select aria-label="Expiry status" style="
+                    min-height:2.75rem;height:auto; padding: 0 12px; font-size:1.0625rem;
+                    border: 2px solid #bec6cf; border-radius: 10px;
                     background: white; color: #0f172a; appearance: auto;
-                " onchange="this.form.submit()">
+                " onchange="this.form.requestSubmit()">
                     <option value="">All Expiry</option>
                     <option value="expired"     {{ request('expiry_filter') == 'expired'     ? 'selected' : '' }}>🔴 Expired</option>
-                    <option value="near_expiry" {{ request('expiry_filter') == 'near_expiry' ? 'selected' : '' }}>🟠 Near Expiry (≤90d)</option>
-                    <option value="monitor"     {{ request('expiry_filter') == 'monitor'     ? 'selected' : '' }}>🟡 Monitor (≤180d)</option>
+                    <option value="near_expiry" {{ request('expiry_filter') == 'near_expiry' ? 'selected' : '' }}>🟠 Near Expiry (0–30 days)</option>
+                    <option value="monitor"     {{ request('expiry_filter') == 'monitor'     ? 'selected' : '' }}>🟡 Monitor (31–180 days)</option>
                     <option value="good"        {{ request('expiry_filter') == 'good'        ? 'selected' : '' }}>🟢 Good (&gt;180d)</option>
                     <option value="no_expiry"   {{ request('expiry_filter') == 'no_expiry'   ? 'selected' : '' }}>⚪ No Expiry Set</option>
                 </select>
@@ -265,7 +238,7 @@
             {{-- EXPORT BUTTON — opens inline modal --}}
             <button type="button" onclick="openInvExportModal()" style="
                 display:inline-flex; align-items:center; gap:6px;
-                font-size:14px; font-weight:600;
+                font-size:1.0625rem; font-weight:600;
                 padding:9px 18px; border-radius:10px;
                 background:#42ad8a; color:#ffffff;
                 border:none; cursor:pointer; transition: background 0.2s;
@@ -279,9 +252,13 @@
                 Export
             </button>
 
+            @if(Route::has('imports.create'))
+                @include('imports._link', ['section' => session('health_unit_id') ? (session('role') === 'admin' ? 'inventory' : 'stock_logs') : 'shipments', 'fallback' => true])
+            @endif
+
             @if(session('health_unit_id'))
                 <a href="{{ route('stock_logs.create') }}" style="
-                    display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600;
+                    display: inline-flex; align-items: center; gap: 6px; font-size:1.0625rem; font-weight: 600;
                     padding: 9px 16px; border-radius: 10px; background: #42ad8a; color: #ffffff;
                     text-decoration: none; border: none; cursor: pointer; transition: all 0.2s;
                 " onmouseover="this.style.background='#369f7d'" onmouseout="this.style.background='#42ad8a'">
@@ -304,6 +281,16 @@
         <form method="GET" action="{{ route('inventory.index') }}" style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end;">
             @if(request('rhu_filter')) <input type="hidden" name="rhu_filter" value="{{ request('rhu_filter') }}"> @endif
             @if(request('expiry_filter')) <input type="hidden" name="expiry_filter" value="{{ request('expiry_filter') }}"> @endif
+
+            <div style="flex:1 1 160px; min-width:0;">
+                <label for="stock_level">Stock level</label>
+                <select name="stock_level" id="stock_level">
+                    <option value="">All stock levels</option>
+                    <option value="low" @selected(request('stock_level') === 'low')>Low stock</option>
+                    <option value="overstock" @selected(request('stock_level') === 'overstock')>Overstocked</option>
+                    <option value="available" @selected(request('stock_level') === 'available')>Usable stock available</option>
+                </select>
+            </div>
 
             <div style="flex: 1 1 220px; min-width: 180px;">
                 <label for="storage_location">Storage Location</label>
@@ -333,20 +320,20 @@
         overflow: hidden;
     ">
         <div class="table-scroll" style="width: 100%; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;">
-            <table style="width:100%; min-width: 1000px; border-collapse: collapse; font-size: 14px;">
+            <table style="width:100%; min-width: 1000px; border-collapse: collapse; font-size:1.0625rem;">
                 <thead>
                     <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                        <th class="no-print" style="padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">#</th>
-                        <th style="padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Batch No.</th>
-                        <th style="padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Medicine</th>
+                        <th class="no-print" style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">#</th>
+                        <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Batch No.</th>
+                        <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Medicine</th>
                         @if(is_null(session('health_unit_id')))
-                            <th style="padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Health Unit</th>
+                            <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Health Unit</th>
                         @endif
-                        <th style="padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Available</th>
-                        <th style="padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Allocated</th>
-                        <th style="padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Expiration</th>
-                        <th style="padding: 14px 16px; text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Storage Location</th>
-                        <th class="no-print" style="padding: 14px 16px; text-align: center; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Actions</th>
+                        <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Available</th>
+                        <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Allocated</th>
+                        <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Expiration</th>
+                        <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Storage Location</th>
+                        <th class="no-print" style="padding: 14px 16px; text-align: center; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Actions</th>
                     </tr>
                 </thead>
 
@@ -358,9 +345,6 @@
 
                             $med  = $inventory->medicine;
                             $unit = $med?->unit ?? null;
-
-                            $packType = $inventory->pack_type ?? $med?->pack_type;
-                            $ppp      = $inventory->pieces_per_pack ?? $med?->pieces_per_pack;
 
                             $pluralUnit = null;
                             if ($unit) {
@@ -391,7 +375,7 @@
 
                                 if ($daysLeft < 0) {
                                     $expiryBadge = ['label' => 'Expired',     'bg' => '#FECACA', 'color' => '#991B1B', 'border' => '#FCA5A5'];
-                                } elseif ($daysLeft <= 90) {
+                                } elseif ($daysLeft <= \App\Models\Inventory::NEAR_EXPIRY_DAYS) {
                                     $expiryBadge = ['label' => 'Near Expiry', 'bg' => '#FFE4CC', 'color' => '#B85C00', 'border' => '#FFB870'];
                                 } elseif ($daysLeft <= 180) {
                                     $expiryBadge = ['label' => 'Monitor',     'bg' => '#FEF3C7', 'color' => '#92400E', 'border' => '#FCD34D'];
@@ -431,7 +415,7 @@
                                               style="
                                                   display:inline-block; margin-top:4px;
                                                   padding:2px 8px; border-radius:6px;
-                                                  font-size:11px; font-weight:700; letter-spacing:0.02em;
+                                                  font-size:1.0625rem; font-weight:700; letter-spacing:0.02em;
                                                   background:{{ $expiryBadge['bg'] }};
                                                   color:{{ $expiryBadge['color'] }};
                                                   border:1px solid {{ $expiryBadge['border'] }};
@@ -446,7 +430,7 @@
 
                             <td style="padding: 14px 16px; color: #334155;">
                                 @if($inventory->storage_location)
-                                    <span style="display:inline-flex; align-items:center; gap:4px; background:#f1f5f9; padding:2px 10px; border-radius:12px; font-size:12px; color:#0f172a;">
+                                    <span style="display:inline-flex; align-items:center; gap:4px; background:#f1f5f9; padding:2px 10px; border-radius:12px; font-size:1.0625rem; color:#0f172a;">
                                         📦 {{ $inventory->storage_location }}
                                     </span>
                                 @else
@@ -463,8 +447,6 @@
                                             data-dosage-form="{{ $med?->dosage_form ?? '' }}"
                                             data-category="{{ $med?->category_label ?? '' }}"
                                             data-unit="{{ $med?->unit ?? '' }}"
-                                            data-pack-type="{{ $packType ?? '' }}"
-                                            data-pieces-per-pack="{{ $ppp ?? '' }}"
                                             data-description="{{ $med?->description ?? '' }}"
                                             data-batch-no="{{ $inventory->batch_no ?? '' }}"
                                             data-available="{{ $inventory->available_stock }}"
@@ -487,8 +469,8 @@
                                     </button>
 
                                     @if($isPhoRow)
-                                        <span style="font-size:11px; color:#94a3b8; text-align:center; max-width:140px; line-height:1.3;">
-                                            Read-only<br><span style="font-size:10px;">(managed via DOH receive &amp; allocation)</span>
+                                        <span style="font-size:1.0625rem; color:#94a3b8; text-align:center; max-width:140px; line-height:1.3;">
+                                            Read-only<br><span style="font-size:1.0625rem;">(managed via DOH receive &amp; allocation)</span>
                                         </span>
                                     @else
                                         <a href="{{ route('inventory.edit', $inventory->id) }}" title="Edit"
@@ -564,9 +546,9 @@
             flex-wrap: wrap;
         ">
             @if ($inventories->onFirstPage())
-                <span style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">← Previous</span>
+                <span style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">← Previous</span>
             @else
-                <a href="{{ $inventories->previousPageUrl() }}" style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
+                <a href="{{ $inventories->previousPageUrl() }}" style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
                    onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#42ad8a';" onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0';">
                     ← Previous
                 </a>
@@ -574,9 +556,9 @@
 
             @foreach ($inventories->getUrlRange(1, $inventories->lastPage()) as $page => $url)
                 @if ($page == $inventories->currentPage())
-                    <span style="font-size: 14px; font-weight: 600; padding: 8px 14px; border-radius: 8px; background: #42ad8a; color: #ffffff; border: 1px solid #42ad8a; cursor: default;">{{ $page }}</span>
+                    <span style="font-size:1.0625rem; font-weight: 600; padding: 8px 14px; border-radius: 8px; background: #42ad8a; color: #ffffff; border: 1px solid #42ad8a; cursor: default;">{{ $page }}</span>
                 @else
-                    <a href="{{ $url }}" style="font-size: 14px; font-weight: 500; padding: 8px 14px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
+                    <a href="{{ $url }}" style="font-size:1.0625rem; font-weight: 500; padding: 8px 14px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
                        onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#42ad8a';" onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0';">
                         {{ $page }}
                     </a>
@@ -584,12 +566,12 @@
             @endforeach
 
             @if ($inventories->hasMorePages())
-                <a href="{{ $inventories->nextPageUrl() }}" style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
+                <a href="{{ $inventories->nextPageUrl() }}" style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #ffffff; color: #334155; border: 1px solid #e2e8f0; text-decoration: none; transition: all 0.2s;"
                    onmouseover="this.style.background='#f8fafc'; this.style.borderColor='#42ad8a';" onmouseout="this.style.background='#ffffff'; this.style.borderColor='#e2e8f0';">
                     Next →
                 </a>
             @else
-                <span style="font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">Next →</span>
+                <span style="font-size:1.0625rem; font-weight: 500; padding: 8px 16px; border-radius: 8px; background: #f1f5f9; color: #94a3b8; border: 1px solid #e2e8f0; cursor: default; user-select: none;">Next →</span>
             @endif
         </div>
     @endif
@@ -615,10 +597,10 @@
     ">
         {{-- Header --}}
         <div style="padding:22px 26px 14px; border-bottom:1px solid #f1f5f9;">
-            <h3 style="font-size:19px; font-weight:700; color:#0f172a; margin:0 0 4px 0;">
+            <h3 style="font-size:1.1875rem; font-weight:700; color:#0f172a; margin:0 0 4px 0;">
                 Export Inventory Records
             </h3>
-            <p style="font-size:13px; color:#64748b; margin:0;">
+            <p style="font-size:1.0625rem; color:#64748b; margin:0;">
                 Choose what to include, then pick an action.
             </p>
         </div>
@@ -629,13 +611,13 @@
             {{-- PROGRAM CATEGORY --}}
             <div style="margin-bottom:22px;">
                 <label for="category-invExportModal"
-                       style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                       style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Program Category
                 </label>
                 <select id="category-invExportModal"
                         style="
-                            width:100%; height:44px;
-                            padding:0 14px; font-size:14px;
+                            width:100%; min-height:2.75rem;height:auto;
+                            padding:0 14px; font-size:1.0625rem;
                             border:2px solid #bec6cf; border-radius:10px;
                             outline:none; box-sizing:border-box;
                             background:#ffffff; color:#0f172a; appearance:auto; cursor:pointer;
@@ -658,13 +640,13 @@
             @if(is_null(session('health_unit_id')))
                 <div style="margin-bottom:22px;">
                     <label for="rhu-invExportModal"
-                           style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                           style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                         Health Unit (RHU)
                     </label>
                     <select id="rhu-invExportModal"
                             style="
-                                width:100%; height:44px;
-                                padding:0 14px; font-size:14px;
+                                width:100%; min-height:2.75rem;height:auto;
+                                padding:0 14px; font-size:1.0625rem;
                                 border:2px solid #bec6cf; border-radius:10px;
                                 outline:none; box-sizing:border-box;
                                 background:#ffffff; color:#0f172a; appearance:auto; cursor:pointer;
@@ -672,6 +654,7 @@
                             onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                             onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
                         <option value="" {{ !request('rhu_filter') ? 'selected' : '' }}>All Health Units</option>
+                        <option value="all" @selected(request('rhu_filter') === 'all')>All Facilities (including PHO)</option>
                         <option value="pho" {{ request('rhu_filter') === 'pho' ? 'selected' : '' }}>Your PHO Inventory</option>
                         @foreach($healthUnits as $rhu)
                             <option value="{{ $rhu->id }}" {{ request('rhu_filter') == $rhu->id ? 'selected' : '' }}>
@@ -679,7 +662,7 @@
                             </option>
                         @endforeach
                     </select>
-                    <p style="font-size:12px; color:#64748b; margin:6px 0 0 0;">
+                    <p style="font-size:1.0625rem; color:#64748b; margin:6px 0 0 0;">
                         Choose a specific RHU, or leave as "All Health Units" for province-wide.
                     </p>
                 </div>
@@ -688,7 +671,7 @@
             {{-- BATCH NUMBER(S) --}}
             <div style="margin-bottom:22px;">
                 <label for="batchInput-invExportModal"
-                       style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                       style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Batch Number(s)
                 </label>
                 <input type="text"
@@ -696,15 +679,15 @@
                        placeholder="e.g. BT-001, BT-002, 1-8"
                        value="{{ request('batch_input', '') }}"
                        style="
-                           width:100%; height:44px;
-                           padding:0 14px; font-size:14px;
+                           width:100%; min-height:2.75rem;height:auto;
+                           padding:0 14px; font-size:1.0625rem;
                            border:2px solid #bec6cf; border-radius:10px;
                            outline:none; box-sizing:border-box;
                            background:#ffffff; color:#0f172a;
                        "
                        onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                        onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
-                <p style="font-size:12px; color:#64748b; margin:6px 0 0 0;">
+                <p style="font-size:1.0625rem; color:#64748b; margin:6px 0 0 0;">
                     Separate multiple batch numbers with commas. Leave blank to include all batches.
                 </p>
             </div>
@@ -712,13 +695,13 @@
             {{-- EXPIRY STATUS --}}
             <div>
                 <label for="expiry-invExportModal"
-                       style="font-size:13px; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
+                       style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Expiry Status
                 </label>
                 <select id="expiry-invExportModal"
                         style="
-                            width:100%; height:44px;
-                            padding:0 14px; font-size:14px;
+                            width:100%; min-height:2.75rem;height:auto;
+                            padding:0 14px; font-size:1.0625rem;
                             border:2px solid #bec6cf; border-radius:10px;
                             outline:none; box-sizing:border-box;
                             background:#ffffff; color:#0f172a; appearance:auto; cursor:pointer;
@@ -726,9 +709,10 @@
                         onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                         onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
                     <option value=""            {{ request('expiry_filter', '') === ''            ? 'selected' : '' }}>All Expiry</option>
-                    <option value="near_expiry" {{ request('expiry_filter', '') === 'near_expiry' ? 'selected' : '' }}>Near Expiry (≤180 days)</option>
+                    <option value="near_expiry" {{ request('expiry_filter', '') === 'near_expiry' ? 'selected' : '' }}>Near Expiry (0–30 days)</option>
+                    <option value="monitor" {{ request('expiry_filter', '') === 'monitor' ? 'selected' : '' }}>Monitor (31–180 days)</option>
                     <option value="expired"     {{ request('expiry_filter', '') === 'expired'     ? 'selected' : '' }}>Expired Only</option>
-                    <option value="not_expired" {{ request('expiry_filter', '') === 'not_expired' ? 'selected' : '' }}>Not Expiring Soon</option>
+                    <option value="not_expired" {{ request('expiry_filter', '') === 'not_expired' ? 'selected' : '' }}>Not Yet Expired</option>
                 </select>
             </div>
         </div>
@@ -744,7 +728,7 @@
             <button type="button"
                     onclick="closeInvExportModal()"
                     style="
-                        font-size:14px; font-weight:600;
+                        font-size:1.0625rem; font-weight:600;
                         padding:10px 18px; border-radius:10px;
                         background:#ffffff; color:#334155;
                         border:1px solid #e2e8f0; cursor:pointer;
@@ -758,7 +742,7 @@
                     onclick="runInvExport('print')"
                     style="
                         display:inline-flex; align-items:center; gap:6px;
-                        font-size:14px; font-weight:600;
+                        font-size:1.0625rem; font-weight:600;
                         padding:10px 18px; border-radius:10px;
                         background:#ffffff; color:#334155;
                         border:1px solid #e2e8f0; cursor:pointer;
@@ -777,7 +761,7 @@
                     onclick="runInvExport('csv')"
                     style="
                         display:inline-flex; align-items:center; gap:6px;
-                        font-size:14px; font-weight:600;
+                        font-size:1.0625rem; font-weight:600;
                         padding:10px 18px; border-radius:10px;
                         background:#42ad8a; color:#ffffff;
                         border:none; cursor:pointer;
@@ -806,7 +790,7 @@
                 <h3 id="modal-med-name" class="modal-title">—</h3>
             </div>
             <button type="button" onclick="closeMedicineModal()" aria-label="Close"
-                    style="background:transparent; border:none; cursor:pointer; padding:4px 10px; color:#64748b; font-size:26px; line-height:1; border-radius:8px; transition: all 0.2s;"
+                    style="background:transparent; border:none; cursor:pointer; padding:4px 10px; color:#64748b; font-size:1.625rem; line-height:1; border-radius:8px; transition: all 0.2s;"
                     onmouseover="this.style.background='#f1f5f9'; this.style.color='#0f172a';"
                     onmouseout="this.style.background='transparent'; this.style.color='#64748b';">✕</button>
         </div>
@@ -849,14 +833,6 @@
                 <span class="value" id="modal-expiration">—</span>
             </div>
             <div>
-                <label>Pack Type</label>
-                <span class="value" id="modal-pack-type">—</span>
-            </div>
-            <div>
-                <label>Units per Pack</label>
-                <span class="value" id="modal-pieces-per-pack">—</span>
-            </div>
-            <div>
                 <label>Available</label>
                 <span class="value" id="modal-available">—</span>
             </div>
@@ -872,7 +848,7 @@
 
         <div style="display:flex; justify-content:flex-end; margin-top:28px;">
             <button type="button" onclick="closeMedicineModal()"
-                    style="padding:12px 26px; background:#42ad8a; color:white; border:none; border-radius:10px; font-weight:700; font-size:16px; cursor:pointer; transition: background 0.2s;"
+                    style="padding:12px 26px; background:#42ad8a; color:white; border:none; border-radius:10px; font-weight:700; font-size:1.0625rem; cursor:pointer; transition: background 0.2s;"
                     onmouseover="this.style.background='#369f7d'" onmouseout="this.style.background='#42ad8a'">
                 Close
             </button>
@@ -910,15 +886,6 @@ function openMedicineModal(btn) {
 
     setModalField('modal-batch-no',       d.batchNo);
     setModalField('modal-expiration',     d.expiration);
-    setModalField('modal-pack-type',      d.packType);
-
-    if (d.piecesPerPack && d.packType) {
-        setModalField('modal-pieces-per-pack', d.piecesPerPack + ' ' + pluralizeUnit(d.unit, d.piecesPerPack) + ' per ' + d.packType);
-    } else if (d.piecesPerPack) {
-        setModalField('modal-pieces-per-pack', d.piecesPerPack);
-    } else {
-        setModalField('modal-pieces-per-pack', null);
-    }
 
     const unitWord = pluralizeUnit(d.unit, d.available);
     setModalField('modal-available', d.available, ' ' + unitWord);

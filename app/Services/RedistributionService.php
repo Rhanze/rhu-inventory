@@ -106,16 +106,9 @@ class RedistributionService
         $result = [];
 
         // Get all stock log releases (deductions) in the last 90 days
-        $logs = StockLog::whereNull('voided_at')->whereIn('health_unit_id', $rhuIds)
-            ->where(function ($q) {
-                // Exclude additions – only releases/removals
-                $q->whereNotNull('remarks')
-                    ->where('remarks', 'like', 'Released%')
-                    ->orWhere('remarks', 'like', 'Dispensed%')
-                    ->orWhere('remarks', 'like', 'Allocated%')
-                    ->orWhere('remarks', 'like', 'Deducted%');
-            })
+        $logs = StockLog::demandReleases()->whereIn('health_unit_id', $rhuIds)
             ->where('date_added', '>=', now()->subDays(90))
+            ->whereDate('date_added', '<=', today())
             ->get();
 
         // Group by health_unit_id and medicine_id

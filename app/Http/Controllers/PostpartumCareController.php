@@ -51,7 +51,7 @@ class PostpartumCareController extends Controller
         $stats = [
             'total' => PostpartumVisit::whereHas('patient', fn ($q) => $q->forViewer())->where('health_unit_id', $healthUnitId)->count(),
             'this_month' => PostpartumVisit::whereHas('patient', fn ($q) => $q->forViewer())->where('health_unit_id', $healthUnitId)
-                ->whereBetween('visit_date', [now()->startOfMonth(), now()->endOfMonth()])
+                ->whereBetween('visit_date', [today()->startOfMonth()->toDateString(), today()->endOfMonth()->toDateString()])
                 ->count(),
             'mothers' => PostpartumVisit::whereHas('patient', fn ($q) => $q->forViewer())->where('health_unit_id', $healthUnitId)
                 ->distinct('patient_id')

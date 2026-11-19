@@ -16,7 +16,7 @@
             Request Stock from a Partner RHU
         </h2>
         <p style="font-size:15px; color:#64748b; margin:6px 0 0 0;">
-            From <strong style="color:#0f5c4b;">{{ $currentRhu->name }}</strong>
+            Requested by <strong style="color:#0f5c4b;">{{ $currentRhu->name }}</strong>
         </p>
     </div>
 
@@ -166,12 +166,14 @@
                 </div>
             </div>
 
+            <p class="tr-helper" id="transfer-approval-help">The PHO reviews your request first. If approved, the supplying RHU is notified and can accept the request.</p>
+
             {{-- Actions --}}
             <div style="display:flex; gap:12px; border-top:1px solid #e2e8f0; padding-top:24px;">
-                <button type="submit" class="tr-btn" style="background:#42ad8a; color:#ffffff; border:none;"
+                <button type="submit" class="tr-btn" aria-describedby="transfer-approval-help" style="background:#42ad8a; color:#ffffff; border:none;"
                         onmouseover="this.style.background='#369f7d'"
                         onmouseout="this.style.background='#42ad8a'">
-                    Send Transfer Request
+                    Submit for PHO Approval
                 </button>
                 <a href="{{ route('transfers.index') }}" class="tr-btn"
                    style="background:#ffffff; color:#334155; border:1px solid #e2e8f0;"
@@ -248,7 +250,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (controller) controller.abort();
         controller = new AbortController();
 
-        fetch(`/search/public-autocomplete?q=${encodeURIComponent(q)}`, {
+        fetch(@json(route('stock_logs.autocomplete')) + `?q=${encodeURIComponent(q)}`, {
             signal: controller.signal,
             headers: { 'Accept': 'application/json' }
         })
@@ -258,7 +260,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function showRecommendations() {
-        fetch(`/search/public-autocomplete?q=a`, {
+        fetch(@json(route('stock_logs.autocomplete')) + '?recommendations=1', {
             headers: { 'Accept': 'application/json' }
         })
         .then(r => r.json())
@@ -388,7 +390,9 @@ function renderQtyHelp() {
     if (qty < 1) { help.textContent = ''; return; }
 
     const unit = pickedMedicine.unit || 'unit';
-    help.innerHTML = `<strong style="color:#0f5c4b;">= ${qty} ${qty === 1 ? unit : unit + 's'}</strong>`;
+    help.textContent = `= ${qty} ${qty === 1 ? unit : unit + 's'}`;
+    help.style.color = '#0f5c4b';
+    help.style.fontWeight = '700';
 }
 
 function fetchSources(medicineId) {
@@ -417,7 +421,7 @@ function loadStockInfo() {
 
     const r = sourceOptions.find(s => s.rhu_id == val);
     if (r) {
-        info.innerHTML = `Available: <strong>${r.available_stock}</strong> units · ${r.distance_km ?? '?'} km away · ${r.municipality ?? ''}`;
+        info.textContent = `Available: ${r.available_stock} units · ${r.distance_km ?? '?'} km away · ${r.municipality ?? ''}`;
         qty.max = r.available_stock;
     }
 }

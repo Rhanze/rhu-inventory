@@ -4,14 +4,14 @@
 <div style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
 
     {{-- Header Card with tabs beside title + actions --}}
-    <div style="
+    <div class="mw-page-card page-heading" style="
         background: rgba(255,255,255,0.9); backdrop-filter: blur(12px);
         border-radius:20px; padding:24px 28px; border:1px solid rgba(255,255,255,0.4);
         box-shadow:0 8px 20px rgba(0,0,0,0.06);
         display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;
     ">
-        <div style="display:flex; align-items:center; gap:24px; flex-wrap:wrap;">
-            <div>
+        <div class="mw-notification-heading page-heading-main" style="display:flex; align-items:center; gap:24px; flex-wrap:wrap;">
+            <div class="page-heading-title">
                 <p style="font-size:13px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#42ad8a; margin:0 0 6px 0;">Notifications</p>
                 <h2 style="font-size:24px; font-weight:700; color:#0f172a; margin:0; display:flex; align-items:center; gap:8px;">
                     Notifications
@@ -23,7 +23,7 @@
                 </h2>
             </div>
 
-            <div style="background: #f1f5f9; border-radius: 12px; padding: 4px; display: inline-flex; gap: 4px;">
+            <div class="mw-notification-tabs page-section-nav" role="navigation" aria-label="Notification sections" style="background: #f1f5f9; border-radius: 12px; padding: 4px; display: inline-flex; gap: 4px;">
                 @php
                     $tabs = [
                         'active'   => ['label' => 'Active',   'count' => $unreadCount],
@@ -33,7 +33,7 @@
                 @endphp
                 @foreach($tabs as $key => $tab)
                     @php $isActive = $view === $key; @endphp
-                    <a href="{{ route('notifications.index', ['view' => $key]) }}" style="
+                    <a href="{{ route('notifications.index', ['view' => $key]) }}" @if($isActive) aria-current="page" @endif style="
                         display: inline-flex; align-items: center; gap: 8px;
                         padding: 8px 18px; border-radius: 9px;
                         font-size: 14px; font-weight: 600; text-decoration: none;
@@ -73,7 +73,7 @@
             </div>
         </div>
 
-        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <div class="page-heading-actions" style="display:flex; gap:8px; flex-wrap:wrap;">
             @if($unreadCount > 0)
                 <button onclick="markAllRead()" style="
                     font-size:14px; font-weight:600; padding:8px 16px; border-radius:10px;
@@ -95,7 +95,7 @@
                     font-size:14px; font-weight:600; padding:8px 16px; border-radius:10px;
                     background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; cursor:pointer;
                 " onmouseover="this.style.background='#fecaca'" onmouseout="this.style.background='#fee2e2'">
-                    🗑️ Delete All
+                    🗑️ Delete All Active
                 </button>
             @endif
 
@@ -123,6 +123,7 @@
             $viewerUnitId = $isPHOViewer ? $phoId : $huId;
             $declineLabel = $isPHOViewer ? 'Reject' : 'Decline';
             $canApproveRequests = in_array(session('role'), ['admin', 'staff']) && !is_null($huId);
+            $canManageTransfers = in_array(session('role'), ['admin', 'staff']) && !is_null($huId);
             $isRecipientViewer = session('user_id');
         @endphp
 
@@ -139,16 +140,15 @@
                 if ($notification->archived_at)  $bgStyle = 'background:#f8fafc; border-left:4px solid #cbd5e1; opacity:0.85;';
 
                 $t          = $notification->transfer;
-                $isPending  = $t && $t->status === 'pending';
                 $isAccepted = $t && $t->status === 'accepted';
 
-                $showAccept = !$notification->archived_at
-                              && $t && $isPending
+                $showAccept = $canManageTransfers && !$notification->archived_at
+                              && $t?->isAwaitingSourceResponse()
                               && $notification->type === 'transfer_request'
                               && $viewerUnitId !== null
                               && $t->from_health_unit_id == $viewerUnitId;
 
-                $showReceive = !$notification->archived_at
+                $showReceive = $canManageTransfers && !$notification->archived_at
                                && $t && $isAccepted
                                && $notification->type === 'transfer_accepted'
                                && $viewerUnitId !== null
@@ -167,17 +167,24 @@
                                     ]);
 
                 // ═══ Supply request approve/reject controls (RHU admin/staff only) ═══
+                $allocation = $notification->allocation;
                 $showSupplyControls = $canApproveRequests
                                     && $notification->type === 'supply_request_pending'
-                                    && $notification->allocation_id
-                                    && !$notification->is_read
+                                    && $allocation
+                                    && $allocation->health_unit_id == $huId
+                                    && $allocation->status === 'pending'
+                                    && !$allocation->inventory_id
+                                    && !$allocation->destination_health_unit_id
                                     && !$notification->archived_at;
 
                 // ═══ Allocation receipt confirmation (recipient only) ═══
-                $showAllocationReceipt = $notification->type === 'allocation_to_user'
-                                    && $notification->allocation_id
+                $showAllocationReceipt = in_array($notification->type, ['allocation_to_user', 'supply_request_approved'])
+                                    && $allocation
                                     && $notification->user_id == $isRecipientViewer
-                                    && !$notification->is_read
+                                    && $allocation->recipient_user_id == $isRecipientViewer
+                                    && $allocation->health_unit_id == $huId
+                                    && in_array($allocation->status, ['awaiting_receipt', 'approved'])
+                                    && $allocation->inventory_id
                                     && !$notification->archived_at;
             @endphp
 
@@ -212,13 +219,14 @@
                             </div>
                         @endif
 
-                        {{-- Prefer explicit ->link, fall back to inventory --}}
+                        {{-- Show navigation only when a useful destination is available. --}}
                         @php
-                            $targetUrl = $notification->link
-                                ?? ($notification->inventory_id
-                                    ? route('inventory.index', ['highlight' => $notification->inventory_id])
-                                    : null);
-                            $targetLabel = $notification->inventory_id ? 'View Inventory →' : 'Open →';
+                            $targetUrl = $notification->destinationUrl(session('role'));
+                            $targetLabel = match (true) {
+                                $notification->type === \App\Models\Notification::TYPE_TRANSFER_PHO_REVIEW_REQUESTED && $t?->isAwaitingPhoReview() => 'Review transfer →',
+                                (bool) $notification->inventory_id => 'View Inventory →',
+                                default => 'Open →',
+                            };
                         @endphp
                         @if($targetUrl)
                             <a href="{{ $targetUrl }}" style="
@@ -284,7 +292,7 @@
                             <div style="display:flex; gap:8px; margin-top:12px; flex-wrap:wrap;" onclick="event.stopPropagation();">
                                 @if($showAccept)
                                     <form method="POST" action="{{ route('transfers.accept', $t->id) }}" style="display:inline;"
-                                          onsubmit="return confirm('Accept this transfer request? A batch will be auto-reserved (FIFO).');">
+                                          onsubmit="return confirm('Accept this transfer request? Stock will be reserved from the earliest-expiring available batch.');">
                                         @csrf
                                         <button type="submit" style="
                                             padding:8px 16px; border-radius:10px; background:#42ad8a; color:#fff;
@@ -306,7 +314,7 @@
 
                                 @if($showReceive)
                                     <form method="POST" action="{{ route('transfers.receive', $t->id) }}" style="display:inline;"
-                                          onsubmit="return confirm('Confirm you have physically received these items? Stock will move immediately between RHUs.');">
+                                          onsubmit="return confirm('Confirm you have physically received these items? Receipt will credit the stock already reserved at the source RHU.');">
                                         @csrf
                                         <button type="submit" style="
                                             padding:8px 16px; border-radius:10px; background:#0f5c4b; color:#fff;
@@ -401,19 +409,19 @@
                     @if($isMidwife)
                         <p style="font-size:16px; margin:0;">🎉 You're all caught up</p>
                         <p style="font-size:14px; margin:4px 0 0 0;">
-                            No overdue vaccine doses, low-stock alerts, or disease outbreaks at your RHU right now.
+                            No active notifications are available. Check the clinical and inventory pages for current records.
                         </p>
 
                     @elseif($isPHO)
                         <p style="font-size:16px; margin:0;">🎉 No active notifications</p>
                         <p style="font-size:14px; margin:4px 0 0 0;">
-                            No provincial alerts, supply requests, or outbreak flags awaiting review.
+                            No active provincial notifications are available. Review the relevant modules for current records.
                         </p>
 
                     @elseif($isRhuAdmin)
-                        <p style="font-size:16px; margin:0;">🎉 All clear</p>
+                        <p style="font-size:16px; margin:0;">🎉 No active notifications</p>
                         <p style="font-size:14px; margin:4px 0 0 0;">
-                            All inventory is well stocked, no batches are expiring soon, and no transfers need action.
+                            No active notifications are available. Check inventory and transfers for their current status.
                         </p>
 
                     @else
@@ -427,129 +435,86 @@
         @endforelse
     </div>
 
+    {{ $notifications->links() }}
+
 </div>
 
 <script>
+async function updateNotification(url, method = 'POST') {
+    try {
+        const response = await fetch(url, {
+            method,
+            headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) {
+            throw new Error(data.message || 'Unable to update notifications. Please refresh and try again.');
+        }
+        location.reload();
+    } catch (error) {
+        alert(error.message || 'Unable to update notifications. Please try again.');
+    }
+}
+
 function markRead(id) {
-    fetch(`/notifications/mark-read/${id}`, {
-        method: 'POST',
-        headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
-    })
-    .then(response => response.json())
-    .then(data => { if (data.success) location.reload(); });
+    updateNotification(@json(route('notifications.mark-read', ['id' => '__ID__'])).replace('__ID__', encodeURIComponent(id)));
 }
 
 function markAllRead() {
-    if (!confirm('Mark all notifications as read?')) return;
-    fetch('/notifications/mark-all-read', {
-        method: 'POST',
-        headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
-    })
-    .then(response => response.json())
-    .then(data => { if (data.success) location.reload(); });
+    if (!confirm('Mark all active notifications as read?')) return;
+    updateNotification(@json(route('notifications.mark-all-read')));
 }
 
 function deleteNotification(id) {
     if (!confirm('Delete this notification?')) return;
-    fetch(`/notifications/delete/${id}`, {
-        method: 'DELETE',
-        headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            const el = document.getElementById('notification-' + id);
-            if (el) { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }
-        } else {
-            alert(data.message || 'Unable to delete notification.');
-        }
-    });
+    updateNotification(@json(route('notifications.destroy', ['id' => '__ID__'])).replace('__ID__', encodeURIComponent(id)), 'DELETE');
 }
 
 function deleteAllNotifications() {
-    if (!confirm('Delete ALL notifications? This cannot be undone.')) return;
-    fetch('/notifications/delete-all', {
-        method: 'DELETE',
-        headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) location.reload();
-        else alert(data.message || 'Unable to delete notifications.');
-    });
+    if (!confirm('Delete ALL active notifications? This cannot be undone.')) return;
+    updateNotification(@json(route('notifications.destroy-all')), 'DELETE');
 }
 
 function archiveNotification(id) {
-    fetch(`/notifications/archive/${id}`, {
-        method: 'POST',
-        headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            const el = document.getElementById('notification-' + id);
-            if (el) { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }
-        } else {
-            alert(data.message || 'Unable to archive notification.');
-        }
-    });
+    updateNotification(@json(route('notifications.archive', ['id' => '__ID__'])).replace('__ID__', encodeURIComponent(id)));
 }
 
 function unarchiveNotification(id) {
-    fetch(`/notifications/unarchive/${id}`, {
-        method: 'POST',
-        headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            const el = document.getElementById('notification-' + id);
-            if (el) { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }
-        } else {
-            alert(data.message || 'Unable to unarchive notification.');
-        }
-    });
+    updateNotification(@json(route('notifications.unarchive', ['id' => '__ID__'])).replace('__ID__', encodeURIComponent(id)));
 }
 
 function deleteAllArchived() {
     if (!confirm('Delete ALL archived notifications? This cannot be undone.')) return;
-    fetch('/notifications/delete-archived', {
-        method: 'DELETE',
-        headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}', 'Accept': 'application/json' },
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) location.reload();
-        else alert(data.message || 'Unable to delete archived notifications.');
-    });
+    updateNotification(@json(route('notifications.destroy-archived')), 'DELETE');
 }
 
-// ═══ Decline (RHU) / Reject (PHO) from notification card ═══
+function submitNotificationRejection(url, reason) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = url;
+    for (const [name, value] of Object.entries({_token: @json(csrf_token()), rejection_reason: reason})) {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = name;
+        input.value = value;
+        form.appendChild(input);
+    }
+    document.body.appendChild(form);
+    window.RhuNavigation?.remember(document.getElementById('main-content'));
+    form.submit();
+}
+
 function openRejectFromNotification(id, label) {
     const verb = (label || 'Reject').toLowerCase();
     const reason = prompt(`Reason to ${verb} this transfer (optional):`);
     if (reason === null) return;
-
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '/transfers/' + id + '/reject';
-    form.innerHTML = '@csrf<input type="hidden" name="rejection_reason" value="' + reason.replace(/"/g, '&quot;') + '">';
-    document.body.appendChild(form);
-    form.submit();
+    submitNotificationRejection(@json(route('transfers.reject', ['id' => '__ID__'])).replace('__ID__', encodeURIComponent(id)), reason);
 }
 
-// ═══ Reject a pending supply request from the notification card ═══
 function rejectSupplyRequest(allocationId) {
     const reason = prompt('Reason for rejecting this request (optional):');
-    if (reason === null) return;   // user cancelled
-
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '{{ url("/allocation") }}/' + allocationId + '/reject-supply-request';
-    form.innerHTML = '@csrf<input type="hidden" name="rejection_reason" value="' +
-                     reason.replace(/"/g, '&quot;') + '">';
-    document.body.appendChild(form);
-    form.submit();
+    if (reason === null) return;
+    submitNotificationRejection(@json(route('allocation.reject_supply_request', ['id' => '__ID__'])).replace('__ID__', encodeURIComponent(allocationId)), reason);
 }
 </script>
 @endsection

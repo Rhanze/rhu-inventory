@@ -4,7 +4,7 @@
 <div style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
 
     {{-- Header Card with inline text nav --}}
-    <div class="no-print" style="
+    <div class="no-print page-heading" style="
         background: rgba(255,255,255,0.9);
         backdrop-filter: blur(12px);
         border-radius: 20px;
@@ -18,8 +18,8 @@
         gap: 16px;
     ">
         {{-- Title + inline text nav --}}
-        <div style="display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;">
-            <div>
+        <div class="page-heading-main" style="display:flex; align-items:baseline; gap:16px; flex-wrap:wrap;">
+            <div class="page-heading-title">
                 <p style="font-size:13px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#42ad8a; margin:0 0 6px 0;">Reports</p>
                 <h2 style="font-size:24px; font-weight:700; color:#0f172a; margin:0;">
                     @if(is_null(session('health_unit_id')))
@@ -31,8 +31,8 @@
             </div>
 
             {{-- Inline text nav --}}
-            <nav style="display:flex; align-items:baseline; gap:20px;">
-                <a href="{{ route('reports.index') }}" style="
+            <nav class="page-section-nav" aria-label="Report sections" style="display:flex; align-items:baseline; gap:20px;">
+                <a href="{{ route('reports.index') }}" aria-current="page" style="
                     font-size:14px; font-weight:700; text-decoration:none;
                     color:#0f5c4b; padding-bottom:4px;
                     border-bottom:2px solid #42ad8a;

@@ -9,6 +9,14 @@ use Illuminate\Support\Facades\DB;
 
 class PublicController extends Controller
 {
+    private function searchParameters(Request $request): array
+    {
+        return $request->validate([
+            'q' => ['nullable', 'string', 'max:200'],
+            'health_unit_id' => ['nullable', 'integer', 'min:1'],
+        ]);
+    }
+
     // ============================================================
     // Helper — builds the multi-word search condition
     // Each word must match at least one of the searchable columns.
@@ -63,8 +71,9 @@ class PublicController extends Controller
     // ============================================================
     public function autocomplete(Request $request)
     {
-        $search = trim($request->get('q', ''));
-        $healthUnitId = $request->get('health_unit_id');
+        $parameters = $this->searchParameters($request);
+        $search = trim($parameters['q'] ?? '');
+        $healthUnitId = $parameters['health_unit_id'] ?? null;
 
         if (strlen($search) < 2) {
             return response()->json([]);
@@ -81,8 +90,10 @@ class PublicController extends Controller
                 $query->whereExists(function ($sub) use ($healthUnitId) {
                     $sub->select(DB::raw(1))
                         ->from('inventory')
+                        ->join('health_units', 'inventory.health_unit_id', '=', 'health_units.id')
                         ->whereColumn('inventory.medicine_id', 'medicines.id')
                         ->where('inventory.health_unit_id', $healthUnitId)
+                        ->whereIn('health_units.facility_type', ['Rural Health Unit', 'RHU'])
                         ->where('inventory.available_stock', '>', 0)
                         ->whereNull('inventory.deleted_at')
                         ->where(function ($q) {
@@ -106,9 +117,9 @@ class PublicController extends Controller
             }));
 
         } catch (\Throwable $e) {
-            \Log::error('Autocomplete failed: '.$e->getMessage());
+            report($e);
 
-            return response()->json(['error' => true, 'message' => $e->getMessage()], 500);
+            return response()->json(['error' => true, 'message' => 'Medicine suggestions are temporarily unavailable. Please try again.'], 500);
         }
     }
 
@@ -117,8 +128,9 @@ class PublicController extends Controller
     // ============================================================
     public function home(Request $request)
     {
-        $q = trim($request->get('q', ''));
-        $selectedRhuId = $request->get('health_unit_id');
+        $parameters = $this->searchParameters($request);
+        $q = trim($parameters['q'] ?? '');
+        $selectedRhuId = $parameters['health_unit_id'] ?? null;
         $selectedRhuId = ($selectedRhuId !== null && $selectedRhuId !== '')
                             ? (int) $selectedRhuId
                             : null;
@@ -191,8 +203,9 @@ class PublicController extends Controller
     {
         // Block deep-links to internal-only items.
         $medicine = Medicine::where('is_dispensable', true)->findOrFail($id);
-        $healthUnitId = $request->get('health_unit_id');
-        $q = $request->get('q', '');
+        $parameters = $this->searchParameters($request);
+        $healthUnitId = $parameters['health_unit_id'] ?? null;
+        $q = $parameters['q'] ?? '';
 
         $query = DB::table('inventory')
             ->join('health_units', 'inventory.health_unit_id', '=', 'health_units.id')
@@ -216,7 +229,7 @@ class PublicController extends Controller
                 'health_units.address',
                 DB::raw('SUM(inventory.available_stock) as total_available'),
                 DB::raw('SUM(inventory.allocated_stock) as allocated_stock'),
-                DB::raw('MIN(inventory.expiration_date) as nearest_expiration')
+                DB::raw('MIN(CASE WHEN inventory.available_stock > 0 THEN inventory.expiration_date END) as nearest_expiration')
             )
             ->groupBy(
                 'health_units.id',

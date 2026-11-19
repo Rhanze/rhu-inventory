@@ -15,7 +15,8 @@ class CheckSessionRole
         }
 
         $user = User::find(session('user_id'));
-        if (! $user || ! $user->is_active || ! in_array($user->role, ['admin', 'staff', 'midwife'])) {
+        if (! $user || ! $user->is_active || ! in_array($user->role, ['admin', 'staff', 'midwife'])
+            || ($user->role === 'midwife' && ! $user->health_unit_id)) {
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 

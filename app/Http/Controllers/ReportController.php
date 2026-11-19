@@ -2,24 +2,25 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Inventory;
-use App\Models\StockLog;
 use App\Models\Allocation;
 use App\Models\DispensingRecord;
 use App\Models\HealthUnit;
-use Carbon\Carbon;
+use App\Models\Inventory;
+use App\Models\Medicine;
+use App\Models\StockLog;
+use App\Support\HistoricalDateRange;
+use Carbon\CarbonInterface;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class ReportController extends Controller
 {
     private function checkAccess()
     {
-        if (!session()->has('user_id')) {
+        if (! session()->has('user_id')) {
             return redirect()->route('login');
         }
 
-        if (!in_array(session('role'), ['admin', 'staff'])) {
+        if (! in_array(session('role'), ['admin', 'staff'])) {
             return redirect()->route('login');
         }
 
@@ -53,7 +54,7 @@ class ReportController extends Controller
         foreach ($parts as $part) {
             if (preg_match('/^(\d+)\s*-\s*(\d+)$/', $part, $m)) {
                 $start = (int) $m[1];
-                $end   = (int) $m[2];
+                $end = (int) $m[2];
 
                 if ($start > $end) {
                     [$start, $end] = [$end, $start];
@@ -81,9 +82,9 @@ class ReportController extends Controller
             foreach ($candidates as $v) {
                 $q->orWhere(function ($sub) use ($v) {
                     $sub->where('batch_no', $v)
-                        ->orWhere('batch_no', 'like', '%-'  . $v)
-                        ->orWhere('batch_no', 'like', '%-0' . $v)
-                        ->orWhere('batch_no', 'like', '%-00' . $v);
+                        ->orWhere('batch_no', 'like', '%-'.$v)
+                        ->orWhere('batch_no', 'like', '%-0'.$v)
+                        ->orWhere('batch_no', 'like', '%-00'.$v);
                 });
             }
         });
@@ -114,7 +115,7 @@ class ReportController extends Controller
         $inventories = $this->buildInventoryQuery($request)->get();
 
         $headers = ['ID', 'Batch No.', 'Medicine', 'Dosage', 'Dosage Form', 'Packaging',
-                    'Available', 'Allocated', 'Dispensed', 'Storage Location', 'Expiration Date'];
+            'Available', 'Allocated', 'Dispensed', 'Storage Location', 'Expiration Date'];
         if (is_null(session('health_unit_id'))) {
             $headers[] = 'RHU';
         }
@@ -124,7 +125,7 @@ class ReportController extends Controller
 
             $packParts = [];
             if ($med && $med->pieces_per_pack && $med->unit) {
-                $packParts[] = $med->pieces_per_pack . ' ' . $med->unit;
+                $packParts[] = $med->pieces_per_pack.' '.$med->unit;
             } elseif ($med && $med->unit) {
                 $packParts[] = $med->unit;
             }
@@ -149,11 +150,12 @@ class ReportController extends Controller
             if (is_null(session('health_unit_id'))) {
                 $row[] = $inv->healthUnit->name ?? '';
             }
+
             return $row;
         });
 
         return $this->streamCsv(
-            'inventory_report_' . now()->format('Ymd_His') . '.csv',
+            'inventory_report_'.now()->format('Ymd_His').'.csv',
             $headers,
             $rows
         );
@@ -161,43 +163,42 @@ class ReportController extends Controller
 
     private function buildInventoryQuery(Request $request)
     {
-        $rhuFilter    = $request->rhu_filter;
+        $rhuFilter = $request->rhu_filter;
         $healthUnitId = session('health_unit_id');
         $expiryFilter = $request->expiry_filter;
-        $category     = $request->category;
+        $category = $request->category;
 
         $batchFilters = $this->parseBatchInput($request, Inventory::class);
 
         return Inventory::with(['medicine', 'healthUnit'])
             ->select('inventory.*')
             ->selectSub(
-                DispensingRecord::selectRaw('COALESCE(SUM(quantity_dispensed), 0)')
-                    ->whereColumn('inventory.medicine_id', 'dispensing_records.medicine_id')
-                    ->whereColumn('inventory.health_unit_id', 'dispensing_records.health_unit_id'),
+                StockLog::selectRaw('COALESCE(SUM(quantity_added), 0)')
+                    ->whereColumn('inventory.id', 'stock_logs.inventory_id')
+                    ->whereColumn('inventory.medicine_id', 'stock_logs.medicine_id')
+                    ->whereColumn('inventory.health_unit_id', 'stock_logs.health_unit_id')
+                    ->whereNull('stock_logs.voided_at')->whereHas('dispensingRecord'),
                 'total_dispensed'
             )
             ->when($healthUnitId, fn ($q) => $q->where('inventory.health_unit_id', $healthUnitId))
             ->when(is_null($healthUnitId) && $rhuFilter, fn ($q) => $q->where('inventory.health_unit_id', $rhuFilter))
-            ->when(!empty($batchFilters), fn ($q) => $q->whereIn('inventory.batch_no', $batchFilters))
+            ->when(trim((string) $request->input('batch_input', '')) !== '', fn ($q) => $q->whereIn('inventory.batch_no', $batchFilters))
             ->when($category, function ($q) use ($category) {
                 $q->whereHas('medicine', fn ($mq) => $mq->where('category', $category));
             })
-            ->when($expiryFilter === 'near_expiry', fn ($q) =>
-                $q->whereNotNull('inventory.expiration_date')
-                  ->whereDate('inventory.expiration_date', '<=', now()->addDays(180))
-                  ->whereDate('inventory.expiration_date', '>=', now())
+            ->when($expiryFilter === 'near_expiry', fn ($q) => $q->expiringWithin())
+            ->when($expiryFilter === 'monitor', fn ($q) => $q->whereDate('inventory.expiration_date', '>', today()->addDays(Inventory::NEAR_EXPIRY_DAYS))
+                ->whereDate('inventory.expiration_date', '<=', today()->addDays(180))
             )
-            ->when($expiryFilter === 'expired', fn ($q) =>
-                $q->whereNotNull('inventory.expiration_date')
-                  ->whereDate('inventory.expiration_date', '<', now())
+            ->when($expiryFilter === 'expired', fn ($q) => $q->whereNotNull('inventory.expiration_date')
+                ->whereDate('inventory.expiration_date', '<', now())
             )
-            ->when($expiryFilter === 'not_expired', fn ($q) =>
-                $q->where(function ($sub) {
-                    $sub->whereNull('inventory.expiration_date')
-                        ->orWhereDate('inventory.expiration_date', '>', now()->addDays(180));
-                })
+            ->when($expiryFilter === 'not_expired', fn ($q) => $q->where(function ($sub) {
+                $sub->whereNull('inventory.expiration_date')
+                    ->orWhereDate('inventory.expiration_date', '>', now()->addDays(180));
+            })
             )
-            ->orderByDesc('id');
+            ->when($expiryFilter === 'near_expiry', fn ($q) => $q->fefo(), fn ($q) => $q->orderByDesc('id'));
     }
 
     // ========== STOCK LOGS REPORT ==========
@@ -223,7 +224,7 @@ class ReportController extends Controller
         $stockLogs = $this->buildStockLogsQuery($request)->get();
 
         $headers = ['ID', 'Batch No.', 'Medicine', 'Type', 'Dosage', 'Dosage Form',
-                    'Packaging', 'Quantity', 'Storage Location', 'Date Added', 'Added By'];
+            'Packaging', 'Quantity', 'Storage Location', 'Date Added', 'Added By'];
         if (is_null(session('health_unit_id'))) {
             $headers[] = 'RHU';
         }
@@ -231,12 +232,13 @@ class ReportController extends Controller
         $rows = $stockLogs->map(function ($log) {
             $med = $log->medicine;
 
-            $isRelease = stripos($log->remarks ?? '', 'Released') !== false;
-            $typeLabel = $isRelease ? 'Stock Out' : 'Stock In';
+            $typeLabel = match ($log->movement_direction) {
+                'release' => 'Stock Out', 'addition' => 'Stock In', default => 'Unknown',
+            };
 
             $packParts = [];
             if ($med && $med->pieces_per_pack && $med->unit) {
-                $packParts[] = $med->pieces_per_pack . ' ' . $med->unit;
+                $packParts[] = $med->pieces_per_pack.' '.$med->unit;
             } elseif ($med && $med->unit) {
                 $packParts[] = $med->unit;
             }
@@ -246,7 +248,7 @@ class ReportController extends Controller
             $packText = $packParts ? implode(' / ', $packParts) : '';
 
             $unit = $med->unit ?? null;
-            $qtyText = $log->quantity_added . ($unit ? ' ' . $unit : '');
+            $qtyText = $log->quantity_added.($unit ? ' '.$unit : '');
 
             $row = [
                 $log->id,
@@ -264,11 +266,12 @@ class ReportController extends Controller
             if (is_null(session('health_unit_id'))) {
                 $row[] = $log->healthUnit->name ?? '';
             }
+
             return $row;
         });
 
         return $this->streamCsv(
-            'stock_logs_report_' . now()->format('Ymd_His') . '.csv',
+            'stock_logs_report_'.now()->format('Ymd_His').'.csv',
             $headers,
             $rows
         );
@@ -276,31 +279,25 @@ class ReportController extends Controller
 
     private function buildStockLogsQuery(Request $request)
     {
-        $rhuFilter    = $request->rhu_filter;
+        $historyRange = HistoricalDateRange::fromRequest($request);
+        $rhuFilter = $request->rhu_filter;
         $healthUnitId = session('health_unit_id');
-        $category     = $request->category;
-        $type         = $request->type;   // ← ADDED
+        $category = $request->category;
+        $type = $request->type;   // ← ADDED
 
         $batchFilters = $this->parseBatchInput($request, StockLog::class);
 
-        return StockLog::with(['medicine', 'addedByUser', 'healthUnit'])
+        return StockLog::whereNull('voided_at')->with(['medicine', 'addedByUser', 'healthUnit'])
             ->when($healthUnitId, fn ($q) => $q->where('health_unit_id', $healthUnitId))
             ->when(is_null($healthUnitId) && $rhuFilter, fn ($q) => $q->where('health_unit_id', $rhuFilter))
-            ->when(!empty($batchFilters), fn ($q) => $q->whereIn('batch_no', $batchFilters))
+            ->when(trim((string) $request->input('batch_input', '')) !== '', fn ($q) => $q->whereIn('batch_no', $batchFilters))
             ->when($category, function ($q) use ($category) {
                 $q->whereHas('medicine', fn ($mq) => $mq->where('category', $category));
             })
-            // Stock In — remarks is NULL or does NOT contain "released"
-            ->when($type === 'stock_in', function ($q) {
-                $q->where(function ($sub) {
-                    $sub->whereNull('remarks')
-                        ->orWhereRaw('LOWER(remarks) NOT LIKE ?', ['%released%']);
-                });
-            })
-            // Stock Out — remarks contains "released"
-            ->when($type === 'stock_out', function ($q) {
-                $q->whereRaw('LOWER(remarks) LIKE ?', ['%released%']);
-            })
+            ->when($type === 'stock_in', fn ($q) => $q->additions())
+            ->when($type === 'stock_out', fn ($q) => $q->releases())
+            ->when($historyRange->isFiltered(), fn ($q) => $historyRange->apply($q, 'date_added'))
+            ->orderByDesc('date_added')
             ->orderByDesc('id');
     }
 
@@ -311,11 +308,12 @@ class ReportController extends Controller
             return $redirect;
         }
 
-        $allocations = $this->buildAllocationQuery($request)->get();
+        $historyRange = HistoricalDateRange::fromRequest($request);
+        $allocations = $this->buildAllocationQuery($request, $historyRange)->get();
 
         $healthUnits = HealthUnit::orderBy('name')->get();
 
-        return view('reports.allocation', compact('allocations', 'healthUnits'));
+        return view('reports.allocation', compact('allocations', 'healthUnits', 'historyRange'));
     }
 
     public function allocationCsv(Request $request)
@@ -324,7 +322,7 @@ class ReportController extends Controller
             return $redirect;
         }
 
-        $allocations = $this->buildAllocationQuery($request)->get();
+        $allocations = $this->buildAllocationQuery($request, HistoricalDateRange::fromRequest($request))->get();
 
         $headers = ['ID', 'Medicine', 'Destination', 'Quantity', 'Date Allocated', 'Allocated By'];
         if (is_null(session('health_unit_id'))) {
@@ -343,24 +341,27 @@ class ReportController extends Controller
             if (is_null(session('health_unit_id'))) {
                 $row[] = $alloc->healthUnit->name ?? '';
             }
+
             return $row;
         });
 
         return $this->streamCsv(
-            'allocation_report_' . now()->format('Ymd_His') . '.csv',
+            'allocation_report_'.now()->format('Ymd_His').'.csv',
             $headers,
             $rows
         );
     }
 
-    private function buildAllocationQuery(Request $request)
+    private function buildAllocationQuery(Request $request, HistoricalDateRange $historyRange)
     {
-        $rhuFilter    = $request->rhu_filter;
+        $rhuFilter = $request->rhu_filter;
         $healthUnitId = session('health_unit_id');
 
         return Allocation::with(['medicine', 'allocatedBy', 'healthUnit', 'destinationHealthUnit'])
             ->when($healthUnitId, fn ($q) => $q->where('health_unit_id', $healthUnitId))
             ->when(is_null($healthUnitId) && $rhuFilter, fn ($q) => $q->where('health_unit_id', $rhuFilter))
+            ->when($historyRange->isFiltered(), fn ($q) => $historyRange->apply($q, 'date_allocated'))
+            ->orderByDesc('date_allocated')
             ->orderByDesc('id');
     }
 
@@ -376,11 +377,17 @@ class ReportController extends Controller
                 ->with('error', 'Dispensing reports are only available at the RHU level.');
         }
 
-        $records = $this->buildDispensingQuery($request)->get();
-
+        $query = $this->buildDispensingQuery($request);
+        $records = $query->get();
+        $facilityRecordCount = $records->count();
+        $barangayBreakdown = (clone $query)->reorder()->barangayBreakdown()->get();
         $healthUnits = HealthUnit::orderBy('name')->get();
+        $barangayFilterOptions = DispensingRecord::qualifying()->where('health_unit_id', session('health_unit_id'))
+            ->whereNotNull('barangay')->pluck('barangay')->map(fn ($area) => trim($area))->filter()
+            ->unique(fn ($area) => mb_strtolower($area))->sort()->values();
+        $selectedMedicine = $request->filled('medicine_id') ? Medicine::withTrashed()->find($request->medicine_id) : null;
 
-        return view('reports.dispensing', compact('records', 'healthUnits'));
+        return view('reports.dispensing', compact('records', 'healthUnits', 'facilityRecordCount', 'barangayBreakdown', 'barangayFilterOptions', 'selectedMedicine'));
     }
 
     public function dispensingCsv(Request $request)
@@ -396,7 +403,7 @@ class ReportController extends Controller
 
         $records = $this->buildDispensingQuery($request)->get();
 
-        $headers = ['ID', 'Medicine', 'Quantity', 'Doctor', 'Date Dispensed', 'Dispensed By'];
+        $headers = ['ID', 'Medicine', 'Quantity', 'Doctor', 'Date Dispensed', 'Dispensed By', 'Barangay served', 'Stock source'];
         if (is_null(session('health_unit_id'))) {
             $headers[] = 'RHU';
         }
@@ -406,18 +413,21 @@ class ReportController extends Controller
                 $rec->id,
                 $rec->medicine->medicine_name ?? '',
                 $rec->quantity_dispensed,
-                $rec->doctor_name,
+                $rec->prescribingDoctorName(),
                 $rec->date_dispensed,
                 $rec->dispensedByUser->name ?? '',
+                $rec->barangay,
+                $rec->stock_source ?: 'rhu',
             ];
             if (is_null(session('health_unit_id'))) {
                 $row[] = $rec->healthUnit->name ?? '';
             }
+
             return $row;
         });
 
         return $this->streamCsv(
-            'dispensing_report_' . now()->format('Ymd_His') . '.csv',
+            'dispensing_report_'.now()->format('Ymd_His').'.csv',
             $headers,
             $rows
         );
@@ -425,27 +435,41 @@ class ReportController extends Controller
 
     private function buildDispensingQuery(Request $request)
     {
-        $rhuFilter    = $request->rhu_filter;
+        $historyRange = HistoricalDateRange::fromRequest($request);
+        $rhuFilter = $request->rhu_filter;
         $healthUnitId = session('health_unit_id');
+        $request->validate(['barangay' => 'nullable|string|max:100', 'barangay_missing' => 'nullable|boolean',
+            'medicine_id' => 'nullable|integer|exists:medicines,id']);
+        $barangay = trim((string) $request->barangay);
+        if ($barangay !== '' && $request->boolean('barangay_missing')) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['barangay' => 'Choose a barangay or records without a saved barangay.']);
+        }
 
-        return DispensingRecord::with(['medicine', 'dispensedByUser', 'healthUnit'])
+        return DispensingRecord::qualifying()->with(['medicine', 'dispensedByUser', 'healthUnit'])
             ->when($healthUnitId, fn ($q) => $q->where('health_unit_id', $healthUnitId))
             ->when(is_null($healthUnitId) && $rhuFilter, fn ($q) => $q->where('health_unit_id', $rhuFilter))
+            ->when($barangay !== '', fn ($q) => $q->forBarangays([$barangay]))
+            ->when($request->boolean('barangay_missing'), fn ($q) => $q->withoutRecordedBarangay())
+            ->when($request->filled('medicine_id'), fn ($q) => $q->where('medicine_id', $request->medicine_id))
+            ->when($historyRange->isFiltered(), fn ($q) => $historyRange->apply($q, 'date_dispensed'))
+            ->orderByDesc('date_dispensed')
             ->orderByDesc('id');
     }
 
-    // ========== NEAR EXPIRY REPORT (180 days) ==========
+    // ========== NEAR EXPIRY REPORT ==========
     public function nearExpiryReport(Request $request)
     {
         if ($redirect = $this->checkAccess()) {
             return $redirect;
         }
 
-        $inventories = $this->buildNearExpiryQuery($request)->get();
+        $nearExpiryFrom = today();
+        $nearExpiryThrough = $nearExpiryFrom->copy()->addDays(Inventory::NEAR_EXPIRY_DAYS);
+        $inventories = $this->buildNearExpiryQuery($request, $nearExpiryFrom)->get();
 
         $healthUnits = HealthUnit::orderBy('name')->get();
 
-        return view('reports.near_expiry', compact('inventories', 'healthUnits'));
+        return view('reports.near_expiry', compact('inventories', 'healthUnits', 'nearExpiryFrom', 'nearExpiryThrough'));
     }
 
     public function nearExpiryCsv(Request $request)
@@ -454,51 +478,51 @@ class ReportController extends Controller
             return $redirect;
         }
 
-        $inventories = $this->buildNearExpiryQuery($request)->get();
+        $nearExpiryFrom = today();
+        $inventories = $this->buildNearExpiryQuery($request, $nearExpiryFrom)->get();
 
         $headers = ['ID', 'Batch No.', 'Medicine', 'Available Stock', 'Expiration Date', 'Status'];
         if (is_null(session('health_unit_id'))) {
-            $headers[] = 'RHU';
+            $headers[] = 'Facility';
         }
 
-        $rows = $inventories->map(function ($inv) {
-            $status = Carbon::parse($inv->expiration_date)->lt(Carbon::today()) ? 'Expired' : 'Near Expiry';
+        $rows = $inventories->map(function ($inv) use ($nearExpiryFrom) {
+            $status = $inv->expiration_date->isSameDay($nearExpiryFrom) ? 'Expires today' : 'Near Expiry';
             $row = [
                 $inv->id,
                 $inv->batch_no ?? '',
                 $inv->medicine->medicine_name ?? '',
                 $inv->available_stock,
-                $inv->expiration_date,
+                $inv->expiration_date->toDateString(),
                 $status,
             ];
             if (is_null(session('health_unit_id'))) {
                 $row[] = $inv->healthUnit->name ?? '';
             }
+
             return $row;
         });
 
         return $this->streamCsv(
-            'near_expiry_report_' . now()->format('Ymd_His') . '.csv',
+            'near_expiry_report_'.now()->format('Ymd_His').'.csv',
             $headers,
             $rows
         );
     }
 
-    private function buildNearExpiryQuery(Request $request)
+    private function buildNearExpiryQuery(Request $request, CarbonInterface $from)
     {
-        $rhuFilter    = $request->rhu_filter;
+        $rhuFilter = $request->rhu_filter;
         $healthUnitId = session('health_unit_id');
-        $sixMonths    = Carbon::today()->addDays(180);
 
         $batchFilters = $this->parseBatchInput($request, Inventory::class);
 
         return Inventory::with(['medicine', 'healthUnit'])
             ->when($healthUnitId, fn ($q) => $q->where('health_unit_id', $healthUnitId))
             ->when(is_null($healthUnitId) && $rhuFilter, fn ($q) => $q->where('health_unit_id', $rhuFilter))
-            ->when(!empty($batchFilters), fn ($q) => $q->whereIn('batch_no', $batchFilters))
-            ->whereNotNull('expiration_date')
-            ->whereDate('expiration_date', '<=', $sixMonths)
-            ->orderBy('expiration_date', 'asc');
+            ->when(trim((string) $request->input('batch_input', '')) !== '', fn ($q) => $q->whereIn('batch_no', $batchFilters))
+            ->expiringWithin(from: $from)
+            ->fefo();
     }
 
     // ========== CSV STREAM HELPER ==========

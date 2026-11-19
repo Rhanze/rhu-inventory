@@ -2,44 +2,48 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\HealthUnit;
 use App\Helpers\ActivityLogger;
-use Illuminate\Http\Request;
+use App\Models\ActivityLog;
+use App\Models\HealthUnit;
+use App\Models\User;
 use Illuminate\Database\QueryException;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class RhuController extends Controller
 {
     private function checkAdminAccess()
     {
-        if (!session()->has('user_id')) {
+        if (! session()->has('user_id')) {
             return redirect()->route('login');
         }
 
-        if (session('role') !== 'admin') {
-            return redirect()->route('dashboard')->with('error', 'Only admin can access the RHU module.');
-        }
+        abort_unless(session('role') === 'admin' && is_null(session('health_unit_id')), 403,
+            'Only PHO administrators can manage RHU reference records.');
 
         return null;
     }
 
     public function index(Request $request)
     {
-    if ($redirect = $this->checkAdminAccess()) {
-        return $redirect;
-    }
+        if ($redirect = $this->checkAdminAccess()) {
+            return $redirect;
+        }
 
-    $search = $request->search;
+        $search = $request->search;
 
-    $healthUnits = HealthUnit::when($search, function ($query, $search) {
-        $query->where('name', 'like', "%{$search}%")
-              ->orWhere('municipality', 'like', "%{$search}%")
-              ->orWhere('address', 'like', "%{$search}%");
-    })
-    ->orderBy('name', 'asc')
-    ->paginate(config('pagination.inventory', 20))
-    ->appends(['search' => $search]);
+        $healthUnits = HealthUnit::when($search, function ($query, $search) {
+            $query->where('name', 'like', "%{$search}%")
+                ->orWhere('municipality', 'like', "%{$search}%")
+                ->orWhere('address', 'like', "%{$search}%");
+        })
+            ->orderBy('name', 'asc')
+            ->orderBy('id', 'asc')
+            ->paginate(config('pagination.inventory', 20))
+            ->appends(['search' => $search]);
 
-    return view('rhu.index', compact('healthUnits'));
+        return view('rhu.index', compact('healthUnits'));
     }
 
     public function create()
@@ -67,12 +71,13 @@ class RhuController extends Controller
             'name' => $request->name,
             'municipality' => $request->municipality,
             'address' => $request->address,
+            'facility_type' => 'Rural Health Unit',
         ]);
 
         ActivityLogger::log(
             'RHU',
             'Create',
-            'Added RHU: ' . $healthUnit->name . '.',
+            'Added RHU: '.$healthUnit->name.'.',
             $healthUnit->id
         );
 
@@ -114,53 +119,67 @@ class RhuController extends Controller
         ActivityLogger::log(
             'RHU',
             'Update',
-            'Updated RHU: ' . $oldName . ' to ' . $healthUnit->name . '.',
+            'Updated RHU: '.$oldName.' to '.$healthUnit->name.'.',
             $healthUnit->id
         );
 
         return redirect()->route('rhu.index')->with('success', 'RHU updated successfully.');
     }
 
-public function destroy($id)
-{
-    if ($redirect = $this->checkAdminAccess()) {
-        return $redirect;
+    public function destroy($id)
+    {
+        if ($redirect = $this->checkAdminAccess()) {
+            return $redirect;
+        }
+
+        $healthUnit = HealthUnit::findOrFail($id);
+
+        if (HealthUnit::count() <= 1) {
+            return redirect()->route('rhu.index')
+                ->with('error', 'You cannot delete the last remaining RHU.');
+        }
+
+        if ((int) session('health_unit_id') === (int) $healthUnit->id) {
+            return redirect()->route('rhu.index')
+                ->with('error', 'You cannot delete the RHU assigned to your current account.');
+        }
+
+        $assignedUsers = User::where('health_unit_id', $healthUnit->id)->count();
+        if ($assignedUsers > 0) {
+            return redirect()->route('rhu.index')
+                ->with('error', "This RHU cannot be deleted because it is still assigned to {$assignedUsers} user account(s).");
+        }
+
+        if ($healthUnit->children()->exists() || $this->hasOperationalRecords($healthUnit->id)) {
+            return redirect()->route('rhu.index')->with('error', 'This RHU has operational or clinical history and cannot be deleted.');
+        }
+
+        try {
+            DB::transaction(function () use ($healthUnit) {
+                ActivityLog::where('health_unit_id', $healthUnit->id)->update(['health_unit_id' => null]);
+                $healthUnit->delete();
+                ActivityLogger::log('RHU', 'Delete', 'Deleted RHU: '.$healthUnit->name.'.');
+            });
+        } catch (QueryException $e) {
+            return redirect()->route('rhu.index')->with('error', 'This RHU is referenced by existing records and cannot be deleted.');
+        }
+
+        return redirect()->route('rhu.index')->with('success', 'RHU deleted successfully.');
     }
 
-    $healthUnit = HealthUnit::findOrFail($id);
+    private function hasOperationalRecords(int $healthUnitId): bool
+    {
+        foreach (['inventory', 'stock_logs', 'dispensing_records', 'public_users', 'allocations', 'disease_reports',
+            'vaccination_schedules', 'immunization_records', 'prenatal_visits', 'postpartum_visits',
+            'family_planning', 'calendar_events', 'rhu_immunization_schedules', 'cold_chain_logs', 'aefi_reports'] as $table) {
+            if (Schema::hasTable($table) && Schema::hasColumn($table, 'health_unit_id')
+                && DB::table($table)->where('health_unit_id', $healthUnitId)->exists()) {
+                return true;
+            }
+        }
 
-    if (HealthUnit::count() <= 1) {
-        return redirect()->route('rhu.index')
-            ->with('error', 'You cannot delete the last remaining RHU.');
+        return DB::table('transfer_requests')->where('from_health_unit_id', $healthUnitId)
+            ->orWhere('to_health_unit_id', $healthUnitId)->exists()
+            || DB::table('allocations')->where('destination_health_unit_id', $healthUnitId)->exists();
     }
-
-    if ((int) session('health_unit_id') === (int) $healthUnit->id) {
-        return redirect()->route('rhu.index')
-            ->with('error', 'You cannot delete the RHU assigned to your current account.');
-    }
-
-    $assignedUsers = \App\Models\User::where('health_unit_id', $healthUnit->id)->count();
-    if ($assignedUsers > 0) {
-        return redirect()->route('rhu.index')
-            ->with('error', "This RHU cannot be deleted because it is still assigned to {$assignedUsers} user account(s).");
-    }
-
-    // ✅ Manually set health_unit_id to NULL for all related activity logs
-    \App\Models\ActivityLog::where('health_unit_id', $healthUnit->id)
-        ->update(['health_unit_id' => null]);
-
-    // If you have other related tables (inventory, stock_logs, etc.), do the same here
-    // \App\Models\Inventory::where('health_unit_id', $healthUnit->id)->update(['health_unit_id' => null]);
-
-    ActivityLogger::log(
-        'RHU',
-        'Delete',
-        'Deleted RHU: ' . $healthUnit->name . '.',
-        $healthUnit->id
-    );
-
-    $healthUnit->delete();
-
-    return redirect()->route('rhu.index')->with('success', 'RHU deleted successfully.');
-}
 }

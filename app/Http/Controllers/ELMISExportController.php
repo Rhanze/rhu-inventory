@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\HealthUnit;
 use App\Services\ELMISExportService;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ELMISExportController extends Controller
 {
@@ -50,7 +51,7 @@ class ELMISExportController extends Controller
         $request->validate([
             'health_unit_id' => 'nullable|exists:health_units,id',
             'date_from' => 'nullable|date',
-            'date_to' => 'nullable|date|after_or_equal:date_from',
+            'date_to' => ['nullable', 'date', Rule::when($request->filled('date_from'), 'after_or_equal:date_from')],
         ]);
 
         $healthUnitId = $this->exportHealthUnit($request);
@@ -69,7 +70,7 @@ class ELMISExportController extends Controller
         $request->validate([
             'health_unit_id' => 'nullable|exists:health_units,id',
             'date_from' => 'nullable|date',
-            'date_to' => 'nullable|date|after_or_equal:date_from',
+            'date_to' => ['nullable', 'date', Rule::when($request->filled('date_from'), 'after_or_equal:date_from')],
         ]);
 
         $healthUnitId = $this->exportHealthUnit($request);

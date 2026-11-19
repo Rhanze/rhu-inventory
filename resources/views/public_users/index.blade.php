@@ -3,33 +3,36 @@
 @section('content')
 <div style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
 
-    <div class="no-print" style="
+    <div class="no-print mw-page-card" style="
         background: rgba(255,255,255,0.9); backdrop-filter: blur(12px);
         border-radius:20px; padding:24px 28px; border:1px solid rgba(255,255,255,0.4);
         box-shadow:0 8px 20px rgba(0,0,0,0.06);
         display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px;">
         <div>
-            <p style="font-size:13px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#42ad8a; margin:0 0 6px 0;">Patient Registry</p>
-            <h2 style="font-size:24px; font-weight:700; color:#0f172a; margin:0;">Registered Patients</h2>
+            <p style="font-size:1.0625rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#42ad8a; margin:0 0 6px 0;">Patient Registry</p>
+            <h2 style="font-size:1.5rem; font-weight:700; color:#0f172a; margin:0;">Registered Patients</h2>
         </div>
-        <a href="{{ route('public_users.create') }}" style="
-            display:inline-flex; align-items:center; gap:6px; font-size:14px; font-weight:600;
+        <div class="no-print" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <a href="{{ route('public_users.create') }}" style="
+            display:inline-flex; align-items:center; gap:6px; font-size:1.0625rem; font-weight:600;
             padding:9px 16px; border-radius:10px; background:#42ad8a; color:#ffffff; text-decoration:none;">
             + Register Patient
         </a>
+            @include('imports._link', ['section' => 'patients'])
+        </div>
     </div>
 
-    <div class="no-print" style="
+    <div class="no-print mw-page-card" style="
         background: rgba(255,255,255,0.9); backdrop-filter: blur(8px);
         border-radius:16px; padding:22px 26px; border:1px solid rgba(255,255,255,0.4);
         box-shadow:0 4px 12px rgba(0,0,0,0.04);">
         <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;">
 
             <div style="flex:2 1 240px; min-width:180px; position:relative;">
-                <label style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">Search</label>
+                <label style="display:block; margin-bottom:6px; font-size:1.0625rem; font-weight:600; color:#0f172a;">Search</label>
                 <input type="text" id="pf-search" value="{{ request('search') }}"
                        placeholder="Name or PhilHealth ID" autocomplete="off"
-                       style="height:44px; padding:0 14px; font-size:15px; border:2px solid #bec6cf; border-radius:10px; outline:none; width:100%; box-sizing:border-box;">
+                       style="min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; outline:none; width:100%; box-sizing:border-box;">
                 <div id="pf-suggestions"
                      style="display:none; position:absolute; top:calc(100% + 4px); left:0; right:0;
                             background:white; border:1px solid #e2e8f0; border-radius:10px;
@@ -39,9 +42,9 @@
             </div>
 
             <div style="flex:1 1 180px; min-width:150px;">
-                <label style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">Barangay</label>
-                <select id="pf-barangay" style="height:44px; padding:0 14px; font-size:15px; border:2px solid #bec6cf; border-radius:10px; outline:none; width:100%; box-sizing:border-box; background:white;">
-                    <option value="">All Barangays</option>
+                <label style="display:block; margin-bottom:6px; font-size:1.0625rem; font-weight:600; color:#0f172a;">Barangay</label>
+                <select id="pf-barangay" @disabled(session('role') === 'midwife' && $barangays->isEmpty()) style="min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; outline:none; width:100%; box-sizing:border-box; background:white;">
+                    <option value="">{{ session('role') === 'midwife' ? ($barangays->isEmpty() ? 'No assigned barangays' : 'All my patients') : 'All Barangays' }}</option>
                     @foreach($barangays as $b)
                         <option value="{{ $b }}" {{ request('barangay') === $b ? 'selected' : '' }}>{{ $b }}</option>
                     @endforeach
@@ -49,8 +52,8 @@
             </div>
 
             <div style="flex:1 1 200px; min-width:170px;">
-                <label style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">Age Group</label>
-                <select id="pf-age-group" style="height:44px; padding:0 14px; font-size:15px; border:2px solid #bec6cf; border-radius:10px; outline:none; width:100%; box-sizing:border-box; background:white;">
+                <label style="display:block; margin-bottom:6px; font-size:1.0625rem; font-weight:600; color:#0f172a;">Age Group</label>
+                <select id="pf-age-group" style="min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; outline:none; width:100%; box-sizing:border-box; background:white;">
                     <option value="">All Ages</option>
                     <option value="infant"     {{ request('age_group') === 'infant'     ? 'selected' : '' }}>Infants (0–11 mo)</option>
                     <option value="child"      {{ request('age_group') === 'child'      ? 'selected' : '' }}>Children (1–4 y)</option>
@@ -66,17 +69,17 @@
     <div style="
         background: rgba(255,255,255,0.9); border-radius:20px; padding:0;
         border:1px solid rgba(255,255,255,0.4);
-        box-shadow:0 8px 20px rgba(0,0,0,0.06); overflow:hidden;">
-        <table style="width:100%; border-collapse:collapse; font-size:14px;">
+        box-shadow:0 8px 20px rgba(0,0,0,0.06); overflow-x:auto;">
+        <table class="mw-mobile-records" style="width:100%; min-width:58rem; border-collapse:collapse; font-size:1.0625rem;">
             <thead>
                 <tr style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
-                    <th style="padding:14px 16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569;">#</th>
-                    <th style="padding:14px 16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569;">Name</th>
-                    <th style="padding:14px 16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569;">Age</th>
-                    <th style="padding:14px 16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569;">Barangay</th>
-                    <th style="padding:14px 16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569;">PhilHealth ID</th>
-                    <th style="padding:14px 16px; text-align:left; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569;">Contact</th>
-                    <th class="no-print" style="padding:14px 16px; text-align:center; font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569;">Actions</th>
+                    <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569;">#</th>
+                    <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569;">Name</th>
+                    <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569;">Age</th>
+                    <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569;">Barangay</th>
+                    <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569;">PhilHealth ID</th>
+                    <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569;">Contact</th>
+                    <th class="no-print" style="padding:14px 16px; text-align:center; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569;">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -88,10 +91,10 @@
                         <td style="padding:14px 16px; font-weight:600; color:#0f172a;">
                             {{ $m->full_name }}
                             @if($m->is_pregnant)
-                                <span style="margin-left:6px; font-size:11px; font-weight:700; background:#fce7f3; color:#9d174d; padding:1px 8px; border-radius:999px;">🤰 Pregnant</span>
+                                <span style="margin-left:6px; font-size:1.0625rem; font-weight:700; background:#fce7f3; color:#9d174d; padding:1px 8px; border-radius:999px;">🤰 Pregnant</span>
                             @endif
                             @if($m->is_infant)
-                                <span style="margin-left:6px; font-size:11px; font-weight:700; background:#fef3c7; color:#92400e; padding:1px 8px; border-radius:999px;">👶 Infant</span>
+                                <span style="margin-left:6px; font-size:1.0625rem; font-weight:700; background:#fef3c7; color:#92400e; padding:1px 8px; border-radius:999px;">👶 Infant</span>
                             @endif
                         </td>
                         <td style="padding:14px 16px; color:#334155; font-weight:600;">{{ $m->age_display }}</td>
@@ -200,7 +203,7 @@
         suggestBox.innerHTML = '';
         items.forEach(function (item, i) {
             var row = document.createElement('div');
-            row.style.cssText = 'padding:10px 14px; cursor:pointer; font-size:14px; color:#0f172a; border-bottom:1px solid #f1f5f9;';
+            row.style.cssText = 'padding:10px 14px; cursor:pointer; font-size:1.0625rem; color:#0f172a; border-bottom:1px solid #f1f5f9;';
             row.textContent = item.text;
             row.addEventListener('mouseenter', function () { activeIndex = i; highlightRows(); });
             row.addEventListener('mousedown', function (e) { e.preventDefault(); pickSuggestion(i); });

@@ -3,9 +3,9 @@
 namespace App\Services;
 
 use App\Models\Allocation;
-use App\Models\DispensingRecord;
 use App\Models\HealthUnit;
 use App\Models\Inventory;
+use App\Models\Medicine;
 use App\Models\StockLog;
 use Illuminate\Support\Facades\DB;
 
@@ -15,14 +15,14 @@ class DashboardService
 
     private ?int $healthUnitId = null;
 
-    public function getDashboardData(bool $isPHOAdmin = false, ?int $healthUnitId = null): array
+    public function getDashboardData(bool $isPHOAdmin = false, ?int $healthUnitId = null, int $usageDays = 90, string $usageRanking = 'trend'): array
     {
         $this->isPHOAdmin = $isPHOAdmin;
         $this->healthUnitId = $healthUnitId;
 
         return [
             'summary' => $this->getSummary(),
-            'utilization' => $this->getUtilizationData(),
+            'utilization' => $this->getUtilizationData($usageDays, $usageRanking),
             'stockMovement' => $this->getStockMovementData(),
             'expirationRisk' => $this->getExpirationRiskData(),
             'redistribution' => $this->getRedistributionData(),
@@ -38,12 +38,8 @@ class DashboardService
 
         $totalItems = (clone $scoped())->where('available_stock', '>', 0)->count();
         $totalStock = (clone $scoped())->sum('available_stock');
-        $lowStock = (clone $scoped())->where('available_stock', '<=', 10)
-            ->where('available_stock', '>', 0)->count();
-        $nearExpiry = (clone $scoped())->where('expiration_date', '<=', now()->addDays(30))
-            ->where('expiration_date', '>', now())
-            ->where('available_stock', '>', 0)
-            ->count();
+        $lowStock = $scoped()->stockLevel('low')->count();
+        $nearExpiry = $scoped()->expiringWithin()->count();
 
         $totalRHUs = HealthUnit::where('facility_type', 'Rural Health Unit')
             ->orWhere('facility_type', 'RHU')
@@ -61,129 +57,91 @@ class DashboardService
     // ================================================================
     // Utilization — Top dispensed medicines (90-day window)
     // ================================================================
-    private function getUtilizationData(): array
+    private function getUtilizationData(int $windowDays = 90, string $ranking = 'trend'): array
     {
-        $windowDays = 90;
+        $windowDays = in_array($windowDays, [30, 90, 180], true) ? $windowDays : 90;
+        $ranking = $ranking === 'usage' ? 'usage' : 'trend';
+        $today = today();
+        $windowStart = $today->copy()->subDays($windowDays - 1)->toDateString();
+        $currentStart = $today->copy()->subDays(29)->toDateString();
+        $previousStart = $today->copy()->subDays(59)->toDateString();
+        $previousEnd = $today->copy()->subDays(30)->toDateString();
 
-        $records = DispensingRecord::query()
-            ->join('medicines', 'medicines.id', '=', 'dispensing_records.medicine_id')
-            ->whereNull('medicines.deleted_at')
-            ->where('dispensing_records.date_dispensed', '>=', now()->subDays($windowDays))
-            ->when(! $this->isPHOAdmin, function ($q) {
-                $q->where('dispensing_records.health_unit_id', $this->healthUnitId);
-            })
-            ->select(
-                'medicines.id as medicine_id',
-                'medicines.medicine_name',
-                'medicines.dosage',
-                'medicines.category',
-                DB::raw('SUM(dispensing_records.quantity_dispensed) as total_quantity')
-            )
-            ->groupBy('medicines.id', 'medicines.medicine_name', 'medicines.dosage', 'medicines.category')
-            ->orderByDesc('total_quantity')
-            ->limit(10)
-            ->get();
+        // Usage and projections share terminal-release evidence, including saved
+        // transactions whose original stock logs are absent or only partial.
+        $events = app(StockDemandHistoryService::class)->events(
+            $this->isPHOAdmin ? null : [$this->healthUnitId], min($windowStart, $previousStart), $today->toDateString());
+        $medicines = Medicine::whereIn('id', $events->pluck('medicine_id')->unique())->get()->keyBy('id');
+        $facilities = HealthUnit::whereIn('id', $events->pluck('health_unit_id')->unique())->pluck('name', 'id');
+        $rows = $events->filter(fn ($event) => $medicines->has($event->medicine_id) && $facilities->has($event->health_unit_id))
+            ->groupBy(fn ($event) => $event->health_unit_id.':'.$event->medicine_id)
+            ->map(function ($releases) use ($medicines, $facilities, $windowStart, $currentStart, $previousStart, $previousEnd) {
+                $first = $releases->first();
+                $medicine = $medicines[$first->medicine_id];
+                $quantity = fn ($from, $to = null) => (int) $releases->filter(fn ($event) =>
+                    $event->date_added->toDateString() >= $from && ($to === null || $event->date_added->toDateString() <= $to))->sum('quantity_added');
 
-        $medicineIds = $records->pluck('medicine_id')->all();
-
-        $grandTotal = (int) DispensingRecord::query()
-            ->where('date_dispensed', '>=', now()->subDays($windowDays))
-            ->when(! $this->isPHOAdmin, fn ($q) => $q->where('health_unit_id', $this->healthUnitId))
-            ->sum('quantity_dispensed');
-
-        $top10Total = (int) $records->sum('total_quantity');
-
-        $trends = [];
-        if (! empty($medicineIds)) {
-            $last30 = DispensingRecord::query()
-                ->whereIn('medicine_id', $medicineIds)
-                ->where('date_dispensed', '>=', now()->subDays(30))
-                ->when(! $this->isPHOAdmin, fn ($q) => $q->where('health_unit_id', $this->healthUnitId))
-                ->select('medicine_id', DB::raw('SUM(quantity_dispensed) as qty'))
-                ->groupBy('medicine_id')
-                ->pluck('qty', 'medicine_id')
-                ->all();
-
-            $prev30 = DispensingRecord::query()
-                ->whereIn('medicine_id', $medicineIds)
-                ->whereBetween('date_dispensed', [now()->subDays(60), now()->subDays(30)])
-                ->when(! $this->isPHOAdmin, fn ($q) => $q->where('health_unit_id', $this->healthUnitId))
-                ->select('medicine_id', DB::raw('SUM(quantity_dispensed) as qty'))
-                ->groupBy('medicine_id')
-                ->pluck('qty', 'medicine_id')
-                ->all();
-
-            foreach ($medicineIds as $id) {
-                $l = (int) ($last30[$id] ?? 0);
-                $p = (int) ($prev30[$id] ?? 0);
-
-                if ($p === 0 && $l === 0) {
-                    $pct = 0;
-                } elseif ($p === 0) {
-                    $pct = null;
-                } else {
-                    $pct = (int) round((($l - $p) / $p) * 100);
+                return (object) ['medicine_id' => $medicine->id, 'health_unit_id' => $first->health_unit_id,
+                    'medicine_name' => $medicine->medicine_name, 'dosage' => $medicine->dosage,
+                    'category' => $medicine->category, 'unit' => $medicine->unit,
+                    'rhu_name' => $facilities[$first->health_unit_id], 'total_quantity' => $quantity($windowStart),
+                    'current_quantity' => $quantity($currentStart), 'previous_quantity' => $quantity($previousStart, $previousEnd)];
+            })->values();
+        $trends = app(StockTrendService::class)->analyze($rows->pluck('health_unit_id')->unique()->all());
+        $unitKey = fn ($unit) => mb_strtolower(trim((string) $unit));
+        $usageByUnit = $rows->groupBy(fn ($row) => $unitKey($row->unit))
+            ->map(fn ($group) => (int) $group->sum('total_quantity'));
+        $details = [];
+        foreach ($rows->groupBy('medicine_id') as $medicineId => $facilities) {
+            $medicine = $facilities->first();
+            $current = (int) $facilities->sum('current_quantity');
+            $previous = (int) $facilities->sum('previous_quantity');
+            $total = (int) $facilities->sum('total_quantity');
+            $unit = $unitKey($medicine->unit);
+            $unitTotal = $usageByUnit->get($unit, 0);
+            $forecast = 0.0;
+            $forecastComplete = true;
+            $limited = false;
+            foreach ($facilities as $facility) {
+                $projection = $trends[$facility->health_unit_id][$medicineId] ?? null;
+                if ($projection === null || $projection['fit']['periods'] === 0) {
+                    $forecastComplete = false;
+                    continue;
                 }
-
-                $trends[$id] = ['last_30d' => $l, 'prev_30d' => $p, 'change_pct' => $pct];
+                $forecast += array_sum(array_slice($projection['daily'], 0, 30));
+                $limited = $limited || $projection['fit']['method'] !== 'linear_regression';
             }
-        }
-
-        $topRhus = [];
-        if ($this->isPHOAdmin && ! empty($medicineIds)) {
-            $rows = DispensingRecord::query()
-                ->join('health_units', 'health_units.id', '=', 'dispensing_records.health_unit_id')
-                ->whereIn('dispensing_records.medicine_id', $medicineIds)
-                ->where('dispensing_records.date_dispensed', '>=', now()->subDays($windowDays))
-                ->select(
-                    'dispensing_records.medicine_id',
-                    'health_units.name as rhu_name',
-                    DB::raw('SUM(dispensing_records.quantity_dispensed) as qty')
-                )
-                ->groupBy('dispensing_records.medicine_id', 'health_units.name')
-                ->orderByDesc('qty')
-                ->get();
-
-            foreach ($rows as $row) {
-                if (! isset($topRhus[$row->medicine_id])) {
-                    $topRhus[$row->medicine_id] = $row->rhu_name;
-                }
-            }
-        }
-
-        $details = $records->map(function ($r) use ($trends, $topRhus, $top10Total) {
-            $id = $r->medicine_id;
-            $trend = $trends[$id] ?? ['last_30d' => 0, 'prev_30d' => 0, 'change_pct' => 0];
-
-            return [
-                'medicine_id' => $id,
-                'medicine_name' => $r->medicine_name,
-                'dosage' => $r->dosage,
-                'category' => $r->category,
-                'total_90d' => (int) $r->total_quantity,
-                'share_pct' => $top10Total > 0
-                                    ? round(($r->total_quantity / $top10Total) * 100, 1)
-                                    : 0,
-                'last_30d' => $trend['last_30d'],
-                'prev_30d' => $trend['prev_30d'],
-                'change_pct' => $trend['change_pct'],
-                'top_rhu' => $topRhus[$id] ?? null,
+            $details[] = [
+                'medicine_id' => (int) $medicineId, 'medicine_name' => $medicine->medicine_name,
+                'dosage' => $medicine->dosage, 'category' => $medicine->category, 'unit' => $medicine->unit ?: 'units',
+                'total_90d' => $total, 'total_usage' => $total,
+                'share_pct' => $unit !== '' && $unitTotal > 0 ? round($total / $unitTotal * 100, 1) : null,
+                'last_30d' => $current, 'prev_30d' => $previous,
+                'change_pct' => $previous > 0 ? round(($current - $previous) / $previous * 100, 1) : ($current > 0 ? null : 0),
+                'forecast_30d' => $forecastComplete ? (int) ceil(round($forecast, 8)) : null,
+                'forecast_basis' => ! $forecastComplete ? 'No completed release history' : ($limited ? 'Limited-history average' : 'Weekly release trend'),
+                'top_rhu' => $this->isPHOAdmin ? $facilities->sortByDesc('total_quantity')->first()->rhu_name : null,
             ];
-        })->all();
+        }
+        $details = array_values(array_filter($details, fn ($row) => $row['total_usage'] > 0 || ($row['forecast_30d'] ?? 0) > 0));
+        usort($details, function ($left, $right) use ($ranking) {
+            $metric = $ranking === 'trend' ? 'forecast_30d' : 'total_usage';
+
+            return (($right[$metric] ?? -1) <=> ($left[$metric] ?? -1))
+                ?: ($right['total_usage'] <=> $left['total_usage'])
+                ?: strcmp($left['medicine_name'], $right['medicine_name']);
+        });
+        $details = array_slice($details, 0, 10);
 
         return [
-            'labels' => $records->pluck('medicine_name')->all(),
-            'data' => $records->pluck('total_quantity')->map(fn ($q) => (int) $q)->all(),
+            'labels' => array_column($details, 'medicine_name'),
+            'data' => array_map(fn ($row) => $ranking === 'trend' ? $row['forecast_30d'] : $row['total_usage'], $details),
             'details' => $details,
-            'summary' => [
-                'top_units' => $top10Total,
-                'grand_total' => $grandTotal,
-                'top_share_pct' => $grandTotal > 0
-                                    ? (int) round(($top10Total / $grandTotal) * 100)
-                                    : 0,
-                'window_days' => $windowDays,
-                'is_pho' => $this->isPHOAdmin,
-            ],
+            'summary' => ['window_days' => $windowDays, 'window_start' => $windowStart, 'window_end' => $today->toDateString(),
+                'current_start' => $currentStart, 'current_end' => $today->toDateString(),
+                'previous_start' => $previousStart, 'previous_end' => $previousEnd,
+                'forecasted_items' => count(array_filter($details, fn ($row) => $row['forecast_30d'] !== null)),
+                'ranking' => $ranking, 'is_pho' => $this->isPHOAdmin],
         ];
     }
 
@@ -194,27 +152,17 @@ class DashboardService
         $releases = [];
 
         for ($i = 5; $i >= 0; $i--) {
-            $month = now()->subMonths($i);
+            $month = today()->startOfMonth()->subMonths($i);
             $months[] = $month->format('M Y');
 
-            $additionsCount = StockLog::query()
+            $additionsCount = StockLog::activeForReporting()->additions()
                 ->when(! $this->isPHOAdmin, fn ($q) => $q->where('health_unit_id', $this->healthUnitId))
-                ->where(function ($q) {
-                    $q->whereNull('remarks')
-                        ->orWhere('remarks', 'like', 'Added%')
-                        ->orWhere('remarks', 'like', 'Stock%');
-                })
                 ->whereYear('date_added', $month->year)
                 ->whereMonth('date_added', $month->month)
                 ->sum('quantity_added');
 
-            $releasesCount = StockLog::query()
+            $releasesCount = StockLog::activeForReporting()->releases()
                 ->when(! $this->isPHOAdmin, fn ($q) => $q->where('health_unit_id', $this->healthUnitId))
-                ->where(function ($q) {
-                    $q->where('remarks', 'like', 'Released%')
-                        ->orWhere('remarks', 'like', 'Dispensed%')
-                        ->orWhere('remarks', 'like', 'Allocated%');
-                })
                 ->whereYear('date_added', $month->year)
                 ->whereMonth('date_added', $month->month)
                 ->sum('quantity_added');
@@ -232,7 +180,7 @@ class DashboardService
 
     private function getExpirationRiskData(): array
     {
-        $now = now();
+        $today = today();
 
         $categories = [
             '0-30 days' => 0,
@@ -245,6 +193,7 @@ class DashboardService
         $inventories = Inventory::query()
             ->when(! $this->isPHOAdmin, fn ($q) => $q->where('health_unit_id', $this->healthUnitId))
             ->where('available_stock', '>', 0)
+            ->whereHas('medicine')
             ->get();
 
         foreach ($inventories as $inventory) {
@@ -254,11 +203,11 @@ class DashboardService
                 continue;
             }
 
-            $daysDiff = $now->diffInDays($inventory->expiration_date, false);
+            $daysDiff = $today->diffInDays($inventory->expiration_date, false);
 
             if ($daysDiff < 0) {
                 continue;
-            } elseif ($daysDiff <= 30) {
+            } elseif ($daysDiff <= Inventory::NEAR_EXPIRY_DAYS) {
                 $categories['0-30 days']++;
             } elseif ($daysDiff <= 60) {
                 $categories['31-60 days']++;
@@ -303,8 +252,7 @@ class DashboardService
     {
         if ($this->isPHOAdmin) {
             $lowStockItems = Inventory::with('healthUnit')
-                ->where('available_stock', '<=', 10)
-                ->where('available_stock', '>', 0)
+                ->stockLevel('low')
                 ->get();
 
             $rhuCounts = [];
@@ -322,11 +270,9 @@ class DashboardService
             ];
         }
 
-        $rows = Inventory::query()
+        $rows = Inventory::stockLevel('low')
             ->join('medicines', 'medicines.id', '=', 'inventory.medicine_id')
             ->where('inventory.health_unit_id', $this->healthUnitId)
-            ->where('inventory.available_stock', '<=', 10)
-            ->where('inventory.available_stock', '>', 0)
             ->whereNull('medicines.deleted_at')
             ->select('medicines.category', DB::raw('COUNT(*) as count'))
             ->groupBy('medicines.category')
@@ -360,11 +306,16 @@ class DashboardService
         $forecast = $forecastService->getForecast($this->healthUnitId);
 
         $summary = $forecast['summary'] ?? [];
+        $horizonDays = (int) ($summary['horizon_days'] ?? config('forecasting.forecast_days', 90));
 
         return [
             'shortage' => (int) ($summary['forecast_shortage'] ?? 0),
+            'shortage_items' => collect($forecast['items'] ?? [])->where('shortage', '>', 0)->count(),
             'low_stock_items' => (int) ($summary['low_stock_items'] ?? 0),
             'total_items' => (int) ($summary['total_items'] ?? 0),
+            'horizon_days' => $horizonDays,
+            'forecast_start' => today()->toDateString(),
+            'forecast_end' => today()->addDays($horizonDays - 1)->toDateString(),
             'scope' => $this->isPHOAdmin ? 'province' : 'rhu',
         ];
     }

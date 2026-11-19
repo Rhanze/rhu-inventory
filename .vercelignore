@@ -17,3 +17,10 @@ database/*.sqlite*
 .codex
 .agents
 .aws
+.vercel
+.idea
+.vscode
+tmp
+tools
+*.bak
+.phpunit.result.cache

@@ -138,6 +138,21 @@
                 </div>
             </div>
 
+            <div>
+                <label for="date_added" style="display:block;margin-bottom:6px;font-size:1rem;font-weight:600;color:#0f172a;">Receipt date</label>
+                <input type="date" name="date_added" id="date_added" value="{{ old('date_added', today()->toDateString()) }}"
+                       style="width:100%;padding:12px 16px;font:inherit;border:2px solid #bec6cf;border-radius:14px;box-sizing:border-box;">
+                <p style="margin:6px 0 0;font-size:1rem;color:#475569;">Use the actual receipt date for historical stock. Equal-expiry batches follow this date.</p>
+                @error('date_added')<p style="color:#dc2626;">{{ $message }}</p>@enderror
+            </div>
+
+            <div>
+                <label for="remarks" style="display:block;margin-bottom:6px;font-size:1rem;font-weight:600;color:#0f172a;">Reason or remarks (optional)</label>
+                <textarea name="remarks" id="remarks" rows="3" maxlength="2000" placeholder="Delivery, opening balance, or reason for this entry"
+                          style="width:100%;padding:12px 16px;font:inherit;border:2px solid #bec6cf;border-radius:14px;box-sizing:border-box;">{{ old('remarks') }}</textarea>
+                @error('remarks')<p style="color:#dc2626;">{{ $message }}</p>@enderror
+            </div>
+
             {{-- Buttons --}}
             <div style="display:flex; gap:12px; margin-top:8px;">
                 <button type="submit" style="

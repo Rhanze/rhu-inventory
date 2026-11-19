@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Services\NotificationService;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 
 class NotificationController extends Controller
 {
@@ -19,25 +19,28 @@ class NotificationController extends Controller
     {
         return [
             'healthUnitId' => session('health_unit_id'),
-            'userId'       => session('user_id'),
-            'role'         => session('role'),
+            'userId' => session('user_id'),
+            'role' => session('role'),
         ];
     }
 
     private function checkAccess()
     {
-        if (!session()->has('user_id')) {
+        if (! session()->has('user_id')) {
             return redirect()->route('login');
         }
-        if (!in_array(session('role'), ['admin', 'staff', 'midwife'])) {
+        if (! in_array(session('role'), ['admin', 'staff', 'midwife'])) {
             return redirect()->route('login');
         }
+
         return null;
     }
 
     public function unreadCount(Request $request): JsonResponse
     {
-        if (!$request->expectsJson()) abort(404);
+        if (! $request->expectsJson()) {
+            abort(404);
+        }
         $v = $this->viewer();
 
         return response()->json([
@@ -49,28 +52,27 @@ class NotificationController extends Controller
 
     public function recent(Request $request): JsonResponse
     {
-        if (!$request->expectsJson()) abort(404);
+        if (! $request->expectsJson()) {
+            abort(404);
+        }
         $v = $this->viewer();
-        $limit = $request->input('limit', 20);
+        $validated = $request->validate(['limit' => 'nullable|integer|min:1|max:100']);
+        $limit = (int) ($validated['limit'] ?? 20);
 
         $notifications = $this->notificationService->getRecentNotifications(
             $v['healthUnitId'], $v['userId'], $v['role'], $limit
         );
 
         return response()->json([
-            'notifications' => $notifications->map(function ($n) {
-                $url = $n->link
-                    ?? ($n->inventory_id
-                        ? route('inventory.index', ['highlight' => $n->inventory_id])
-                        : '#');
+            'notifications' => $notifications->map(function ($n) use ($v) {
                 return [
-                    'id'         => $n->id,
-                    'title'      => $n->title,
-                    'message'    => $n->message,
-                    'severity'   => $n->severity,
-                    'is_read'    => $n->is_read,
+                    'id' => $n->id,
+                    'title' => $n->title,
+                    'message' => $n->message,
+                    'severity' => $n->severity,
+                    'is_read' => $n->is_read,
                     'created_at' => $n->created_at->diffForHumans(),
-                    'url'        => $url,
+                    'url' => $n->destinationUrl($v['role']),
                 ];
             }),
             'unread_count' => $this->notificationService->getUnreadCount(
@@ -81,7 +83,9 @@ class NotificationController extends Controller
 
     public function markRead(Request $request, int $id): JsonResponse
     {
-        if (!$request->expectsJson()) abort(404);
+        if (! $request->expectsJson()) {
+            abort(404);
+        }
         $v = $this->viewer();
 
         return response()->json([
@@ -93,12 +97,14 @@ class NotificationController extends Controller
 
     public function markAllRead(Request $request): JsonResponse
     {
-        if (!$request->expectsJson()) abort(404);
+        if (! $request->expectsJson()) {
+            abort(404);
+        }
         $v = $this->viewer();
 
         return response()->json([
             'success' => true,
-            'count'   => $this->notificationService->markAllAsRead(
+            'count' => $this->notificationService->markAllAsRead(
                 $v['healthUnitId'], $v['userId'], $v['role']
             ),
         ]);
@@ -106,7 +112,9 @@ class NotificationController extends Controller
 
     public function destroy(Request $request, int $id): JsonResponse
     {
-        if (!$request->expectsJson()) abort(404);
+        if (! $request->expectsJson()) {
+            abort(404);
+        }
         $v = $this->viewer();
 
         $deleted = $this->notificationService->destroyById(
@@ -121,7 +129,9 @@ class NotificationController extends Controller
 
     public function destroyAll(Request $request): JsonResponse
     {
-        if (!$request->expectsJson()) abort(404);
+        if (! $request->expectsJson()) {
+            abort(404);
+        }
         $v = $this->viewer();
 
         $deleted = $this->notificationService->destroyAll(
@@ -130,14 +140,16 @@ class NotificationController extends Controller
 
         return response()->json([
             'success' => true,
-            'count'   => $deleted,
-            'message' => $deleted . ' notification(s) deleted.',
+            'count' => $deleted,
+            'message' => $deleted.' notification(s) deleted.',
         ]);
     }
 
     public function archive(Request $request, int $id): JsonResponse
     {
-        if (!$request->expectsJson()) abort(404);
+        if (! $request->expectsJson()) {
+            abort(404);
+        }
         $v = $this->viewer();
 
         $success = $this->notificationService->archive(
@@ -152,7 +164,9 @@ class NotificationController extends Controller
 
     public function unarchive(Request $request, int $id): JsonResponse
     {
-        if (!$request->expectsJson()) abort(404);
+        if (! $request->expectsJson()) {
+            abort(404);
+        }
         $v = $this->viewer();
 
         $success = $this->notificationService->unarchive(
@@ -167,7 +181,9 @@ class NotificationController extends Controller
 
     public function destroyArchived(Request $request): JsonResponse
     {
-        if (!$request->expectsJson()) abort(404);
+        if (! $request->expectsJson()) {
+            abort(404);
+        }
         $v = $this->viewer();
 
         $count = $this->notificationService->destroyArchived(
@@ -176,22 +192,25 @@ class NotificationController extends Controller
 
         return response()->json([
             'success' => true,
-            'count'   => $count,
-            'message' => $count . ' archived notification(s) deleted.',
+            'count' => $count,
+            'message' => $count.' archived notification(s) deleted.',
         ]);
     }
 
     public function index(Request $request)
     {
-        if ($redirect = $this->checkAccess()) return $redirect;
+        if ($redirect = $this->checkAccess()) {
+            return $redirect;
+        }
 
         $v = $this->viewer();
-        $view = $request->get('view', 'active');
+        $validated = $request->validate(['view' => 'nullable|string|in:active,archived,all']);
+        $view = $validated['view'] ?? 'active';
 
         $notifications = $this->notificationService->getNotifications(
             $v['healthUnitId'], $v['userId'], $v['role'], $view, 50
         );
-        $unreadCount   = $this->notificationService->getUnreadCount(
+        $unreadCount = $this->notificationService->getUnreadCount(
             $v['healthUnitId'], $v['userId'], $v['role']
         );
         $archivedCount = $this->notificationService->getArchivedCount(

@@ -12,7 +12,12 @@ use App\Models\Inventory;
 use App\Models\Medicine;
 use App\Models\StockLog;
 use App\Models\TransferRequest;
+use App\Services\InventoryHistoryService;
+use App\Services\InventoryHistoricalBalanceService;
+use App\Support\HistoricalDateRange;
+use App\Support\InventoryHistoryPeriod;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 
 class InventoryController extends Controller
@@ -93,12 +98,9 @@ class InventoryController extends Controller
             ->when($request->expiry_filter === 'expired', fn ($q) => $q->whereNotNull('expiration_date')
                 ->whereDate('expiration_date', '<', now())
             )
-            ->when($request->expiry_filter === 'near_expiry', fn ($q) => $q->whereNotNull('expiration_date')
-                ->whereDate('expiration_date', '>=', now())
-                ->whereDate('expiration_date', '<=', now()->addDays(90))
-            )
+            ->when($request->expiry_filter === 'near_expiry', fn ($q) => $q->expiringWithin())
             ->when($request->expiry_filter === 'monitor', fn ($q) => $q->whereNotNull('expiration_date')
-                ->whereDate('expiration_date', '>', now()->addDays(90))
+                ->whereDate('expiration_date', '>', today()->addDays(Inventory::NEAR_EXPIRY_DAYS))
                 ->whereDate('expiration_date', '<=', now()->addDays(180))
             )
             ->when($request->expiry_filter === 'good', fn ($q) => $q->whereNotNull('expiration_date')
@@ -119,6 +121,36 @@ class InventoryController extends Controller
             return redirect()->route('login');
         }
 
+        if ($request->input('view') === 'history') {
+            $request->validate(['summary_page' => ['nullable', 'integer', 'min:1', 'max:1000000']]);
+            $historyPeriod = InventoryHistoryPeriod::apply($request);
+            $historyRange = HistoricalDateRange::fromRequest($request);
+            $movements = app(InventoryHistoryService::class)->records($request, $historyRange);
+            $stockHistory = app(InventoryHistoricalBalanceService::class)->summarize($request, $historyRange);
+            $healthUnits = HealthUnit::orderBy('name')->get();
+            $unitId = session('health_unit_id');
+            if ($unitId === null && $request->filled('rhu_filter') && $request->input('rhu_filter') !== 'all') {
+                $unitId = $request->rhu_filter === 'pho' ? (HealthUnit::phoId() ?? -1) : (int) $request->rhu_filter;
+            }
+            $historyMedicines = Medicine::withTrashed()->where(function ($medicines) use ($unitId) {
+                foreach (['inventory', 'stock_logs', 'dispensing_records', 'allocations'] as $table) {
+                    $medicines->orWhereIn('id', DB::table($table)->select('medicine_id')
+                        ->when($unitId !== null, fn ($query) => $query->where('health_unit_id', $unitId)));
+                }
+            })->orderBy('medicine_name')->orderBy('dosage')->get(['id', 'medicine_name', 'dosage']);
+            $stockRows = collect($stockHistory['rows'])->values();
+            $stockPage = max(1, (int) $request->input('summary_page', 1));
+            $stockSummary = new LengthAwarePaginator($stockRows->slice(($stockPage - 1) * 20, 20)->values(),
+                $stockRows->count(), 20, $stockPage, [
+                    'path' => $request->url(), 'pageName' => 'summary_page', 'query' => $request->query(),
+                ]);
+
+            $historyFacility = $unitId === null ? null : $healthUnits->firstWhere('id', $unitId);
+
+            return view('inventory.history', compact('movements', 'historyRange', 'healthUnits',
+                'historyPeriod', 'historyMedicines', 'stockHistory', 'stockSummary', 'unitId', 'historyFacility'));
+        }
+
         $search = $request->search;
         $rhuFilter = $request->rhu_filter;
         $facilityType = $request->facility_type;
@@ -126,6 +158,7 @@ class InventoryController extends Controller
         $category = $request->category;
         $batchInput = $request->batch_input;
         $expiryFilter = $request->expiry_filter;
+        $stockLevel = $request->validate(['stock_level' => 'nullable|in:low,overstock,available'])['stock_level'] ?? null;
         $healthUnitId = session('health_unit_id');
         $isPhoAdmin = is_null($healthUnitId);
         $phoId = $isPhoAdmin ? HealthUnit::phoId() : null;
@@ -134,10 +167,10 @@ class InventoryController extends Controller
             ->when($healthUnitId, function ($q) use ($healthUnitId) {
                 $q->where('health_unit_id', $healthUnitId);
             })
-            ->when($isPhoAdmin && $rhuFilter === 'pho' && $phoId, function ($q) use ($phoId) {
-                $q->where('health_unit_id', $phoId);
+            ->when($isPhoAdmin && $rhuFilter === 'pho', function ($q) use ($phoId) {
+                $q->where('health_unit_id', $phoId ?? -1);
             })
-            ->when($isPhoAdmin && $rhuFilter && $rhuFilter !== 'pho', function ($q) use ($rhuFilter) {
+            ->when($isPhoAdmin && $rhuFilter && ! in_array($rhuFilter, ['pho', 'all'], true), function ($q) use ($rhuFilter) {
                 $q->where('health_unit_id', $rhuFilter);
             })
             ->when($isPhoAdmin && ! $rhuFilter && $phoId, function ($q) use ($phoId) {
@@ -160,10 +193,11 @@ class InventoryController extends Controller
                 $q->whereHas('medicine', fn ($mq) => $mq->where('category', $category));
             });
 
-        $query = $this->applyBatchAndExpiryFilters($query, $request);
+        $query = $this->applyBatchAndExpiryFilters($query, $request)
+            ->when($stockLevel, fn ($query) => $query->stockLevel($stockLevel));
 
         $inventories = $query
-            ->orderBy('id', 'desc')
+            ->when($request->expiry_filter === 'near_expiry', fn ($q) => $q->fefo(), fn ($q) => $q->orderByDesc('id'))
             ->paginate(config('pagination.inventory', 20))
             ->appends([
                 'search' => $search,
@@ -173,6 +207,7 @@ class InventoryController extends Controller
                 'category' => $category,
                 'batch_input' => $batchInput,
                 'expiry_filter' => $expiryFilter,
+                'stock_level' => $stockLevel,
             ]);
 
         $healthUnits = HealthUnit::rhuOnly()->orderBy('name')->get();
@@ -227,34 +262,42 @@ class InventoryController extends Controller
             'storage_location' => 'nullable|string|max:255',
             'pack_type' => 'nullable|string|max:50',
             'pieces_per_pack' => 'nullable|integer|min:1',
+            'remarks' => 'nullable|string|max:2000',
+            'date_added' => 'nullable|date|before_or_equal:today',
         ]);
 
-        $inventory = Inventory::create([
-            'medicine_id' => $request->medicine_id,
-            'health_unit_id' => session('health_unit_id'),
-            'available_stock' => $request->available_stock,
-            'allocated_stock' => $request->allocated_stock,
-            'batch_no' => $request->batch_no,
-            'expiration_date' => $request->expiration_date,
-            'storage_location' => $request->storage_location,
-            'pack_type' => $request->pack_type,
-            'pieces_per_pack' => $request->pieces_per_pack,
-        ]);
+        $inventory = DB::transaction(function () use ($request) {
+            $inventory = Inventory::create([
+                'medicine_id' => $request->medicine_id,
+                'health_unit_id' => session('health_unit_id'),
+                'available_stock' => $request->available_stock,
+                'allocated_stock' => $request->allocated_stock,
+                'batch_no' => $request->batch_no,
+                'expiration_date' => $request->expiration_date,
+                'storage_location' => $request->storage_location,
+                'pack_type' => $request->pack_type,
+                'pieces_per_pack' => $request->pieces_per_pack,
+            ]);
+
+            if ($request->available_stock > 0) {
+                StockLog::create([
+                    'medicine_id' => $inventory->medicine_id,
+                    'inventory_id' => $inventory->id,
+                    'movement_type' => 'addition',
+                    'health_unit_id' => $inventory->health_unit_id,
+                    'quantity_added' => $request->available_stock,
+                    'batch_no' => $inventory->batch_no,
+                    'storage_location' => $inventory->storage_location,
+                    'date_added' => $request->input('date_added') ?: now()->toDateString(),
+                    'added_by' => session('user_id'),
+                    'remarks' => 'Added — Manual inventory entry (Inventory #'.$inventory->id.')'.
+                        ($request->filled('remarks') ? ' | Reason '.$request->remarks : ''),
+                ]);
+            }
+            return $inventory;
+        });
 
         $medicine = Medicine::find($inventory->medicine_id);
-
-        if ($request->available_stock > 0) {
-            StockLog::create([
-                'medicine_id' => $inventory->medicine_id,
-                'health_unit_id' => $inventory->health_unit_id,
-                'quantity_added' => $request->available_stock,
-                'batch_no' => $inventory->batch_no,
-                'storage_location' => $inventory->storage_location,
-                'date_added' => now()->toDateString(),
-                'added_by' => session('user_id'),
-                'remarks' => 'Added — Manual inventory entry (Inventory #'.$inventory->id.')',
-            ]);
-        }
 
         ActivityLogger::log(
             'Inventory',
@@ -302,6 +345,7 @@ class InventoryController extends Controller
                 'storage_location' => 'nullable|string|max:255',
                 'pack_type' => 'nullable|string|max:50',
                 'pieces_per_pack' => 'nullable|integer|min:1',
+                'remarks' => 'nullable|string|max:2000',
             ]);
 
             $oldAvailable = (int) $inventory->available_stock;
@@ -310,7 +354,9 @@ class InventoryController extends Controller
 
             $inventory->update([
                 'available_stock' => $request->available_stock,
-                'allocated_stock' => $request->allocated_stock,
+                // Allocations and transfer reservations own this balance. A stale hidden
+                // form value must not overwrite stock reserved since the form opened.
+                'allocated_stock' => $inventory->allocated_stock,
                 'batch_no' => $request->batch_no,
                 'expiration_date' => $request->expiration_date,
                 'storage_location' => $request->storage_location,
@@ -324,6 +370,8 @@ class InventoryController extends Controller
                 $remarksPrefix = $delta > 0 ? 'Added' : 'Released';
                 StockLog::create([
                     'medicine_id' => $inventory->medicine_id,
+                    'inventory_id' => $inventory->id,
+                    'movement_type' => $delta > 0 ? 'adjustment_in' : 'adjustment_out',
                     'health_unit_id' => $inventory->health_unit_id,
                     'quantity_added' => abs($delta),
                     'batch_no' => $inventory->batch_no,
@@ -332,7 +380,8 @@ class InventoryController extends Controller
                     'added_by' => session('user_id'),
                     'remarks' => $remarksPrefix.' — Inventory adjusted ('.
                                           ($delta > 0 ? '+' : '-').abs($delta).' units, '.
-                                          'Inventory #'.$inventory->id.')',
+                                          'Inventory #'.$inventory->id.')'.
+                        ($request->filled('remarks') ? ' | Reason '.$request->remarks : ''),
                 ]);
             }
 
@@ -393,6 +442,8 @@ class InventoryController extends Controller
             if ($qtyAtDelete > 0) {
                 StockLog::create([
                     'medicine_id' => $inventory->medicine_id,
+                    'inventory_id' => $inventory->id,
+                    'movement_type' => 'adjustment_out',
                     'health_unit_id' => $inventory->health_unit_id,
                     'quantity_added' => $qtyAtDelete,
                     'batch_no' => $batchAtDelete,
@@ -425,6 +476,7 @@ class InventoryController extends Controller
         $facilityType = $request->facility_type;
         $storageLoc = $request->storage_location;
         $category = $request->category;
+        $stockLevel = $request->validate(['stock_level' => 'nullable|in:low,overstock,available'])['stock_level'] ?? null;
         $healthUnitId = session('health_unit_id');
         $isPhoAdmin = is_null($healthUnitId);
         $phoId = $isPhoAdmin ? HealthUnit::phoId() : null;
@@ -433,10 +485,10 @@ class InventoryController extends Controller
             ->when($healthUnitId, function ($q) use ($healthUnitId) {
                 $q->where('health_unit_id', $healthUnitId);
             })
-            ->when($isPhoAdmin && $rhuFilter === 'pho' && $phoId, function ($q) use ($phoId) {
-                $q->where('health_unit_id', $phoId);
+            ->when($isPhoAdmin && $rhuFilter === 'pho', function ($q) use ($phoId) {
+                $q->where('health_unit_id', $phoId ?? -1);
             })
-            ->when($isPhoAdmin && $rhuFilter && $rhuFilter !== 'pho', function ($q) use ($rhuFilter) {
+            ->when($isPhoAdmin && $rhuFilter && ! in_array($rhuFilter, ['pho', 'all'], true), function ($q) use ($rhuFilter) {
                 $q->where('health_unit_id', $rhuFilter);
             })
             ->when($isPhoAdmin && ! $rhuFilter && $phoId, function ($q) use ($phoId) {
@@ -461,9 +513,12 @@ class InventoryController extends Controller
                 $q->whereHas('medicine', fn ($mq) => $mq->where('category', $category));
             });
 
-        $query = $this->applyBatchAndExpiryFilters($query, $request);
+        $query = $this->applyBatchAndExpiryFilters($query, $request)
+            ->when($stockLevel, fn ($query) => $query->stockLevel($stockLevel));
 
-        $inventories = $query->orderByDesc('id')->get();
+        $inventories = $query
+            ->when($request->expiry_filter === 'near_expiry', fn ($q) => $q->fefo(), fn ($q) => $q->orderByDesc('id'))
+            ->get();
 
         $filename = 'inventory_'.now()->format('Ymd_His').'.csv';
 
@@ -648,6 +703,8 @@ class InventoryController extends Controller
 
                     StockLog::create([
                         'medicine_id' => $medicine->id,
+                        'inventory_id' => $inventory->id,
+                        'movement_type' => 'receipt',
                         'health_unit_id' => $phoId,
                         'quantity_added' => $row['quantity'],
                         'batch_no' => $inventory->batch_no,
@@ -664,7 +721,7 @@ class InventoryController extends Controller
             });
         } catch (\Throwable $e) {
             return back()->withInput()
-                ->with('error', 'Failed to save shipment: '.$e->getMessage());
+                ->with('error', $this->operationErrorMessage($e, 'Unable to save the shipment. Please try again.'));
         }
 
         ActivityLogger::log(
@@ -717,12 +774,14 @@ class InventoryController extends Controller
                         ->lockForUpdate()->first();
 
                     if (! $inv || $inv->available_stock < $item->quantity) {
-                        throw new \RuntimeException('Cannot reverse shipment: batch stock has already been used.');
+                        throw new \DomainException('Cannot reverse shipment: batch stock has already been used.');
                     }
                     $inv->decrement('available_stock', $item->quantity);
 
                     StockLog::create([
                         'medicine_id' => $item->medicine_id,
+                        'inventory_id' => $inv->id,
+                        'movement_type' => 'adjustment_out',
                         'health_unit_id' => $phoId,
                         'quantity_added' => $item->quantity,
                         'batch_no' => $item->batch_no,
@@ -739,7 +798,7 @@ class InventoryController extends Controller
                 $shipment->delete();
             });
         } catch (\Throwable $e) {
-            return back()->with('error', 'Delete failed: '.$e->getMessage());
+            return back()->with('error', $this->operationErrorMessage($e, 'Unable to delete the shipment. Please try again.'));
         }
 
         ActivityLogger::log(
@@ -828,6 +887,7 @@ class InventoryController extends Controller
 
     private function findInventoryForCurrentUser($id)
     {
+        abort_if(is_null(session('health_unit_id')) && session('role') !== 'admin', 403);
         $query = Inventory::query();
 
         if (session('health_unit_id')) {

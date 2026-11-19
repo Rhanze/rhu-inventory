@@ -20,6 +20,7 @@ class Allocation extends Model
         'date_allocated',
         'allocated_by',
         'recipient_user_id',         // ← NEW
+        'dispensing_enabled',
         'destination_health_unit_id',
         'status',
         'remarks',
@@ -29,6 +30,7 @@ class Allocation extends Model
     ];
 
     protected $casts = [
+        'dispensing_enabled' => 'boolean',
         'quantity_allocated' => 'integer',
         'date_allocated'     => 'date',
         'created_at'         => 'datetime',
@@ -39,7 +41,7 @@ class Allocation extends Model
 
     public function medicine()
     {
-        return $this->belongsTo(Medicine::class, 'medicine_id');
+        return $this->belongsTo(Medicine::class, 'medicine_id')->withTrashed();
     }
 
     public function inventory()
@@ -77,7 +79,7 @@ class Allocation extends Model
     public function getDestinationDisplayAttribute(): string
     {
         if ($this->destination_health_unit_id) {
-            return ($this->destinationHealthUnit->name ?? 'Unknown RHU') . ' (RHU)';
+            return $this->destinationHealthUnit->name ?? 'Unknown health unit';
         }
 
         return $this->destination ?: '—';

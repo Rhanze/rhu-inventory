@@ -252,7 +252,8 @@ class SampleInventorySeeder extends Seeder
             ];
 
             if ($destCol) {
-                $row[$destCol] = $pho->id ?? null;
+                // These are internal RHU distributions, not provincial transfers.
+                    $row[$destCol] = null;
             }
 
             if ($recipientCol) {
@@ -288,6 +289,7 @@ class SampleInventorySeeder extends Seeder
                     : null;
             }
 
+            $row['destination'] = $isMidwifeRequest ? 'Midwife outreach supplies' : 'RHU outreach distribution';
             $allocationRows[] = $row;
         }
 

@@ -6,12 +6,15 @@ use App\Models\CalendarEvent;
 use App\Models\DoHProgram;
 use App\Models\FamilyPlanning;
 use App\Models\HealthUnit;
+use App\Models\Medicine;
 use App\Models\PostpartumVisit;
 use App\Models\PrenatalVisit;
 use App\Models\PublicUser;
 use App\Models\RhuImmunizationSchedule;
 use App\Models\VaccinationSchedule;
 use App\Services\VaccinationScheduleService;
+use App\Services\DohEventPlanningService;
+use App\Support\BarangayDemandScope;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -35,6 +38,17 @@ class VaccinationForecastController extends Controller
             return redirect()->route('dashboard')
                 ->with('error', 'Vaccination tracking is only available at the RHU level.');
         }
+
+        return null;
+    }
+
+    private function guardEpiManager()
+    {
+        if ($redirect = $this->guardRhuUser()) {
+            return $redirect;
+        }
+
+        abort_unless(session('role') === 'midwife', 403);
 
         return null;
     }
@@ -90,12 +104,17 @@ class VaccinationForecastController extends Controller
             return $redirect;
         }
 
+        $filters = $request->validate(['month' => 'nullable|date_format:Y-m', 'day' => 'nullable|date_format:Y-m-d',
+            'area_label' => 'nullable|string|max:120']);
         $healthUnitId = session('health_unit_id');
+        $calendarAreaFilter = session('role') === 'midwife'
+            ? BarangayDemandScope::validateForViewer((int) $healthUnitId, $filters['area_label'] ?? null, 'area_label')
+            : null;
         $this->scheduleService->markOverdueAsMissed(30);
 
         $rhu = HealthUnit::find($healthUnitId);
 
-        $month = $request->get('month', now()->format('Y-m'));
+        $month = $request->input('month') ?: now()->format('Y-m');
         $start = Carbon::parse($month.'-01')->startOfMonth();
         $end = $start->copy()->endOfMonth();
 
@@ -105,9 +124,11 @@ class VaccinationForecastController extends Controller
         // ── Vaccination doses ──
         $rawSchedules = VaccinationSchedule::whereHas('patient', fn ($q) => $q->forViewer())->with('patient')
             ->where('health_unit_id', $healthUnitId)
+            ->when($calendarAreaFilter, fn ($query) => $query->whereHas('patient', fn ($patient) => $patient
+                ->whereRaw('LOWER(TRIM(barangay)) = ?', [mb_strtolower($calendarAreaFilter)])))
             ->whereBetween('due_date', [
-                $gridStart->copy()->subDays(10)->toDateString(),
-                $gridEnd->copy()->addDays(10)->toDateString(),
+                $gridStart->copy()->subDays(35)->toDateString(),
+                $gridEnd->toDateString(),
             ])
             ->orderBy('due_date')
             ->get();
@@ -116,7 +137,8 @@ class VaccinationForecastController extends Controller
             ->map(function ($s) use ($rhu) {
                 $s->session_date = $this->scheduleService->sessionDateFor(
                     Carbon::parse($s->due_date),
-                    $rhu?->id
+                    $rhu?->id,
+                    in_array($s->status, ['pending', 'missed'], true) ? $s->patient?->barangay : null
                 );
 
                 return $s;
@@ -126,6 +148,8 @@ class VaccinationForecastController extends Controller
 
         // ── Events ──
         $events = CalendarEvent::where('health_unit_id', $healthUnitId)
+            ->when($calendarAreaFilter, fn ($query) => $query->where(fn ($area) => $area
+                ->whereRaw('LOWER(TRIM(area_label)) = ?', [mb_strtolower($calendarAreaFilter)])->orWhereNull('area_label')))
             ->whereBetween('event_date', [$gridStart->toDateString(), $gridEnd->toDateString()])
             ->orderBy('event_date')
             ->orderByRaw("CASE WHEN priority = 'emergency' THEN 0 WHEN priority = 'high' THEN 1 ELSE 2 END")
@@ -136,6 +160,8 @@ class VaccinationForecastController extends Controller
         // ── Family Planning supplies due ──
         $fpSupplies = FamilyPlanning::whereHas('patient', fn ($q) => $q->forViewer())->with('patient')
             ->where('health_unit_id', $healthUnitId)
+            ->when($calendarAreaFilter, fn ($query) => $query->whereHas('patient', fn ($patient) => $patient
+                ->whereRaw('LOWER(TRIM(barangay)) = ?', [mb_strtolower($calendarAreaFilter)])))
             ->whereNotNull('next_supply_date')
             ->whereBetween('next_supply_date', [$gridStart->toDateString(), $gridEnd->toDateString()])
             ->orderBy('next_supply_date')
@@ -145,6 +171,8 @@ class VaccinationForecastController extends Controller
         // ── Prenatal visits scheduled ──
         $prenatalVisits = PrenatalVisit::whereHas('patient', fn ($q) => $q->forViewer())->with('patient')
             ->where('health_unit_id', $healthUnitId)
+            ->when($calendarAreaFilter, fn ($query) => $query->whereHas('patient', fn ($patient) => $patient
+                ->whereRaw('LOWER(TRIM(barangay)) = ?', [mb_strtolower($calendarAreaFilter)])))
             ->whereNotNull('next_visit_date')
             ->whereBetween('next_visit_date', [$gridStart->toDateString(), $gridEnd->toDateString()])
             ->orderBy('next_visit_date')
@@ -154,6 +182,8 @@ class VaccinationForecastController extends Controller
         // ── Postpartum visits scheduled ──
         $postpartumVisits = PostpartumVisit::whereHas('patient', fn ($q) => $q->forViewer())->with('patient')
             ->where('health_unit_id', $healthUnitId)
+            ->when($calendarAreaFilter, fn ($query) => $query->whereHas('patient', fn ($patient) => $patient
+                ->whereRaw('LOWER(TRIM(barangay)) = ?', [mb_strtolower($calendarAreaFilter)])))
             ->whereNotNull('next_visit_date')
             ->whereBetween('next_visit_date', [$gridStart->toDateString(), $gridEnd->toDateString()])
             ->orderBy('next_visit_date')
@@ -219,7 +249,7 @@ class VaccinationForecastController extends Controller
                         'child_name' => $s->patient?->full_name ?? 'Unknown',
                         'barangay' => $s->patient?->barangay ?? '—',
                         'status' => $s->status,
-                        'is_overdue' => $s->status === 'pending' && $s->due_date->isPast(),
+                        'is_overdue' => $s->is_overdue,
                     ])->values()->all(),
                     'events' => $dayEvents->map(fn ($e) => [
                         'id' => $e->id,
@@ -278,11 +308,12 @@ class VaccinationForecastController extends Controller
             'child_name' => $s->patient?->full_name ?? 'Unknown',
             'barangay' => $s->patient?->barangay ?? '—',
             'status' => $s->status,
-            'is_overdue' => $s->status === 'pending' && $s->due_date->isPast(),
+            'is_overdue' => $s->is_overdue,
         ])->values()->all();
 
         $selectedEvents = $se->map(fn ($e) => [
             'id' => $e->id,
+            'created_by' => $e->created_by,
             'title' => $e->title,
             'type' => $e->type,
             'type_label' => $e->type_label,
@@ -332,12 +363,16 @@ class VaccinationForecastController extends Controller
         }
 
         // ═══ Per-area EPI schedules + barangays for the panel ═══
+        $isMidwife = session('role') === 'midwife';
+        $assignedAreas = $isMidwife ? BarangayDemandScope::options((int) $healthUnitId, (int) session('user_id')) : collect();
         $epiSchedules = RhuImmunizationSchedule::active()
             ->forHealthUnit($healthUnitId)
+            ->when($isMidwife, fn ($query) => $query->whereIn(DB::raw('LOWER(TRIM(area_label))'),
+                $assignedAreas->map(fn ($area) => mb_strtolower($area))))
             ->orderBy('area_label')
             ->get();
 
-        $barangays = PublicUser::forViewer()
+        $barangays = $isMidwife ? $assignedAreas : PublicUser::forViewer()
             ->where('health_unit_id', $healthUnitId)
             ->whereNotNull('barangay')
             ->where('barangay', '!=', '')
@@ -345,13 +380,18 @@ class VaccinationForecastController extends Controller
             ->orderBy('barangay')
             ->pluck('barangay');
 
+        $selectedProgramPlans = collect(app(DohEventPlanningService::class)->onDate((int) $healthUnitId,
+            Carbon::parse($selectedDate)))->keyBy('program_id');
+        $planningMedicines = $selectedProgramPlans->isEmpty() ? collect()
+            : Medicine::orderBy('medicine_name')->get(['id', 'medicine_name', 'dosage', 'unit']);
+
         return view('vaccination.calendar', compact(
             'weeks', 'start', 'end', 'month',
             'selectedDate', 'selectedSchedules', 'selectedEvents',
             'selectedFP', 'selectedPrenatal', 'selectedPostpartum',
             'selectedChildCount', 'monthStats', 'rhu',
             'sDoh', 'vitaminAEligibility',
-            'epiSchedules', 'barangays'
+            'epiSchedules', 'barangays', 'selectedProgramPlans', 'planningMedicines', 'calendarAreaFilter'
         ));
     }
 
@@ -417,11 +457,12 @@ class VaccinationForecastController extends Controller
             return $redirect;
         }
 
+        $request->validate(['month' => 'nullable|date_format:Y-m']);
         $healthUnitId = session('health_unit_id');
         $this->scheduleService->markOverdueAsMissed(30);
         $this->scheduleService->rescheduleMissedDoses(30);
 
-        $month = $request->input('month', now()->format('Y-m'));
+        $month = $request->input('month') ?: now()->format('Y-m');
         $summary = $this->scheduleService->monthlySummary($healthUnitId, $month);
         $nextMonth = Carbon::parse($month.'-01')->addMonth()->format('Y-m');
         $nextSummary = $this->scheduleService->monthlySummary($healthUnitId, $nextMonth);
@@ -435,8 +476,9 @@ class VaccinationForecastController extends Controller
             return $redirect;
         }
 
+        $request->validate(['month' => 'nullable|date_format:Y-m']);
         $healthUnitId = session('health_unit_id');
-        $month = $request->input('month', now()->format('Y-m'));
+        $month = $request->input('month') ?: now()->format('Y-m');
         $summary = $this->scheduleService->monthlySummary($healthUnitId, $month);
         $filename = 'vaccination_forecast_'.$month.'.csv';
 
@@ -524,8 +566,8 @@ class VaccinationForecastController extends Controller
 
         $validated = $request->validate([
             'immunization_pattern' => 'required|in:exact,weekly,monthly_first,monthly_last,monthly_nth',
-            'immunization_weekday' => 'nullable|integer|min:0|max:6',
-            'immunization_week_number' => 'nullable|integer|min:1|max:4',
+            'immunization_weekday' => 'required_unless:immunization_pattern,exact|nullable|integer|min:0|max:6',
+            'immunization_week_number' => 'required_if:immunization_pattern,monthly_nth|nullable|integer|min:1|max:4',
         ]);
 
         if ($validated['immunization_pattern'] === 'exact') {
@@ -534,7 +576,7 @@ class VaccinationForecastController extends Controller
         }
 
         if ($validated['immunization_pattern'] !== 'exact'
-            && ($validated['immunization_weekday'] === null || $validated['immunization_weekday'] === '')) {
+            && ! isset($validated['immunization_weekday'])) {
             return back()->with('error', 'Please select a day of the week for this pattern.');
         }
 
@@ -548,7 +590,7 @@ class VaccinationForecastController extends Controller
      */
     public function storeEpiSchedule(Request $request)
     {
-        if ($redirect = $this->guardRhuUser()) {
+        if ($redirect = $this->guardEpiManager()) {
             return $redirect;
         }
 
@@ -564,10 +606,10 @@ class VaccinationForecastController extends Controller
         }
 
         $healthUnitId = session('health_unit_id');
-        $area = trim($validated['area_label']);
+        $area = BarangayDemandScope::validateForViewer((int) $healthUnitId, $validated['area_label'], 'area_label', true);
 
         $existing = RhuImmunizationSchedule::forHealthUnit($healthUnitId)
-            ->where('area_label', $area)
+            ->whereRaw('LOWER(TRIM(area_label)) = ?', [mb_strtolower($area)])
             ->exists();
 
         if ($existing) {
@@ -592,12 +634,13 @@ class VaccinationForecastController extends Controller
      */
     public function destroyEpiSchedule($id)
     {
-        if ($redirect = $this->guardRhuUser()) {
+        if ($redirect = $this->guardEpiManager()) {
             return $redirect;
         }
 
         $schedule = RhuImmunizationSchedule::forHealthUnit(session('health_unit_id'))->findOrFail($id);
         $area = $schedule->area_label;
+        BarangayDemandScope::validateForViewer((int) session('health_unit_id'), $area, 'area_label', true);
         $schedule->delete();
 
         return back()->with('success',
@@ -610,7 +653,7 @@ class VaccinationForecastController extends Controller
      */
     public function generateEpiDays(Request $request)
     {
-        if ($redirect = $this->guardRhuUser()) {
+        if ($redirect = $this->guardEpiManager()) {
             return $redirect;
         }
 
@@ -625,6 +668,8 @@ class VaccinationForecastController extends Controller
 
         $schedules = RhuImmunizationSchedule::active()
             ->forHealthUnit($healthUnitId)
+            ->whereIn(DB::raw('LOWER(TRIM(area_label))'),
+                BarangayDemandScope::options((int) $healthUnitId, (int) session('user_id'))->map(fn ($area) => mb_strtolower($area)))
             ->get();
 
         if ($schedules->isEmpty()) {
@@ -649,7 +694,7 @@ class VaccinationForecastController extends Controller
             foreach ($dates as $date) {
                 $exists = CalendarEvent::where('health_unit_id', $healthUnitId)
                     ->where('event_date', $date->toDateString())
-                    ->where('type', 'immunization_day')
+                    ->where('type', CalendarEvent::TYPE_EPI_DAY)
                     ->where('area_label', $sched->area_label)
                     ->exists();
 
@@ -662,7 +707,7 @@ class VaccinationForecastController extends Controller
                     'title' => 'EPI Day — '.$sched->area_label,
                     'description' => 'Regular immunization session · '.$sched->pattern_label,
                     'event_date' => $date->toDateString(),
-                    'type' => 'immunization_day',
+                    'type' => CalendarEvent::TYPE_EPI_DAY,
                     'priority' => 'normal',
                     'area_label' => $sched->area_label,
                     'created_by' => session('user_id'),
@@ -687,20 +732,20 @@ class VaccinationForecastController extends Controller
      */
     public function clearEpiDays(Request $request)
     {
-        if ($redirect = $this->guardRhuUser()) {
+        if ($redirect = $this->guardEpiManager()) {
             return $redirect;
         }
 
         $healthUnitId = session('health_unit_id');
-        $areaLabel = $request->input('area_label');
+        $validated = $request->validate(['area_label' => 'nullable|string|max:120']);
+        $areaLabel = BarangayDemandScope::validateForViewer((int) $healthUnitId, $validated['area_label'] ?? null, 'area_label');
 
         $query = CalendarEvent::where('health_unit_id', $healthUnitId)
-            ->where('type', 'immunization_day')
-            ->whereDate('event_date', '>=', now()->toDateString());
-
-        if ($areaLabel) {
-            $query->where('area_label', $areaLabel);
-        }
+            ->where('type', CalendarEvent::TYPE_EPI_DAY)
+            ->whereDate('event_date', '>=', now()->toDateString())
+            ->whereIn(DB::raw('LOWER(TRIM(area_label))'), BarangayDemandScope::options((int) $healthUnitId, (int) session('user_id'))
+                ->map(fn ($area) => mb_strtolower($area)))
+            ->when($areaLabel, fn ($query) => $query->whereRaw('LOWER(TRIM(area_label)) = ?', [mb_strtolower($areaLabel)]));
 
         $deleted = $query->delete();
 
@@ -722,43 +767,9 @@ class VaccinationForecastController extends Controller
             return response()->json(['labels' => [], 'data' => []]);
         }
 
-        $rows = DB::table('immunization_records')
-            ->join('public_users', 'public_users.id', '=', 'immunization_records.public_user_id')
-            ->when(session('role') === 'midwife', fn ($q) => $q->where('public_users.assigned_midwife_id', session('user_id')))
-            ->where('public_users.health_unit_id', $healthUnitId)
-            ->whereNotNull('public_users.barangay')
-            ->where('public_users.barangay', '!=', '')
-            ->select('public_users.barangay',
-                DB::raw('COUNT(DISTINCT immunization_records.public_user_id) as immunized'))
-            ->groupBy('public_users.barangay')
-            ->orderByDesc('immunized')
-            ->get();
+        $coverage = app(\App\Services\BarangayImmunizationCoverageService::class)->forHealthUnit((int) $healthUnitId);
 
-        $totals = PublicUser::forViewer()
-            ->where('health_unit_id', $healthUnitId)
-            ->whereNotNull('barangay')
-            ->where('barangay', '!=', '')
-            ->whereNotNull('birth_date')
-            ->where('birth_date', '>=', now()->subYears(5))
-            ->select('barangay', DB::raw('COUNT(*) as total'))
-            ->groupBy('barangay')
-            ->pluck('total', 'barangay');
-
-        $labels = $rows->pluck('barangay');
-        $data = $rows->pluck('immunized')->map(fn ($v) => (int) $v);
-        $percent = collect();
-
-        foreach ($labels as $idx => $barangay) {
-            $total = (int) ($totals[$barangay] ?? 0);
-            $imms = (int) ($data[$idx] ?? 0);
-            $percent->push($total === 0 ? 0 : (int) round(($imms / $total) * 100));
-        }
-
-        return response()->json([
-            'labels' => $labels,
-            'data' => $data,
-            'totals' => $labels->map(fn ($b) => (int) ($totals[$b] ?? 0)),
-            'percent' => $percent,
-        ]);
+        return response()->json(['labels' => $coverage['labels'], 'data' => $coverage['immunized'],
+            'totals' => $coverage['totals'], 'percent' => $coverage['percent']]);
     }
 }
