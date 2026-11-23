@@ -420,10 +420,16 @@
 
             <form class="public-search-form" action="{{ route('public.home.citizen') }}" method="GET">
                 <div class="search-form-flex">
-                    <input type="text" name="q" id="public-search-input" value="{{ $q }}" maxlength="200" aria-label="Medicine name or dosage" enterkeyhint="search"
+                    <input type="text" name="q" id="public-search-input" value="{{ $q }}" maxlength="200" aria-label="Medicine name or dosage" enterkeyhint="search" required
+                       @if($missingSearchQuery) aria-invalid="true" aria-describedby="public-search-error" @endif
                        placeholder="Search by name or dosage" autocomplete="off">
                     <button class="search-submit" type="submit">Search</button>
                 </div>
+                @if($missingSearchQuery)
+                    <p id="public-search-error" role="alert" style="margin:0;color:#a32d2d;font-weight:600;">
+                        Enter a medicine name or dosage to search.
+                    </p>
+                @endif
 
                 <div class="rhu-field">
                     <select name="health_unit_id" id="rhu-hidden-input" aria-label="Rural health unit"

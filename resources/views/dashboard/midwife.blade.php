@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Midwife Dashboard')
+
 @section('content')
 
 

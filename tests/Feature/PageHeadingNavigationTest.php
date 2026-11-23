@@ -26,6 +26,45 @@ class PageHeadingNavigationTest extends TestCase
         return 'contains(concat(" ", normalize-space(@class), " "), " '.$name.' ")';
     }
 
+    public function test_staff_dashboard_and_workflow_tabs_have_distinct_titles(): void
+    {
+        $unit = HealthUnit::create(['name' => 'Title fixture RHU']);
+        foreach ([
+            ['admin', null, 'dashboard', 'PHO Dashboard'],
+            ['admin', $unit->id, 'dashboard', 'RHU Admin Dashboard'],
+            ['staff', $unit->id, 'dashboard', 'RHU Staff Dashboard'],
+            ['midwife', $unit->id, 'dashboard.midwife', 'Midwife Dashboard'],
+        ] as [$role, $unitId, $route, $title]) {
+            $actor = User::factory()->create(['role' => $role, 'health_unit_id' => $unitId]);
+            $page = $this->withSession(['user_id' => $actor->id])->get(route($route))->assertOk();
+            $this->assertSame($title.' | PHO Supply Portal', $this->xpath($page->getContent())->evaluate('string(/html/head/title)'));
+        }
+
+        $admin = User::factory()->create(['role' => 'admin', 'health_unit_id' => $unit->id]);
+        $this->withSession(['user_id' => $admin->id]);
+        foreach (['transfers.index' => 'Transfers', 'vaccination.calendar' => 'Vaccination Calendar', 'settings' => 'Settings'] as $route => $title) {
+            $page = $this->get(route($route))->assertOk();
+            $this->assertSame($title.' | PHO Supply Portal', $this->xpath($page->getContent())->evaluate('string(/html/head/title)'));
+        }
+    }
+
+    public function test_calendar_month_links_are_named_and_open_the_expected_months(): void
+    {
+        $unit = HealthUnit::create(['name' => 'Calendar fixture RHU']);
+        $midwife = User::factory()->create(['role' => 'midwife', 'health_unit_id' => $unit->id]);
+        $page = $this->withSession(['user_id' => $midwife->id])
+            ->get(route('vaccination.calendar', ['month' => '2026-11']))->assertOk();
+        $xpath = $this->xpath($page->getContent());
+
+        foreach (['Previous month' => '2026-10', 'Next month' => '2026-12'] as $label => $month) {
+            $links = $xpath->query('//a['.$this->hasClass('cal-nav-btn').'][@aria-label="'.$label.'"]');
+            $this->assertCount(1, $links);
+            $url = $links->item(0)->getAttribute('href');
+            $this->assertSame(route('vaccination.calendar', ['month' => $month]), $url);
+            $this->get($url)->assertOk()->assertViewHas('start', fn ($date) => $date->format('Y-m') === $month);
+        }
+    }
+
     public function test_shared_headers_keep_their_title_navigation_and_action_structure_for_supported_roles(): void
     {
         $unit = HealthUnit::create(['name' => 'Heading navigation RHU', 'facility_type' => 'Rural Health Unit']);

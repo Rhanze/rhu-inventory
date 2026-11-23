@@ -130,6 +130,7 @@ class PublicController extends Controller
     {
         $parameters = $this->searchParameters($request);
         $q = trim($parameters['q'] ?? '');
+        $missingSearchQuery = $request->query->has('q') && $q === '';
         $selectedRhuId = $parameters['health_unit_id'] ?? null;
         $selectedRhuId = ($selectedRhuId !== null && $selectedRhuId !== '')
                             ? (int) $selectedRhuId
@@ -188,6 +189,7 @@ class PublicController extends Controller
 
         return view('public.home', compact(
             'q',
+            'missingSearchQuery',
             'rhuList',
             'selectedRhu',
             'selectedRhuId',

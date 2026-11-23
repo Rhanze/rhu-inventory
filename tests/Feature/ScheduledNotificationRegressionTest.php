@@ -61,7 +61,7 @@ class ScheduledNotificationRegressionTest extends TestCase
         $notice = Notification::where('type', 'overdue_doses')->sole();
         $this->assertSame($midwife->id, $notice->user_id);
         $this->assertStringStartsWith('1 assigned child has overdue vaccine doses.', $notice->message);
-        $this->assertSame(route('vaccination.calendar'), $notice->link);
+        $this->assertSame('/vaccination/calendar', $notice->link);
         $this->assertSame(0, Notification::where('user_id', $other->id)->count());
         $this->assertSame(0, $service->scanOverdueDoses());
     }
@@ -83,6 +83,7 @@ class ScheduledNotificationRegressionTest extends TestCase
         DB::table('calendar_events')->where('id', $deleted->id)->update(['deleted_at' => now()]);
 
         $this->assertSame(6, $service->scanEpiReminders());
+        $this->assertSame(['/vaccination/calendar'], Notification::where('type', 'epi_reminder')->distinct()->pluck('link')->all());
         $this->assertSame(0, Notification::where('health_unit_id', $deletedUnit->id)->count());
         $this->assertSame(0, $service->scanEpiReminders());
     }

@@ -50,6 +50,26 @@ class PublicSearchAuditTest extends TestCase
         }
     }
 
+    public function test_blank_search_gives_a_medicine_prompt_and_preserves_the_selected_rhu(): void
+    {
+        $rhu = HealthUnit::create(['name' => 'Public RHU', 'facility_type' => 'Rural Health Unit']);
+        $this->get('/public')->assertOk()->assertDontSee('Enter a medicine name or dosage to search.');
+
+        foreach (['', '%20%20'] as $query) {
+            $response = $this->get('/public?q='.$query.'&health_unit_id='.$rhu->id)->assertOk()
+                ->assertSee('Enter a medicine name or dosage to search.')
+                ->assertDontSee('id="search-results"', false);
+            $document = new \DOMDocument;
+            $document->loadHTML($response->getContent(), LIBXML_NOERROR | LIBXML_NOWARNING);
+            $xpath = new \DOMXPath($document);
+            $this->assertCount(1, $xpath->query(
+                '//input[@name="q"][@required][@aria-invalid="true"][@aria-describedby="public-search-error"]',
+            ));
+            $this->assertCount(1, $xpath->query('//*[@id="public-search-error"][@role="alert"]'));
+            $this->assertCount(1, $xpath->query('//select[@name="health_unit_id"]/option[@value="'.$rhu->id.'"][@selected]'));
+        }
+    }
+
     public function test_public_totals_and_next_expiry_describe_stock_that_can_actually_be_dispensed(): void
     {
         $unit = HealthUnit::create(['name' => 'Public RHU', 'facility_type' => 'Rural Health Unit']);

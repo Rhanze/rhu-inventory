@@ -156,9 +156,19 @@ class Notification extends Model
         }
 
         $link = trim((string) $this->link);
-        $scheme = parse_url($link, PHP_URL_SCHEME);
-        if ($link !== '' && ! str_starts_with($link, '#')
+        $parts = parse_url($link);
+        $scheme = $parts['scheme'] ?? null;
+        if ($link !== '' && $parts !== false && ! str_starts_with($link, '#')
             && ($scheme === null || in_array(strtolower((string) $scheme), ['http', 'https'], true))) {
+            $calendar = route('vaccination.calendar', absolute: false);
+            $path = $parts['path'] ?? '';
+            // Scheduled notices may still carry a host or a local installation path.
+            if ($path === $calendar || (in_array(strtolower($parts['host'] ?? ''), ['localhost', '127.0.0.1', '[::1]'], true)
+                && str_ends_with($path, $calendar))) {
+                return $calendar.(isset($parts['query']) ? '?'.$parts['query'] : '')
+                    .(isset($parts['fragment']) ? '#'.$parts['fragment'] : '');
+            }
+
             // Receipt controls are already on the notification card; opening this page again adds no detail.
             if ($this->type === 'allocation_to_user' && $link === route('notifications.index')) {
                 return null;

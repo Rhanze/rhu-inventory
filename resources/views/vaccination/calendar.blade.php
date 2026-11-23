@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Vaccination Calendar')
+
 @section('content')
 @php
     $midwifeRole = session('role') === 'midwife';
@@ -410,7 +412,7 @@
 
             <div class="mw-calendar-month-controls" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                 <a href="{{ route('vaccination.calendar', ['month' => $start->copy()->subMonth()->format('Y-m'), 'area_label' => $calendarAreaFilter]) }}"
-                   class="cal-nav-btn" title="Previous month">←</a>
+                   class="cal-nav-btn" aria-label="Previous month" title="Previous month">←</a>
 
                 <select name="month_picker" class="cal-select" onchange="onMonthPick(this.value)" id="month-picker">
                     @php
@@ -434,7 +436,7 @@
                 </select>
 
                 <a href="{{ route('vaccination.calendar', ['month' => $start->copy()->addMonth()->format('Y-m'), 'area_label' => $calendarAreaFilter]) }}"
-                   class="cal-nav-btn" title="Next month">→</a>
+                   class="cal-nav-btn" aria-label="Next month" title="Next month">→</a>
             </div>
 
             <div style="display:flex; gap:20px; flex-wrap:wrap;">

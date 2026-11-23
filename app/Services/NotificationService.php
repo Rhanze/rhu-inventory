@@ -49,7 +49,7 @@ class NotificationService
                             'type' => 'doh_preparation', 'dedup_key' => $key,
                             'title' => $stage.'-day preparation · '.$event['name'], 'message' => $message,
                             'severity' => $event['shortage_count'] > 0 ? 'warning' : 'info',
-                            'link' => route('vaccination.calendar', ['month' => substr($event['date'], 0, 7), 'day' => $event['date']]).'#selected-day',
+                            'link' => route('vaccination.calendar', ['month' => substr($event['date'], 0, 7), 'day' => $event['date']], absolute: false).'#selected-day',
                             'is_read' => false, 'created_at' => now()]);
                         DB::table('doh_event_reminders')->where('dedup_key', $key)->update(['notification_id' => $notice->id]);
 
@@ -315,7 +315,7 @@ class NotificationService
                 'Overdue Vaccine Doses',
                 $children.' assigned '.($children === 1 ? 'child has' : 'children have').' overdue vaccine doses. Open the vaccination calendar to follow up.',
                 'warning',
-                route('vaccination.calendar'),
+                route('vaccination.calendar', absolute: false),
                 [],
                 'overdue_digest',
                 20
@@ -443,7 +443,7 @@ class NotificationService
                 $title,
                 $message,
                 'info',
-                route('vaccination.calendar'),
+                route('vaccination.calendar', absolute: false),
                 [],
                 $dedup,
                 20
@@ -465,7 +465,7 @@ class NotificationService
                     $title,
                     $message,
                     'info',
-                    route('vaccination.calendar'),
+                    route('vaccination.calendar', absolute: false),
                     [],
                     $dedup,
                     20

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\HealthUnit;
+use App\Models\Notification;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\RouteCollection;
@@ -48,6 +49,28 @@ class PortalDomainSplitTest extends TestCase
         $this->withSession(['user_id' => $user->id, 'role' => 'midwife', 'health_unit_id' => $unit->id])
             ->get('http://management.rhu.test/dashboard')->assertRedirect('http://management.rhu.test/midwife/dashboard');
         $this->get('http://rhu.test/dashboard')->assertNotFound();
+    }
+
+    public function test_midwife_can_open_a_calendar_notice_saved_with_a_localhost_url(): void
+    {
+        $unit = HealthUnit::create(['name' => 'Calendar notice RHU']);
+        $midwife = User::factory()->create(['role' => 'midwife', 'health_unit_id' => $unit->id]);
+        $day = today()->toDateString();
+        $path = '/vaccination/calendar?month='.substr($day, 0, 7).'&day='.$day.'#selected-day';
+        $notice = Notification::create([
+            'health_unit_id' => $unit->id, 'user_id' => $midwife->id, 'type' => 'doh_preparation',
+            'title' => 'Calendar reminder', 'message' => 'Open the calendar.', 'severity' => 'info',
+            'created_at' => now(), 'link' => 'http://localhost'.$path,
+        ]);
+
+        $management = 'http://management.rhu.test';
+        $this->withSession(['user_id' => $midwife->id])->get($management.'/notifications')
+            ->assertOk()->assertSee('href="'.e($path).'"', false)
+            ->assertDontSee('href="'.e($notice->link).'"', false);
+        $this->getJson($management.'/notifications/recent')->assertOk()
+            ->assertJsonPath('notifications.0.url', $path);
+        $this->get($management.strtok($path, '#'))->assertOk()->assertSee('id="selected-day"', false);
+        $this->get('http://rhu.test'.strtok($path, '#'))->assertNotFound();
     }
 
     public function test_valid_staff_login_redirects_on_management_domain(): void

@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', $isPHOAdmin ? 'PHO Dashboard' : (session('role') === 'staff' ? 'RHU Staff Dashboard' : 'RHU Admin Dashboard'))
+
 @section('content')
 <div class="dashboard-page" style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
 
