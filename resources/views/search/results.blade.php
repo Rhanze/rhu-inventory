@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Staff Search Results')
+
 @section('content')
 <div style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem; overflow-wrap:anywhere; line-height:1.5;">
 

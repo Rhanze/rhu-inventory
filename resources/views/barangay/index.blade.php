@@ -1,6 +1,8 @@
 {{-- resources/views/barangay/index.blade.php --}}
 @extends('layouts.app')
 
+@section('title', 'Barangays')
+
 @section('content')
 <div style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
 

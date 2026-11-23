@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Stock Forecasting')
+
 @section('content')
 @include('forecast._styles')
 <style>

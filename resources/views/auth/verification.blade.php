@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Verify sign-in | RHU Inventory</title>
+    <title>Verify Sign-in | PHO Supply Portal</title>
     <style>
         body { margin: 0; padding: 1rem; min-height: calc(100dvh - 2rem); display: grid; place-items: center; background: #e8f5ef; color: #0f172a; font: 1rem/1.5 Arial, sans-serif; }
         main { width: min(100%, 27rem); box-sizing: border-box; padding: clamp(1rem, 5vw, 2rem); background: #fff; border: 1px solid #c9ded5; border-radius: 1rem; }

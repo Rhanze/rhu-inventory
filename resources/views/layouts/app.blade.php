@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('images/web-icon.png') }}">
-    <title>@yield('title', 'Inventory') | PHO Supply Portal</title>
+    <title>@yield('title', 'Staff Portal') | PHO Supply Portal</title>
     @vite('resources/css/app.css')
 
     <style>

@@ -1,5 +1,7 @@
 @extends('layouts.public')
 
+@section('title', 'Medicine and Vaccine Search')
+
 @push('head')
     <link rel="stylesheet" href="{{ asset('css/form-choice-search.css') }}?v={{ filemtime(public_path('css/form-choice-search.css')) }}">
     <script src="{{ asset('js/form-choice-search.js') }}?v={{ filemtime(public_path('js/form-choice-search.js')) }}" defer></script>

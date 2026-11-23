@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Stock Lookup')
+
 @section('content')
 <style>
 /* ═══════════════════════════════════════════════════════════

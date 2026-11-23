@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Edit User Account')
+
 @section('content')
 @php
     $isRhuAdmin = (bool) session('health_unit_id');

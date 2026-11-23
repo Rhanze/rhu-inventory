@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Target Client List')
+
 @section('content')
 {{-- ═══════════════════════════════════════════════════════════════ --}}
 {{-- PRINT STYLES                                                    --}}

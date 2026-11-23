@@ -1,5 +1,7 @@
 @extends('layouts.public')
 
+@section('title', 'Accessibility')
+
 @section('content')
 <div class="stack" style="max-width: 900px; margin: 0 auto;">
 

@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Supply Requests')
+
 @section('content')
 @include('supply_requests._mobile_styles')
 <div class="supply-request-page" style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">

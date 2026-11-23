@@ -1,6 +1,8 @@
 {{-- resources/views/activity_logs/index.blade.php --}}
 @extends('layouts.app')
 
+@section('title', 'Activity Logs')
+
 @section('content')
 <div style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
 

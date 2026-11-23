@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'PHO Dashboard')
+
 @section('content')
 <div class="dashboard-page" style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
 

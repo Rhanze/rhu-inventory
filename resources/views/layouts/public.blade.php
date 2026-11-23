@@ -6,7 +6,7 @@
     <meta name="description" content="Search medicine and vaccine availability at Rural Health Units in the Province of Antique. No staff account is required.">
     <link rel="canonical" href="{{ request()->routeIs('public.home', 'public.home.citizen') ? route('public.home') : url()->current() }}">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('images/web-icon.png') }}">
-    <title>PHO Supply Portal | Search</title>
+    <title>@yield('title', 'Medicine and Vaccine Search') | PHO Supply Portal</title>
     @vite('resources/css/app.css')
 
     <style>

@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Transfer Receipt Review')
+
 @section('content')
 <section style="max-width:44rem;padding:clamp(1rem,4vw,2rem);border-radius:1rem;background:#fff;">
     <a href="{{ route('transfers.index', ['receipt_review' => 1]) }}" style="color:#0f5c4b;text-decoration:underline;">Receipt reviews</a>

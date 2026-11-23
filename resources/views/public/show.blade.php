@@ -1,5 +1,7 @@
 @extends('layouts.public')
 
+@section('title', filled($medicine->medicine_name) ? $medicine->medicine_name : 'Medicine Details')
+
 @section('content')
 <div class="stack">
 

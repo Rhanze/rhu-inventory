@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Family Planning')
+
 @section('content')
 <link rel="stylesheet" href="{{ asset('css/clinical-dialog.css') }}">
 <div style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">

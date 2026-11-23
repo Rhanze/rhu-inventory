@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Edit Patient')
+
 @section('content')
 @php
     $isMidwife = session('role') === 'midwife';

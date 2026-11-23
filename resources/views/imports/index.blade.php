@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Import')
+@section('title', 'CSV Imports')
 
 @section('content')
 <div style="max-width:70rem;margin:0 auto;display:grid;gap:1.25rem;">

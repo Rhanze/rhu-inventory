@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Immunization History')
+
 @section('content')
 @include('shared.empty_result', ['resultKey' => 'history', 'recordCount' => $records->count()])
 <div style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">

@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Stock on Hand')
+
 @php
     // Unique dosage forms for the export filter
     $dosageFormOptions = \App\Models\Medicine::query()

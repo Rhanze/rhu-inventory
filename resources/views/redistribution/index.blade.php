@@ -1,4 +1,6 @@
 @extends('layouts.app')
+
+@section('title', 'Redistribution')
 @section('content')
 <div style="background:white;padding:24px;border-radius:16px;overflow:auto">
     <h1>Redistribution suggestions</h1>

@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Patient Profile')
+
 @section('content')
 
 {{-- ═══════════════════════════════════════════════════════════════ --}}

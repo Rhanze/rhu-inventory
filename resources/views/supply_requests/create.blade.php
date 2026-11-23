@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Create Supply Request')
+
 @php
     $purposeLimit = match (old('urgency')) { 'urgent' => 246, 'emergency' => 243, default => 255 };
     // Prepare medicines JSON for the JS autocomplete, enriched with stock info

@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Inventory History')
+
 @section('content')
 <div class="inventory-history">
     <style>

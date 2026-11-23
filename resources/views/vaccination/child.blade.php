@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Child Vaccination Schedule')
+
 @section('content')
 
 {{-- ═══════════════════════════════════════════════════════════════ --}}

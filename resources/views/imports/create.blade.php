@@ -1,5 +1,5 @@
 @extends('layouts.app')
-@section('title', 'Import')
+@section('title', 'Import '.$definition['title'])
 @section('content')
 <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:20px;border:1px solid #e2e8f0;box-shadow:0 8px 20px rgba(0,0,0,.06);overflow:hidden;font-size:1.0625rem;line-height:1.5;">
     <div style="padding:22px 26px 14px;border-bottom:1px solid #f1f5f9;">

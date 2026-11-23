@@ -31,8 +31,24 @@ class NavigationAuditTest extends TestCase
                 $this->assertLessThan(500, $response->getStatusCode(), $route->getName().' failed for '.$actor->role.' / '.($actor->health_unit_id ?? 'PHO'));
                 if ($response->baseResponse instanceof StreamedResponse && $response->isSuccessful()) {
                     $response->streamedContent();
+                } elseif ($response->isSuccessful() && str_starts_with($response->headers->get('Content-Type', ''), 'text/html')) {
+                    $this->assertMatchesRegularExpression('/<title>[^<]+ \| PHO Supply Portal<\/title>/', $response->getContent(), $route->getName());
+                    $response->assertDontSee('<title>Staff Portal | PHO Supply Portal</title>', false);
                 }
             }
+        }
+    }
+
+    public function test_role_dashboards_link_to_the_correctly_titled_notification_page(): void
+    {
+        $rhu = HealthUnit::create(['name' => 'Tab title RHU']);
+        foreach ([['admin', null], ['admin', $rhu->id], ['midwife', $rhu->id]] as [$role, $facility]) {
+            $actor = User::factory()->create(['role' => $role, 'health_unit_id' => $facility]);
+            $page = $this->withSession(['user_id' => $actor->id])
+                ->get(route($role === 'midwife' ? 'dashboard.midwife' : 'dashboard'))->assertOk();
+            $url = route('notifications.index');
+            $page->assertSee('href="'.$url.'"', false);
+            $this->get($url)->assertOk()->assertSee('<title>Notifications | PHO Supply Portal</title>', false);
         }
     }
 }

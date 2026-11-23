@@ -40,6 +40,57 @@
 <div style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
 
     <style>
+        .mw-calendar-actions,
+        .mw-calendar-actions form {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+            max-width: 100%;
+            margin: 0;
+        }
+
+        .mw-calendar-actions :is(.cal-toolbar-button, .csv-import-link, .record-choice-input, #clear-epi-area:not(.record-choice-native)) {
+            box-sizing: border-box;
+            block-size: 2.875rem;
+            min-block-size: 44px;
+        }
+
+        .mw-calendar-actions .cal-toolbar-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 0 0.625rem;
+            border: 1px solid #42ad8a;
+            border-radius: 10px;
+            background: #fff;
+            color: #0f5c4b;
+            font-size: 1rem;
+            font-weight: 600;
+            line-height: 1.25;
+            text-decoration: none;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        .mw-calendar-actions .cal-toolbar-button.is-danger { color: #991b1b; border-color: #fca5a5; }
+        .mw-calendar-actions .cal-toolbar-button.is-primary { color: #fff; background: #42ad8a; }
+        .mw-calendar-actions .cal-toolbar-button.is-secondary { color: #334155; border-color: #e2e8f0; }
+        #clear-epi-form :is(.record-choice, #clear-epi-area:not(.record-choice-native)) {
+            width: clamp(11rem, calc(15vw - 3.5rem), 13rem);
+            max-width: 100%;
+        }
+        #clear-epi-area:not(.record-choice-native) {
+            padding: 0 12px;
+            border: 1px solid #a6b7af;
+            border-radius: 9px;
+            background: #fff;
+            color: #0f172a;
+            font: inherit;
+        }
+
         .cal-nav-btn {
             display: inline-flex; align-items: center; justify-content: center;
             padding: 10px 14px; border-radius: 10px;
@@ -135,9 +186,6 @@
             body.role-midwife .mw-calendar-scroll .cal-cell { min-height: 110px; padding: 8px 6px; }
             body.role-midwife .mw-calendar-scroll .cal-chip { font-size: 11px; padding: 2px 6px; }
             body.role-midwife .mw-calendar-actions { width: 100%; }
-            body.role-midwife .mw-calendar-actions > form { flex-wrap: wrap; max-width: 100%; }
-            body.role-midwife #clear-epi-form { width: 100%; }
-            body.role-midwife #clear-epi-form > * { flex: 1 1 140px; }
             body.role-midwife .mw-epi-form > div { flex: 1 1 100% !important; }
             body.role-midwife .mw-calendar-month-controls { width: 100%; display: grid !important; grid-template-columns: 44px minmax(0, 1fr) minmax(0, 1fr) 44px; }
             body.role-midwife .mw-calendar-month-controls .cal-select { width: 100%; padding: 0 6px; }
@@ -167,32 +215,23 @@
             </h2>
         </div>
 
-        <div class="mw-calendar-actions mw-form-actions" style="display:flex; gap:8px; flex-wrap:wrap;">
+        <div class="mw-calendar-actions">
             @if($midwifeRole)
-            <form method="POST" action="{{ route('vaccination.generate_epi_days') }}" style="display:inline;"
+            <form method="POST" action="{{ route('vaccination.generate_epi_days') }}"
                   onsubmit="return confirmDialog(event, 'Generate EPI day events for your assigned areas for the next 12 months?');">
                 @csrf
-                <button type="submit" @disabled($noAssignedAreas) style="
-                    display:inline-flex; align-items:center; gap:6px;
-                    padding:10px 18px; border-radius:10px;
-                    background:#ffffff; color:#0f5c4b; border:1px solid #42ad8a;
-                    font-size:16px; font-weight:600; cursor:pointer;">
+                <button type="submit" class="cal-toolbar-button" @disabled($noAssignedAreas)>
                     🔄 Generate EPI Days
                 </button>
             </form>
 
             <form method="POST" action="{{ route('vaccination.clear_epi_days') }}"
                   id="clear-epi-form"
-                  onsubmit="return confirmClearEpi(event);"
-                  style="display:inline-flex; align-items:center; gap:6px;">
+                  onsubmit="return confirmClearEpi(event);">
                 @csrf
 
                 @if(($epiSchedules ?? collect())->count() > 0)
-                    <select name="area_label" id="clear-epi-area" style="
-                        height:44px; padding:0 14px; font-size:15px;
-                        border:2px solid #fca5a5; border-radius:10px;
-                        background:#ffffff; color:#991b1b; font-weight:700;
-                        cursor:pointer; outline:none; appearance:auto;">
+                    <select name="area_label" id="clear-epi-area" aria-label="EPI area to clear">
                         <option value="">— All assigned areas —</option>
                         @foreach($epiSchedules as $sched)
                             <option value="{{ $sched->area_label }}">{{ $sched->area_label }}</option>
@@ -200,32 +239,20 @@
                     </select>
                 @endif
 
-                <button type="submit" @disabled($noAssignedAreas) style="
-                    display:inline-flex; align-items:center; gap:6px;
-                    padding:10px 18px; border-radius:10px;
-                    background:#ffffff; color:#991b1b; border:1px solid #fca5a5;
-                    font-size:16px; font-weight:600; cursor:pointer;">
+                <button type="submit" class="cal-toolbar-button is-danger" @disabled($noAssignedAreas)>
                     🗑️ Clear EPI Days
                 </button>
             </form>
             @endif
 
-            <button type="button" onclick="openEventModal()" @disabled($noAssignedAreas) style="
-                display:inline-flex; align-items:center; gap:6px;
-                padding:10px 18px; border-radius:10px;
-                background:#42ad8a; color:#fff; border:1px solid #42ad8a;
-                font-size:16px; font-weight:600; cursor:pointer;">
+            <button type="button" class="cal-toolbar-button is-primary" onclick="openEventModal()" @disabled($noAssignedAreas)>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 Add Event
             </button>
 
             @include('imports._link', ['section' => 'calendar_events'])
 
-            <a href="{{ route('vaccination.forecast') }}" style="
-                display:inline-flex; align-items:center; gap:6px;
-                padding:10px 18px; border-radius:10px;
-                background:#ffffff; color:#334155; border:1px solid #e2e8f0;
-                font-size:16px; font-weight:600; text-decoration:none;">
+            <a href="{{ route('vaccination.forecast') }}" class="cal-toolbar-button is-secondary">
                 📊 Forecast
             </a>
         </div>

@@ -13,6 +13,32 @@ class PublicSearchAuditTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_public_footer_and_search_result_links_open_pages_with_specific_titles(): void
+    {
+        $rhu = HealthUnit::create(['name' => 'Public RHU', 'facility_type' => 'Rural Health Unit']);
+        $medicine = Medicine::create(['medicine_name' => 'Fixture Medicine & Vaccine', 'is_dispensable' => true]);
+        Inventory::create(['health_unit_id' => $rhu->id, 'medicine_id' => $medicine->id, 'available_stock' => 12]);
+        $search = $this->get(route('public.home.citizen', ['q' => 'Fixture', 'health_unit_id' => $rhu->id]))
+            ->assertOk()->assertSee('<title>Medicine and Vaccine Search | PHO Supply Portal</title>', false);
+        foreach (['privacy' => 'Privacy Policy', 'terms' => 'Terms of Use', 'accessibility' => 'Accessibility'] as $route => $title) {
+            $url = route($route);
+            $search->assertSee('href="'.$url.'"', false);
+            $this->get($url)->assertOk()->assertSee('<title>'.$title.' | PHO Supply Portal</title>', false);
+        }
+        $detail = route('public.medicine.show', ['id' => $medicine->id, 'health_unit_id' => $rhu->id, 'q' => 'Fixture']);
+        $search->assertSee('href="'.e($detail).'"', false);
+        $this->get($detail)->assertOk()->assertSee('<title>Fixture Medicine &amp; Vaccine | PHO Supply Portal</title>', false);
+    }
+
+    public function test_medicine_details_use_the_name_when_present_and_fall_back_for_a_blank_name(): void
+    {
+        foreach ([['0', '0'], ['   ', 'Medicine Details']] as [$name, $title]) {
+            $medicine = Medicine::create(['medicine_name' => $name, 'is_dispensable' => true]);
+            $this->get(route('public.medicine.show', ['id' => $medicine->id]))
+                ->assertOk()->assertSee('<title>'.$title.' | PHO Supply Portal</title>', false);
+        }
+    }
+
     public function test_landing_search_keeps_its_query_and_search_row_above_the_rhu_selector(): void
     {
         $rhu = HealthUnit::create(['name' => 'Public RHU', 'facility_type' => 'Rural Health Unit']);

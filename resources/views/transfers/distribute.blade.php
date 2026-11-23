@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'PHO Stock Distribution')
+
 @php
     $medicinesJson = $medicines->map(function ($m) {
         return [

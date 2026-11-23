@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Medicine and Supply Catalog')
+
 @section('content')
 @php
     // Unique dosage forms for the export filter

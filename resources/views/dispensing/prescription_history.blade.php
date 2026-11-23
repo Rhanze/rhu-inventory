@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Prescription History')
+
 @section('content')
 <section style="max-width:44rem;padding:1.5rem;border-radius:1rem;background:#fff;">
     <a href="{{ route('dispensing.index') }}" style="color:#0f5c4b;text-decoration:underline;">Dispensing records</a>

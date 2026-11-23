@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="robots" content="noindex, nofollow">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('images/web-icon.png') }}">
-    <title>PHO Supply Portal| @yield('title', 'Login')</title>
+    <title>@yield('title', 'Login') | PHO Supply Portal</title>
     <style>
         * {
             box-sizing: border-box;

@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Batch Inventory Report</title>
+    <title>Batch Inventory Report | PHO Supply Portal</title>
     <style>
         body { margin: 1rem; color: #111827; font: 11pt/1.45 Arial, sans-serif; }
         h1 { margin: 0; font-size: 1.45rem; }

@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Add Health Unit')
+
 @section('content')
 <div style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
 
