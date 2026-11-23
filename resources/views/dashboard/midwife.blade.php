@@ -369,7 +369,7 @@
         <a id="midwife-kpi-pending-requests" class="mw-stat mw-kpi-link {{ $pendingRequests > 0 ? 'tone-amber' : '' }}" href="{{ route('supply_requests.index', ['status' => 'pending']) }}">
             <p class="mw-stat-label">Pending Requests</p>
             <p class="mw-stat-value">{{ $pendingRequests }}</p>
-            <p class="mw-stat-sub">As of {{ $snapshotDate }}: your pending supply requests at this RHU. Transfers to other facilities are excluded.</p>
+            <p class="mw-stat-sub">As of {{ $snapshotDate }}: your pending supply requests at this RHU.</p>
         </a>
     </div>
 

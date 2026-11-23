@@ -58,7 +58,8 @@ class MidwifeSnapshotLinksTest extends TestCase
             ->assertViewHas('dispensedToday', 2)->assertViewHas('dispensedThisMonth', 3)
             ->assertViewHas('activePatients', 2)->assertViewHas('pendingRequests', 2)
             ->assertSee('As of 2026-11-18')->assertSee('currently assigned to you at this RHU')
-            ->assertSee('Transfers to other facilities are excluded.');
+            ->assertSee('your pending supply requests at this RHU.')
+            ->assertDontSee('Transfers to other facilities are excluded.');
         $document = new \DOMDocument;
         @$document->loadHTML($dashboard->getContent());
         $xpath = new \DOMXPath($document);
