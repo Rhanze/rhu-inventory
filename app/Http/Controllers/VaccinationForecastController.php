@@ -445,11 +445,13 @@ class VaccinationForecastController extends Controller
         $healthUnitId = session('health_unit_id');
 
         $month = $request->input('month') ?: now()->format('Y-m');
-        $summary = $this->scheduleService->monthlySummary($healthUnitId, $month);
+        $summary = $this->scheduleService->monthlySummary($healthUnitId, $month, includeAppointments: false);
         $nextMonth = Carbon::parse($month.'-01')->addMonth()->format('Y-m');
-        $nextSummary = $this->scheduleService->monthlySummary($healthUnitId, $nextMonth);
+        $nextSummary = $this->scheduleService->monthlySummary($healthUnitId, $nextMonth, includeAppointments: false);
+        $appointments = $this->scheduleService->monthlyAppointments($healthUnitId, $month)
+            ->paginate(50)->appends(['month' => $month]);
 
-        return view('vaccination.monthly', compact('summary', 'nextSummary', 'month'));
+        return view('vaccination.monthly', compact('summary', 'nextSummary', 'month', 'appointments'));
     }
 
     public function monthlyExport(Request $request)
@@ -461,10 +463,11 @@ class VaccinationForecastController extends Controller
         $request->validate(['month' => 'nullable|date_format:Y-m']);
         $healthUnitId = session('health_unit_id');
         $month = $request->input('month') ?: now()->format('Y-m');
-        $summary = $this->scheduleService->monthlySummary($healthUnitId, $month);
+        $summary = $this->scheduleService->monthlySummary($healthUnitId, $month, includeAppointments: false);
+        $appointments = $this->scheduleService->monthlyAppointments($healthUnitId, $month);
         $filename = 'vaccination_forecast_'.$month.'.csv';
 
-        return response()->streamDownload(function () use ($summary) {
+        return response()->streamDownload(function () use ($summary, $appointments) {
             $handle = fopen('php://output', 'w');
             SpreadsheetCsv::writeRow($handle, ['Month', $summary['month']]);
             SpreadsheetCsv::writeRow($handle, []);
@@ -476,7 +479,7 @@ class VaccinationForecastController extends Controller
             SpreadsheetCsv::writeRow($handle, ['TOTAL', $summary['total_children'], $summary['total_doses']]);
             SpreadsheetCsv::writeRow($handle, []);
             SpreadsheetCsv::writeRow($handle, ['Child Name', 'Barangay', 'Vaccine', 'Dose', 'Due Date', 'Status']);
-            foreach ($summary['children'] as $s) {
+            foreach ($appointments->lazy(200) as $s) {
                 SpreadsheetCsv::writeRow($handle, [
                     $s->patient?->full_name ?? 'Unknown',
                     $s->patient?->barangay ?? '—',

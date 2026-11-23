@@ -4,9 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\DispensingRecord;
 use App\Models\HealthUnit;
+use App\Models\Inventory;
 use App\Models\Medicine;
 use App\Models\User;
 use App\Support\ClinicalAudit;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
@@ -70,5 +72,37 @@ class ServerlessServicesTest extends TestCase
         $this->getJson(route('internal.scheduler'))->assertOk()->assertJsonPath('status', 'already_processed');
         config(['portals.surface' => 'public']);
         $this->getJson(route('internal.scheduler'))->assertNotFound();
+    }
+
+    public function test_the_inventory_backup_runs_on_a_late_tick_and_shares_the_hour_with_the_regular_scheduler(): void
+    {
+        $cronSecret = str_repeat('cron-', 10);
+        $inventorySecret = str_repeat('alerts-', 8);
+        config(['portals.surface' => 'management', 'serverless.cron_secret' => $cronSecret,
+            'serverless.inventory_alerts_secret' => $inventorySecret]);
+        $unit = HealthUnit::create(['name' => 'Alert backup RHU']);
+        $medicine = Medicine::create(['medicine_name' => 'Backup alert fixture']);
+        Inventory::create(['health_unit_id' => $unit->id, 'medicine_id' => $medicine->id, 'available_stock' => 2]);
+        $backup = route('internal.inventory_alerts');
+        $regular = route('internal.scheduler');
+
+        $this->travelTo(Carbon::parse('2026-11-23 13:00:00', 'Asia/Manila'));
+        $this->getJson($backup)->assertForbidden();
+        $this->withToken($cronSecret)->getJson($backup)->assertForbidden();
+        $this->withToken($inventorySecret)->getJson($regular)->assertForbidden();
+        $this->assertDatabaseCount('notifications', 0);
+
+        $this->withToken($cronSecret)->getJson($regular)->assertOk()->assertJsonPath('status', 'processed');
+        $this->assertDatabaseHas('notifications', ['health_unit_id' => $unit->id, 'type' => 'low_stock',
+            'title' => 'Critical Low Stock Alert', 'severity' => 'danger']);
+        $this->travel(17)->minutes();
+        $this->withToken($inventorySecret)->getJson($backup)->assertOk()->assertJsonPath('status', 'already_processed');
+
+        $this->travel(1)->hour();
+        $this->withToken($inventorySecret)->getJson($backup)->assertOk()->assertJsonPath('status', 'processed');
+        $this->getJson($backup)->assertOk()->assertJsonPath('status', 'already_processed');
+        $this->assertDatabaseCount('notifications', 1);
+        config(['portals.surface' => 'public']);
+        $this->getJson($backup)->assertNotFound();
     }
 }

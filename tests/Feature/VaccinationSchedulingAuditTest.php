@@ -22,6 +22,45 @@ class VaccinationSchedulingAuditTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_monthly_details_are_paginated_while_totals_and_csv_cover_all_visible_appointments(): void
+    {
+        $unit = $this->unit();
+        $midwife = User::factory()->create(['health_unit_id' => $unit->id, 'role' => 'midwife']);
+        $first = $this->patient($unit);
+        $first->update(['first_name' => 'First assigned', 'assigned_midwife_id' => $midwife->id]);
+        $last = $this->patient($unit);
+        $last->update(['first_name' => 'Last assigned', 'assigned_midwife_id' => $midwife->id]);
+        $hidden = $this->patient($unit);
+        $hidden->update(['first_name' => 'Unassigned patient']);
+        $appointment = ['health_unit_id' => $unit->id, 'vaccine_name' => 'BCG',
+            'due_date' => '2026-11-30', 'status' => 'pending'];
+        foreach (range(1, 50) as $dose) {
+            VaccinationSchedule::create($appointment + ['public_user_id' => $first->id, 'dose_number' => $dose]);
+        }
+        VaccinationSchedule::create($appointment + ['public_user_id' => $last->id, 'dose_number' => 1]);
+        VaccinationSchedule::create($appointment + ['public_user_id' => $hidden->id, 'dose_number' => 1]);
+        VaccinationSchedule::create(array_replace($appointment, ['due_date' => '2026-12-01'])
+            + ['public_user_id' => $last->id, 'dose_number' => 2]);
+
+        $this->withSession(['user_id' => $midwife->id]);
+        $filters = ['month' => '2026-11'];
+        $summaryMatches = fn ($summary) => $summary['total_children'] === 2 && $summary['total_doses'] === 51;
+        $firstPage = $this->get(route('vaccination.monthly', $filters))->assertOk()
+            ->assertViewHas('summary', $summaryMatches)
+            ->assertViewHas('nextSummary', fn ($summary) => $summary['total_doses'] === 1)
+            ->assertSee('First assigned')->assertDontSee('Last assigned')->assertDontSee('Unassigned patient');
+        $pageTwoUrl = $firstPage->viewData('appointments')->nextPageUrl();
+        $this->assertStringContainsString('month=2026-11', $pageTwoUrl);
+        $this->get($pageTwoUrl)->assertOk()->assertViewHas('summary', $summaryMatches)
+            ->assertSee('Last assigned')->assertDontSee('First assigned')->assertDontSee('Unassigned patient');
+
+        $export = $this->get(route('vaccination.monthly.export', $filters + ['page' => 2]))->assertOk()->streamedContent();
+        $this->assertSame(50, substr_count($export, 'First assigned'));
+        $this->assertSame(1, substr_count($export, 'Last assigned'));
+        $this->assertStringNotContainsString('Unassigned patient', $export);
+        $this->assertDatabaseCount('vaccination_schedules', 53);
+    }
+
     private function unit(array $attributes = []): HealthUnit
     {
         return HealthUnit::create($attributes + ['name' => 'Scheduling RHU']);

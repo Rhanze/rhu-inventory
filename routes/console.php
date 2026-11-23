@@ -6,7 +6,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 
 Schedule::command('logs:prune --days=30')->daily()->withoutOverlapping();
-Schedule::call(fn () => app(NotificationService::class)->scanAndGenerate())
+Schedule::call(fn () => app(NotificationService::class)->scanHourly())
     ->name('inventory-notifications')->hourly()->withoutOverlapping();
 Schedule::command('notifications:scan')->dailyAt('01:00')->withoutOverlapping();
 Schedule::command('transfers:process')->dailyAt('02:00')->withoutOverlapping();

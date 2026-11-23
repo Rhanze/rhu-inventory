@@ -67,6 +67,7 @@ Route::domain(config('portals.enabled') ? config('portals.management_domain') : 
     }
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::get('/internal/scheduler', SchedulerController::class)->name('internal.scheduler');
+    Route::get('/internal/inventory-alerts', [SchedulerController::class, 'inventoryAlerts'])->name('internal.inventory_alerts');
     Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
     Route::get('/login/verification', [AuthController::class, 'showVerification'])->name('login.verification');
     Route::post('/login/verification', [AuthController::class, 'verify'])->name('login.verify');

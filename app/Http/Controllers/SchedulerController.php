@@ -2,12 +2,25 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 
 class SchedulerController extends Controller
 {
+    public function inventoryAlerts(Request $request, NotificationService $notifications)
+    {
+        abort_unless(config('portals.surface') === 'management', 404);
+        $secret = config('serverless.inventory_alerts_secret');
+        abort_unless(is_string($secret) && strlen($secret) >= 32 && hash_equals($secret, $request->bearerToken() ?? ''), 403);
+
+        $status = $notifications->scanHourly();
+
+        return response()->json(['status' => $status], $status === 'already_running' ? 202 : 200)
+            ->header('Cache-Control', 'no-store');
+    }
+
     public function __invoke(Request $request)
     {
         abort_unless(config('portals.surface') === 'management', 404);

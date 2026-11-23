@@ -10,6 +10,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -116,6 +117,28 @@ class NotificationService
     // ═══════════════════════════════════════════════════════════
     // INVENTORY SCAN — RHU-shared only (admin/staff)
     // ═══════════════════════════════════════════════════════════
+
+    public function scanHourly(): string
+    {
+        $lock = Cache::lock('inventory-alerts-scan', 360);
+        if (! $lock->get()) {
+            return 'already_running';
+        }
+
+        try {
+            $hour = 'inventory-alerts-hour:'.now()->format('YmdH');
+            if (Cache::has($hour)) {
+                return 'already_processed';
+            }
+
+            $this->scanAndGenerate();
+            Cache::put($hour, true, now()->addHours(2));
+
+            return 'processed';
+        } finally {
+            $lock->release();
+        }
+    }
 
     public function scanAndGenerate(): int
     {

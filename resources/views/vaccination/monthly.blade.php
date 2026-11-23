@@ -1,5 +1,7 @@
 @extends('layouts.app')
 
+@section('title', 'Monthly Vaccination Forecast')
+
 @section('content')
 <style>
     @media screen and (max-width: 900px) {
@@ -187,7 +189,7 @@
     </div>
 
     {{-- Children list --}}
-    @if($summary['children']->count() > 0)
+    @if($appointments->total() > 0)
         <div style="
             background: rgba(255,255,255,0.95); border-radius: 20px;
             border: 1px solid rgba(66,173,138,0.15); box-shadow: 0 8px 20px rgba(0,0,0,0.06);
@@ -202,6 +204,9 @@
                 </p>
             </div>
 
+            @if($appointments->isEmpty())
+                <p style="padding:0 24px 20px;">This page has no appointments. <a href="{{ $appointments->url(1) }}">Go to the first page</a>.</p>
+            @else
             <table class="mw-mobile-records" style="width:100%; border-collapse:collapse; font-size:1.0625rem;">
                 <thead>
                     <tr style="background:#f8fafc; border-bottom:1px solid #e2e8f0;">
@@ -213,7 +218,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($summary['children'] as $s)
+                    @foreach($appointments as $s)
                         @php
                             $statusClass = $s->status === 'missed' ? 'red' : 'amber';
                         @endphp
@@ -244,6 +249,10 @@
                     @endforeach
                 </tbody>
             </table>
+            <div style="padding:16px 24px;">
+                {{ $appointments->links() }}
+            </div>
+            @endif
         </div>
     @endif
 

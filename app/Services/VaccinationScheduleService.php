@@ -11,6 +11,7 @@ use App\Models\RhuImmunizationSchedule;
 use App\Models\VaccinationSchedule;
 use App\Support\ClinicalAudit;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -187,40 +188,44 @@ class VaccinationScheduleService
                 && ! $known->has($row->public_user_id.':'.$doseKey($row->vaccine_name, $row->dose_number)))->count();
     }
 
-    public function monthlySummary(int $healthUnitId, string $yearMonth): array
+    public function monthlySummary(int $healthUnitId, string $yearMonth, bool $includeAppointments = true): array
     {
         $start = Carbon::parse($yearMonth.'-01')->startOfMonth();
         $end = $start->copy()->endOfMonth();
 
-        $rows = VaccinationSchedule::current()->whereHas('patient', fn ($q) => $q->forViewer())->with('patient')
-            ->where('health_unit_id', $healthUnitId)
-            ->whereDate('due_date', '>=', $start->toDateString())
-            ->whereDate('due_date', '<=', $end->toDateString())
-            ->whereIn('status', ['pending', 'missed'])
-            ->orderBy('due_date')
-            ->get();
-
-        $byVaccine = $rows->groupBy('vaccine_name')
-            ->map(fn ($group) => [
-                'vaccine' => $group->first()->vaccine_name,
-                'children' => $group->pluck('public_user_id')->unique()->count(),
-                'doses' => $group->count(),
-            ])
-            ->sortByDesc('doses')
-            ->values();
-
-        $uniqueChildren = $rows->pluck('public_user_id')->unique()->count();
+        $query = $this->dueAppointments($healthUnitId, $start, $end);
+        $totals = (clone $query)->toBase()->selectRaw('COUNT(*) AS doses, COUNT(DISTINCT public_user_id) AS children')->first();
+        $byVaccine = $query->toBase()
+            ->selectRaw('vaccine_name AS vaccine, COUNT(*) AS doses, COUNT(DISTINCT public_user_id) AS children')
+            ->groupBy('vaccine_name')->orderByDesc('doses')->orderBy('vaccine_name')->get()
+            ->map(fn ($row) => ['vaccine' => $row->vaccine, 'doses' => (int) $row->doses, 'children' => (int) $row->children]);
 
         return [
             'month' => $start->format('F Y'),
             'year_month' => $yearMonth,
             'start' => $start,
             'end' => $end,
-            'total_children' => $uniqueChildren,
-            'total_doses' => $rows->count(),
+            'total_children' => (int) $totals->children,
+            'total_doses' => (int) $totals->doses,
             'by_vaccine' => $byVaccine,
-            'children' => $rows,
+            'children' => $includeAppointments ? $this->monthlyAppointments($healthUnitId, $yearMonth)->get() : collect(),
         ];
+    }
+
+    public function monthlyAppointments(int $healthUnitId, string $yearMonth): Builder
+    {
+        $start = Carbon::parse($yearMonth.'-01')->startOfMonth();
+
+        return $this->dueAppointments($healthUnitId, $start, $start->copy()->endOfMonth())
+            ->with('patient')->orderBy('due_date')->orderBy('id');
+    }
+
+    private function dueAppointments(int $healthUnitId, Carbon $start, Carbon $end): Builder
+    {
+        return VaccinationSchedule::current()->whereHas('patient', fn ($q) => $q->forViewer())
+            ->where('health_unit_id', $healthUnitId)
+            ->whereBetween('due_date', [$start->toDateString(), $end->toDateString()])
+            ->whereIn('status', ['pending', 'missed']);
     }
 
     // ═══════════════════════════════════════════════════════════

@@ -1,0 +1,34 @@
+name: Production inventory alerts
+
+on:
+  schedule:
+    - cron: '17,47 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: production-inventory-alerts
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Trigger the Management inventory scan
+        env:
+          INVENTORY_ALERTS_SECRET: ${{ secrets.INVENTORY_ALERTS_SECRET }}
+        run: |
+          : "${INVENTORY_ALERTS_SECRET:?Missing inventory alerts credential}"
+          for attempt in 1 2 3; do
+            response=$(printf 'Authorization: Bearer %s\n' "$INVENTORY_ALERTS_SECRET" |
+              curl --fail --silent --show-error --max-time 35 --header @- \
+                https://rhu-management.vercel.app/internal/inventory-alerts) || response=''
+            status=$(jq -r '.status // empty' <<< "$response" 2>/dev/null) || status=''
+            case "$status" in
+              processed|already_processed) printf 'Inventory scan %s\n' "$status"; exit 0 ;;
+            esac
+            if [ "$attempt" -lt 3 ]; then sleep 5; fi
+          done
+          echo 'The Management inventory scan did not confirm completion.'
+          exit 1
