@@ -26,7 +26,7 @@ COPY --from=dependencies /app /app
 COPY --from=assets /build/public/build /app/public/build
 COPY Caddyfile /etc/caddy/Caddyfile
 ENV APP_ENV=production APP_DEBUG=false PORT=80 \
-    PORTAL_DOMAIN_SPLIT=true PORTAL_HTTPS_ONLY=true \
+    PORTAL_DOMAIN_SPLIT=true PORTAL_HTTPS_ONLY=true REQUIRE_ADMIN_MFA=false \
     SESSION_DRIVER=redis CACHE_STORE=redis LOG_CHANNEL=stderr QUEUE_CONNECTION=sync \
     PRESCRIPTION_DISK=s3 LARAVEL_STORAGE_PATH=/tmp/rhu-storage \
     APP_CONFIG_CACHE=/tmp/rhu-bootstrap/config.php \

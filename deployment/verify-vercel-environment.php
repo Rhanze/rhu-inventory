@@ -46,6 +46,17 @@ function vercelEnvironmentProblems(array $env): array
     if (($env['PORTAL_SURFACE'] ?? '') === 'public' && (($env['SESSION_DRIVER'] ?? 'redis') !== 'redis' || ($env['CACHE_STORE'] ?? 'redis') !== 'redis')) {
         $errors[] = 'Public sessions and cache must use Redis because the public business database account is read-only.';
     }
+    if (($env['PORTAL_SURFACE'] ?? '') === 'management') {
+        foreach (['SESSION_ENCRYPT', 'SESSION_EXPIRE_ON_CLOSE'] as $setting) {
+            if (! filter_var($env[$setting] ?? false, FILTER_VALIDATE_BOOL)) {
+                $errors[] = $setting.' must be enabled for management sessions.';
+            }
+        }
+        if (filter_var($env['SESSION_LIFETIME'] ?? '', FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1, 'max_range' => 30]]) === false) {
+            $errors[] = 'SESSION_LIFETIME must be between 1 and 30 minutes for management sessions.';
+        }
+    }
     $parser = new ConfigurationUrlParser;
     if (($env['SESSION_DRIVER'] ?? 'redis') === 'redis' || ($env['CACHE_STORE'] ?? 'redis') === 'redis') {
         try {

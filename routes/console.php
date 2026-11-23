@@ -10,6 +10,7 @@ Schedule::call(fn () => app(NotificationService::class)->scanAndGenerate())
     ->name('inventory-notifications')->hourly()->withoutOverlapping();
 Schedule::command('notifications:scan')->dailyAt('01:00')->withoutOverlapping();
 Schedule::command('transfers:process')->dailyAt('02:00')->withoutOverlapping();
+Schedule::command('vaccinations:maintain-schedule')->dailyAt('00:15')->withoutOverlapping();
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());

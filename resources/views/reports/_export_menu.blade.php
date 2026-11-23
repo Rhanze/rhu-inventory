@@ -1,5 +1,6 @@
 @php
     $modalTitle  = $modalTitle  ?? 'Export Report';
+    $showBatch   = $showBatch   ?? true;
     $showExpiry  = $showExpiry  ?? false;
     $csvRoute    = $csvRoute    ?? 'reports.inventory.csv';
     $printAction = $printAction ?? url()->current();
@@ -42,14 +43,16 @@
                 {{ $modalTitle }}
             </h3>
             <p style="font-size:1.0625rem; color:#64748b; margin:0;">
-                Choose what to include, then pick an action.
+                {{ $showBatch || $showExpiry ? 'Choose what to include, then pick an action.' : 'Print or export the records shown in this report.' }}
             </p>
         </div>
 
         {{-- Body --}}
+        @if($showBatch || $showExpiry)
         <div style="padding:20px 26px;">
 
             {{-- BATCH NUMBER TEXT INPUT --}}
+            @if($showBatch)
             <div style="margin-bottom:22px;">
                 <label for="batchInput-{{ $modalId }}"
                        style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
@@ -72,6 +75,7 @@
                     Separate multiple batch numbers with commas. Leave blank to include all batches.
                 </p>
             </div>
+            @endif
 
             {{-- EXPIRY FILTER (only if $showExpiry) --}}
             @if($showExpiry)
@@ -106,6 +110,7 @@
                 </div>
             @endif
         </div>
+        @endif
 
         {{-- Footer: Cancel / Print / Export CSV --}}
         <div style="

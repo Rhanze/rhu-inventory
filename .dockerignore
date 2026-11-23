@@ -20,3 +20,7 @@ database/*.sqlite*
 .aws
 .idea
 .vscode
+tmp
+tools
+*.bak
+.phpunit.result.cache

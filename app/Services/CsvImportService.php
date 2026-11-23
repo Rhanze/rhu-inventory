@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Pipeline\Pipeline;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
@@ -266,14 +267,8 @@ class CsvImportService
             $data[$field] = $matches->first()->id;
         }
 
-        if (in_array($section, ['allocations', 'dispensing'], true) && empty($data['inventory_id']) && ! empty($data['medicine_id'])) {
-            if ($section === 'dispensing' && ($data['stock_source'] ?? 'rhu') === 'allocation') {
-                $data['inventory_id'] = app(AllocationDispensingService::class)
-                    ->inventories((int) session('health_unit_id'), (int) session('user_id'))
-                    ->firstWhere('medicine_id', (int) $data['medicine_id'])?->id;
-            } else {
-                $data['inventory_id'] = Inventory::availableFefo((int) session('health_unit_id'), (int) $data['medicine_id'])->value('id');
-            }
+        if ($section === 'allocations' && empty($data['inventory_id']) && ! empty($data['medicine_id'])) {
+            $data['inventory_id'] = Inventory::availableFefo((int) session('health_unit_id'), (int) $data['medicine_id'])->value('id');
             if (! $data['inventory_id']) {
                 throw ValidationException::withMessages(['medicine' => 'No unexpired available inventory for this medicine exists in your RHU.']);
             }
@@ -345,6 +340,7 @@ class CsvImportService
             }
             unset($item);
             $data = array_intersect_key($data, array_flip(['shipment_no', 'reference_no', 'supplier', 'received_date', 'remarks', 'items']));
+            $data['submission_token'] = (string) Str::uuid();
         } else {
             $data = array_intersect_key($data, array_flip($definition['columns']));
         }

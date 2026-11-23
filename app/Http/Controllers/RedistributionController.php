@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\RedistributionService;
+use App\Support\SpreadsheetCsv;
 use Illuminate\Http\Request;
 
 class RedistributionController extends Controller
@@ -64,7 +65,7 @@ class RedistributionController extends Controller
         return response()->streamDownload(function () use ($suggestions) {
             $handle = fopen('php://output', 'w');
 
-            fputcsv($handle, [
+            SpreadsheetCsv::writeRow($handle, [
                 'Medicine',
                 'From RHU',
                 'To RHU',
@@ -73,7 +74,7 @@ class RedistributionController extends Controller
             ]);
 
             foreach ($suggestions as $suggestion) {
-                fputcsv($handle, [
+                SpreadsheetCsv::writeRow($handle, [
                     $suggestion['medicine_name'],
                     $suggestion['from_rhu'],
                     $suggestion['to_rhu'],

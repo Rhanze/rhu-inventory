@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\PrenatalVisit;
 use App\Models\PublicUser;
+use App\Support\ClinicalAudit;
 use Illuminate\Http\Request;
 
 class PrenatalController extends Controller
@@ -31,8 +32,10 @@ class PrenatalController extends Controller
         $search = $request->search;
         $trimester = $request->trimester;
 
-        $visits = PrenatalVisit::whereHas('patient', fn ($q) => $q->forViewer())->with('patient')
-            ->where('health_unit_id', $healthUnitId)
+        $archived = $request->boolean('archived');
+        abort_unless(! $archived || ClinicalAudit::archiveVisible(), 403);
+        $visits = ClinicalAudit::scopedVisits(PrenatalVisit::class)->with('patient')
+            ->when($archived, fn ($query) => $query->onlyTrashed())
             ->when($search, function ($q) use ($search) {
                 $q->whereHas('patient', function ($p) use ($search) {
                     $p->where('first_name', 'like', "%{$search}%")
@@ -42,7 +45,7 @@ class PrenatalController extends Controller
             ->when($trimester, fn ($q) => $q->where('trimester', $trimester))
             ->orderByDesc('visit_date')
             ->paginate(20)
-            ->appends(['search' => $search, 'trimester' => $trimester]);
+            ->appends(['search' => $search, 'trimester' => $trimester, 'archived' => $archived ? 1 : null]);
 
         $patients = PublicUser::forViewer()->where('health_unit_id', $healthUnitId)
             ->where(function ($q) {
@@ -63,7 +66,7 @@ class PrenatalController extends Controller
         ];
 
         return view('prenatal.index', compact(
-            'visits', 'patients', 'stats', 'search', 'trimester'
+            'visits', 'patients', 'stats', 'search', 'trimester', 'archived'
         ));
     }
 
@@ -88,23 +91,7 @@ class PrenatalController extends Controller
 
         $validated['health_unit_id'] = session('health_unit_id');
 
-        $patient = PublicUser::forViewer()->where('id', $validated['patient_id'])
-            ->where('health_unit_id', session('health_unit_id'))
-            ->firstOrFail();
-
-        PrenatalVisit::create([
-            'patient_id' => $validated['patient_id'],
-            'health_unit_id' => $validated['health_unit_id'],
-            'visit_date' => $validated['visit_date'],
-            'next_visit_date' => $validated['next_visit_date'] ?? null,
-            'trimester' => $validated['trimester'] ?? null,
-            'blood_pressure' => $validated['blood_pressure'] ?? null,
-            'weight' => $validated['weight'] ?? null,
-            'fundal_height' => $validated['fundal_height'] ?? null,
-            'fetal_heart_tone' => $validated['fetal_heart_tone'] ?? null,
-            'tt_dose' => $validated['tt_dose'] ?? null,
-            'remarks' => $validated['remarks'] ?? null,
-        ]);
+        $patient = ClinicalAudit::createVisit(PrenatalVisit::class, $validated);
 
         return back()->with('success', 'Prenatal visit recorded for '.$patient->full_name.'.');
     }
@@ -115,9 +102,19 @@ class PrenatalController extends Controller
             return $redirect;
         }
 
-        $visit = PrenatalVisit::whereHas('patient', fn ($q) => $q->forViewer())->where('health_unit_id', session('health_unit_id'))->findOrFail($id);
-        $visit->delete();
+        ClinicalAudit::setVoided(PrenatalVisit::class, (int) $id, true);
 
-        return back()->with('success', 'Visit deleted.');
+        return back()->with('success', 'Record voided and retained in the archive.');
+    }
+
+    public function restore($id)
+    {
+        if ($redirect = $this->guard()) {
+            return $redirect;
+        }
+
+        ClinicalAudit::setVoided(PrenatalVisit::class, (int) $id, false);
+
+        return back()->with('success', 'Record restored.');
     }
 }

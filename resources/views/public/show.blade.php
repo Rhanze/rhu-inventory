@@ -63,7 +63,7 @@
             margin-bottom: 30px;
             box-sizing: border-box;
         ">
-            <a class="back-to-search" href="{{ route('public.home.citizen', array_filter(['q' => $q ?? null, 'health_unit_id' => $healthUnitId ?? null])) }}" style="
+            <a class="back-to-search" href="{{ route('public.home.citizen', array_filter(['q' => $q, 'health_unit_id' => $healthUnitId], fn ($value) => filled($value))) }}" style="
                 display: inline-flex;
                 align-items: center;
                 gap: 6px;

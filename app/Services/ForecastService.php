@@ -97,7 +97,7 @@ class ForecastService
             }
         }
 
-        $doses = VaccinationSchedule::with(['patient', 'healthUnit'])->where('status', 'pending')
+        $doses = VaccinationSchedule::current()->with(['patient', 'healthUnit'])->where('status', 'pending')
             ->whereNull('immunization_record_id')->whereNull('given_date')
             ->whereHas('patient', fn ($query) => $query->whereColumn('public_users.health_unit_id', 'vaccination_schedules.health_unit_id'))
             ->when($healthUnitId !== null, fn ($query) => $query->where('health_unit_id', $healthUnitId))
@@ -267,10 +267,14 @@ class ForecastService
             $daily = $projection['daily'];
             $forecastNeed = $this->units(array_sum(array_slice($daily, 0, $horizon)));
             $next30 = array_sum(array_slice($daily, 0, 30));
-            $coverage = $trendService->coverage($inventory->available_stock, $daily);
+            $stock = $trendService->projectStock($inventory->forecast_batches, $daily);
+            $coverage = $stock['coverage'];
             $days = (int) floor($coverage['days'] + 1e-9);
             $hasHistory = $fit['periods'] > 0;
             $noProjectedDemand = array_sum($daily) <= 0;
+            $reorderPoint = $hasHistory ? $this->units(array_sum(array_slice($daily, 0, $reorderDays))) : null;
+            $reorderDue = $reorderPoint !== null && ($inventory->available_stock <= $reorderPoint
+                || $this->units(array_sum(array_slice($stock['unfilled'], 0, $reorderDays))) > 0);
             $status = match (true) {
                 $inventory->available_stock === 0 => 'critical',
                 ! $hasHistory => 'unknown',
@@ -295,10 +299,12 @@ class ForecastService
                 'coverage_capped' => $coverage['capped'],
                 'forecast_need_3mo' => $forecastNeed,
                 'forecast_horizon_days' => $horizon,
-                'shortage' => max(0, $forecastNeed - $inventory->available_stock),
+                'shortage' => $this->units(array_sum(array_slice($stock['unfilled'], 0, $horizon))),
+                'forecast_expiry_loss' => $hasHistory ? (int) floor(round(array_sum(array_slice($stock['expired'], 0, $horizon)), 8)) : null,
                 'status' => $status,
                 'status_color' => $this->getStatusColor($status),
-                'reorder_point' => $hasHistory ? $this->units(array_sum(array_slice($daily, 0, $reorderDays))) : null,
+                'reorder_point' => $reorderPoint,
+                'reorder_due' => $reorderDue,
                 'trend' => $fit['trend'],
                 'model' => $fit,
                 'weekly_history' => $projection['history'],

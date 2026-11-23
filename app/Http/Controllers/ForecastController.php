@@ -50,7 +50,7 @@ class ForecastController extends Controller
             'shortage' => $item['shortage'] > 0,
             'low' => in_array($item['status'], ['low', 'critical'], true),
             'critical' => $item['status'] === 'critical',
-            'reorder' => $item['reorder_point'] !== null && $item['available_stock'] <= $item['reorder_point'],
+            'reorder' => $item['reorder_due'],
             'unknown' => $item['model']['periods'] === 0,
             default => true,
         })->values();

@@ -48,6 +48,17 @@
             @endif
 
             @include('imports._link', ['section' => 'dispensing', 'fallback' => true])
+            @include('dispensing._barangay_filter')
+            <form method="GET" action="{{ route('reports.dispensing') }}">
+                @foreach(request()->except('batch_no', 'page') as $filterName => $filterValue)
+                    @if(is_scalar($filterValue))
+                        <input type="hidden" name="{{ $filterName }}" value="{{ $filterValue }}">
+                    @endif
+                @endforeach
+                <label for="dispensing-batch-filter">Lot number</label>
+                <input id="dispensing-batch-filter" type="search" name="batch_no" maxlength="100" value="{{ request('batch_no') }}">
+                <button type="submit">Filter</button>
+            </form>
             @include('reports._export_menu', [
                 'csvRoute'  => 'reports.dispensing.csv',
                 'csvParams' => request()->except('page'),
@@ -55,7 +66,7 @@
         </div>
     </div>
 
-    @include('dispensing._read_filters')
+    @include('dispensing._medicine_filter_context')
     @include('shared.history_filters')
     @include('dispensing._barangay_breakdown')
     @include('shared.empty_result', ['resultKey' => 'history', 'recordCount' => $records->count()])
@@ -74,6 +85,7 @@
                         <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Date</th>
                         <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Medicine</th>
                         <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Quantity</th>
+                        <th style="padding:14px 16px; text-align:left; color:#475569;">Lots and quantities</th>
                         <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Doctor</th>
                         <th style="padding:14px 16px; text-align:left; font-size:1.0625rem; font-weight:600; text-transform:uppercase; letter-spacing:0.06em; color:#475569; white-space:nowrap;">Dispensed By</th>
                         <th style="padding:14px 16px;text-align:left;color:#475569;">Barangay served</th>
@@ -92,6 +104,7 @@
                             <td style="padding:14px 16px; color:#334155; white-space:nowrap;">{{ $record->date_dispensed }}</td>
                             <td style="padding:14px 16px; font-weight:600; color:#0f172a;">{{ $record->medicine->medicine_name ?? 'N/A' }}</td>
                             <td style="padding:14px 16px; color:#334155; font-weight:600;">{{ $record->quantity_dispensed }}</td>
+                            <td style="padding:14px 16px; color:#334155;">{{ $record->lotBreakdown() ?: 'Not recorded' }}</td>
                             <td style="padding:14px 16px; color:#334155;">{{ $record->prescribingDoctorDisplay() }}</td>
                             <td style="padding:14px 16px; color:#334155;">{{ $record->dispensedByUser->name ?? 'N/A' }}</td>
                             <td style="padding:14px 16px;color:#334155;">{{ $record->barangay ?: 'Not recorded' }}</td>
@@ -102,7 +115,7 @@
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="@php $cols = 8; if (is_null(session('health_unit_id'))) $cols += 1; echo $cols; @endphp"
+                            <td colspan="{{ is_null(session('health_unit_id')) ? 10 : 9 }}"
                                 style="padding:40px 20px; text-align:center; color:#64748b; border-bottom:1px solid #f1f5f9;">
                                 No saved dispensing records match the selected period and filters.
                             </td>

@@ -73,7 +73,7 @@ class HealthUnit extends Model
      */
     public function scopeRhuOnly($query)
     {
-        return $query->where('facility_type', 'Rural Health Unit');
+        return $query->whereIn('facility_type', ['Rural Health Unit', 'RHU']);
     }
 
     /**
@@ -81,7 +81,7 @@ class HealthUnit extends Model
      */
     public function scopeRhus($query)
     {
-        return $query->where('facility_type', 'Rural Health Unit');
+        return $this->scopeRhuOnly($query);
     }
 
     /**

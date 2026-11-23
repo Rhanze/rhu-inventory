@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\PostpartumVisit;
 use App\Models\PublicUser;
+use App\Support\ClinicalAudit;
 use Illuminate\Http\Request;
 
 class PostpartumCareController extends Controller
@@ -31,8 +32,10 @@ class PostpartumCareController extends Controller
         $search = $request->input('search');
         $visitNumber = $request->input('visit_number');
 
-        $visits = PostpartumVisit::whereHas('patient', fn ($q) => $q->forViewer())->with('patient')
-            ->where('health_unit_id', $healthUnitId)
+        $archived = $request->boolean('archived');
+        abort_unless(! $archived || ClinicalAudit::archiveVisible(), 403);
+        $visits = ClinicalAudit::scopedVisits(PostpartumVisit::class)->with('patient')
+            ->when($archived, fn ($query) => $query->onlyTrashed())
             ->when($search, function ($q) use ($search) {
                 $q->whereHas('patient', function ($p) use ($search) {
                     $p->where('first_name', 'like', "%{$search}%")
@@ -42,7 +45,7 @@ class PostpartumCareController extends Controller
             ->when($visitNumber, fn ($q) => $q->where('visit_number', $visitNumber))
             ->orderByDesc('visit_date')
             ->paginate(20)
-            ->appends(['search' => $search, 'visit_number' => $visitNumber]);
+            ->appends(['search' => $search, 'visit_number' => $visitNumber, 'archived' => $archived ? 1 : null]);
 
         $patients = PublicUser::forViewer()->where('health_unit_id', $healthUnitId)
             ->orderBy('last_name')
@@ -59,7 +62,7 @@ class PostpartumCareController extends Controller
         ];
 
         return view('postpartum.index', compact(
-            'visits', 'patients', 'stats', 'search', 'visitNumber'
+            'visits', 'patients', 'stats', 'search', 'visitNumber', 'archived'
         ));
     }
 
@@ -83,21 +86,7 @@ class PostpartumCareController extends Controller
         $validated['health_unit_id'] = session('health_unit_id');
         $validated['visit_number'] = $validated['visit_number'] ?? 1;
 
-        $patient = PublicUser::forViewer()->where('id', $validated['patient_id'])
-            ->where('health_unit_id', session('health_unit_id'))
-            ->firstOrFail();
-
-        PostpartumVisit::create([
-            'patient_id' => $validated['patient_id'],
-            'health_unit_id' => $validated['health_unit_id'],
-            'delivery_date' => $validated['delivery_date'],
-            'place_of_delivery' => $validated['place_of_delivery'] ?? null,
-            'attended_by' => $validated['attended_by'] ?? null,
-            'visit_date' => $validated['visit_date'],
-            'next_visit_date' => $validated['next_visit_date'] ?? null,
-            'visit_number' => $validated['visit_number'],
-            'remarks' => $validated['remarks'] ?? null,
-        ]);
+        $patient = ClinicalAudit::createVisit(PostpartumVisit::class, $validated);
 
         return back()->with('success', 'Postpartum visit recorded for '.$patient->full_name.'.');
     }
@@ -108,9 +97,19 @@ class PostpartumCareController extends Controller
             return $redirect;
         }
 
-        $visit = PostpartumVisit::whereHas('patient', fn ($q) => $q->forViewer())->where('health_unit_id', session('health_unit_id'))->findOrFail($id);
-        $visit->delete();
+        ClinicalAudit::setVoided(PostpartumVisit::class, (int) $id, true);
 
-        return back()->with('success', 'Visit deleted.');
+        return back()->with('success', 'Record voided and retained in the archive.');
+    }
+
+    public function restore($id)
+    {
+        if ($redirect = $this->guard()) {
+            return $redirect;
+        }
+
+        ClinicalAudit::setVoided(PostpartumVisit::class, (int) $id, false);
+
+        return back()->with('success', 'Record restored.');
     }
 }

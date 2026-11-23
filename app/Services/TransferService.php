@@ -8,6 +8,7 @@ use App\Models\Inventory;
 use App\Models\Notification;
 use App\Models\StockLog;
 use App\Models\TransferRequest;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -75,6 +76,7 @@ class TransferService
                 'status' => 'accepted', 'stock_reserved' => true, 'inventory_id' => $batch->id,
                 'batch_no' => $batch->batch_no, 'pack_type' => $batch->pack_type,
                 'pieces_per_pack' => $batch->pieces_per_pack, 'approved_by' => session('user_id'), 'approved_at' => now(),
+                'reserved_expiration_date' => $batch->expiration_date, 'has_batch_snapshot' => true,
             ]);
             $this->notify($transfer, 'transfer_accepted', 'Transfer accepted', 'Stock has been reserved. Confirm receipt when it arrives.', [$transfer->to_health_unit_id]);
 
@@ -103,20 +105,43 @@ class TransferService
         }, 3);
     }
 
-    public function complete(int $id, ?int $actorId, ?int $destinationUnitId = null, bool $automatic = false): TransferRequest
+    public function complete(int $id, int $actorId, int $destinationUnitId, ?int $receivedQuantity = null, ?string $evidenceReference = null): TransferRequest
     {
-        return DB::transaction(function () use ($id, $actorId, $destinationUnitId, $automatic) {
+        return DB::transaction(function () use ($id, $actorId, $destinationUnitId, $receivedQuantity, $evidenceReference) {
             $transfer = TransferRequest::whereKey($id)->lockForUpdate()->firstOrFail();
-            abort_if($destinationUnitId !== null && $transfer->to_health_unit_id != $destinationUnitId, 403);
+            abort_unless($transfer->to_health_unit_id == $destinationUnitId
+                && User::whereKey($actorId)->where('health_unit_id', $destinationUnitId)
+                    ->where('is_active', true)->whereIn('role', ['admin', 'staff'])->exists(), 403);
             if ($transfer->status === 'received') {
+                if ($receivedQuantity !== null && $receivedQuantity !== ($transfer->receiptReview?->received_quantity ?? $transfer->quantity)) {
+                    throw ValidationException::withMessages(['received_quantity' => 'A receipt has already been posted with a different count. Review the recorded receipt before making a correction.']);
+                }
+
                 return $transfer;
             }
             if ($transfer->status !== 'accepted') {
                 $this->fail('This transfer is not awaiting receipt.');
             }
+            $counted = $receivedQuantity ?? $transfer->quantity;
+            $evidenceReference = trim($evidenceReference ?? '');
+            if ($counted < 0) {
+                throw ValidationException::withMessages(['received_quantity' => 'Enter the quantity physically received.']);
+            }
+            if ($counted !== $transfer->quantity && $evidenceReference === '') {
+                throw ValidationException::withMessages(['evidence_reference' => 'Enter a receiving document or evidence reference for the discrepancy.']);
+            }
+
             $source = Inventory::whereKey($transfer->inventory_id)->lockForUpdate()->first();
             if (! $source || ($source->expiration_date && $source->expiration_date->lt(today()))) {
                 $this->fail('The original batch is missing or expired. Cancel and arrange a new transfer.');
+            }
+            $knownSnapshot = $transfer->has_batch_snapshot || $transfer->stock_reserved;
+            if ((int) $source->health_unit_id !== (int) $transfer->from_health_unit_id
+                || (int) $source->medicine_id !== (int) $transfer->medicine_id
+                || (($knownSnapshot || $transfer->batch_no !== null) && $source->batch_no !== $transfer->batch_no)
+                || ($knownSnapshot && ($source->pack_type !== $transfer->pack_type || $source->pieces_per_pack !== $transfer->pieces_per_pack))
+                || ($transfer->has_batch_snapshot && $source->expiration_date?->toDateString() !== $transfer->reserved_expiration_date?->toDateString())) {
+                $this->fail('The batch identity differs from the reservation. Review the source records before receiving this transfer.');
             }
             if (! $transfer->stock_reserved) {
                 // Accepted before reservation support: reserve under this same lock.
@@ -130,27 +155,47 @@ class TransferService
             if ($source->allocated_stock < $transfer->quantity) {
                 $this->fail('The reserved stock balance needs reconciliation.');
             }
-            // Serialize creation of a destination batch even when no inventory row exists yet.
-            HealthUnit::whereKey($transfer->to_health_unit_id)->lockForUpdate()->firstOrFail();
-            $destination = Inventory::firstOrCreate([
-                'health_unit_id' => $transfer->to_health_unit_id, 'medicine_id' => $transfer->medicine_id,
-                'batch_no' => $source->batch_no, 'expiration_date' => $source->expiration_date,
-            ], ['available_stock' => 0, 'allocated_stock' => 0, 'storage_location' => $source->storage_location,
-                'pack_type' => $source->pack_type, 'pieces_per_pack' => $source->pieces_per_pack]);
+            // A shortage requires reconciliation before any stock can be returned to the source.
+            // Only the counted portion of the reserved lot is available at the destination.
+            $credited = min($counted, $transfer->quantity);
             $source->decrement('allocated_stock', $transfer->quantity);
-            $destination->increment('available_stock', $transfer->quantity);
-            app(StockMovementService::class)->record($transfer, $source, 0, -$transfer->quantity);
-            app(StockMovementService::class)->record($transfer, $destination, $transfer->quantity);
-            foreach ([[$source, 'Released', 'transfer_out'], [$destination, 'Added', 'transfer_in']] as [$batch, $verb, $type]) {
+            $ledger = app(StockMovementService::class);
+            $ledger->record($transfer, $source, 0, -$transfer->quantity);
+            $movements = [[$source, 'Released', 'transfer_out', $transfer->quantity]];
+            if ($credited > 0) {
+                // Serialize creation of a destination batch even when no inventory row exists yet.
+                HealthUnit::whereKey($transfer->to_health_unit_id)->lockForUpdate()->firstOrFail();
+                $destination = Inventory::firstOrCreate([
+                    'health_unit_id' => $transfer->to_health_unit_id, 'medicine_id' => $transfer->medicine_id,
+                    'batch_no' => $source->batch_no, 'expiration_date' => $source->expiration_date,
+                    'pack_type' => $source->pack_type, 'pieces_per_pack' => $source->pieces_per_pack,
+                ], ['available_stock' => 0, 'allocated_stock' => 0, 'storage_location' => $source->storage_location]);
+                $destination->increment('available_stock', $credited);
+                $ledger->record($transfer, $destination, $credited);
+                $movements[] = [$destination, 'Added', 'transfer_in', $credited];
+            }
+            foreach ($movements as [$batch, $verb, $type, $quantity]) {
                 StockLog::create(['medicine_id' => $transfer->medicine_id, 'health_unit_id' => $batch->health_unit_id,
-                    'inventory_id' => $batch->id, 'quantity_added' => $transfer->quantity, 'batch_no' => $batch->batch_no,
+                    'inventory_id' => $batch->id, 'quantity_added' => $quantity, 'batch_no' => $batch->batch_no,
                     'date_added' => today(), 'added_by' => $actorId, 'movement_type' => $type,
                     'remarks' => $verb.' — Transfer #'.$transfer->id, 'transfer_id' => $transfer->id]);
             }
             $transfer->update(['status' => 'received', 'stock_reserved' => false, 'received_at' => now(),
-                'received_by' => $actorId, 'completed_at' => now(), 'auto_completed' => $automatic]);
-            $this->notify($transfer, 'transfer_received', 'Transfer received', 'Receipt recorded and batch stock updated.', [$transfer->from_health_unit_id, $transfer->to_health_unit_id]);
-            ActivityLogger::log('Transfer', $automatic ? 'Auto-Complete' : 'Receive', 'Completed transfer #'.$id, $transfer->from_health_unit_id, $actorId);
+                'received_by' => $actorId, 'completed_at' => now(), 'auto_completed' => false,
+                'batch_no' => $source->batch_no, 'pack_type' => $source->pack_type, 'pieces_per_pack' => $source->pieces_per_pack,
+                'reserved_expiration_date' => $source->expiration_date, 'has_batch_snapshot' => true]);
+            $transfer->receiptReview()->create([
+                'expected_quantity' => $transfer->quantity,
+                'received_quantity' => $counted,
+                'evidence_reference' => $evidenceReference === '' ? 'Confirmed by the receiving facility' : $evidenceReference,
+                'reviewed_by' => $actorId,
+                'reviewed_at' => now(),
+            ]);
+            $this->markReceiptRemindersRead($transfer);
+            $message = $counted === $transfer->quantity ? 'Receipt recorded and batch stock updated.'
+                : 'The receiving facility reported a quantity discrepancy. Review the transfer and receiving evidence.';
+            $this->notify($transfer, 'transfer_received', 'Transfer received', $message, [$transfer->from_health_unit_id, $transfer->to_health_unit_id]);
+            ActivityLogger::log('Transfer', 'Receive', 'Confirmed receipt of transfer #'.$id, $transfer->from_health_unit_id, $actorId);
 
             return $transfer;
         }, 3);
@@ -168,12 +213,20 @@ class TransferService
                 app(StockMovementService::class)->reverse($transfer, 'Transfer cancelled and reserved stock returned');
             }
             $transfer->update(['status' => 'cancelled', 'stock_reserved' => false]);
+            $this->markReceiptRemindersRead($transfer);
             if ($transfer->isVisibleToSource()) {
                 $this->notify($transfer, 'transfer_cancelled', 'Transfer cancelled', 'Any reserved stock has been returned to availability.', [$transfer->from_health_unit_id]);
             } else {
                 $this->markPhoReviewNoticeRead($transfer);
             }
         }, 3);
+    }
+
+    private function markReceiptRemindersRead(TransferRequest $transfer): void
+    {
+        Notification::where('transfer_id', $transfer->id)
+            ->where('health_unit_id', $transfer->to_health_unit_id)
+            ->where('type', 'transfer_reminder')->where('is_read', false)->update(['is_read' => true]);
     }
 
     private function markPhoReviewNoticeRead(TransferRequest $transfer): void

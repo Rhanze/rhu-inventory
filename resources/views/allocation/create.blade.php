@@ -23,45 +23,18 @@
         <form action="{{ route('allocation.store') }}" method="POST" style="display:flex; flex-direction:column; gap:20px;">
             @csrf
 
-            {{-- Inventory Item --}}
+            {{-- Medicine --}}
             <div>
-                <label for="inventory_id" style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">Inventory Item</label>
-                <select name="inventory_id" id="inventory_id"
+                <label for="inventory_id" style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">Medicine</label>
+                <select name="inventory_id" id="inventory_id" required aria-describedby="allocation-rotation-help"
                         style="width:100%; padding:12px 16px; font-size:14px; border:2px solid #bec6cf; border-radius:14px; outline:none; background:white; color:#0f172a; box-sizing:border-box; appearance:auto;"
                         onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                         onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
-                    <option value="">Select inventory</option>
-                    @foreach($inventories as $inventory)
-                        @php
-                            $expiry = $inventory->expiration_date
-                                ? \Carbon\Carbon::parse($inventory->expiration_date)->format('M d, Y')
-                                : null;
-                        @endphp
-                        <option value="{{ $inventory->id }}"
-                                data-unit="{{ $inventory->medicine->unit ?? '' }}"
-                                data-pack-type="{{ $inventory->pack_type ?? $inventory->medicine->pack_type ?? '' }}"
-                                data-pieces-per-pack="{{ $inventory->pieces_per_pack ?? $inventory->medicine->pieces_per_pack ?? '' }}"
-                                data-batch="{{ $inventory->batch_no ?? '' }}"
-                                data-expiry="{{ $expiry ?? '' }}"
-                                data-stock="{{ $inventory->available_stock }}"
-                                {{ old('inventory_id') == $inventory->id ? 'selected' : '' }}>
-                            [{{ $inventory->batch_no ?? 'NO BATCH' }}]
-                            | {{ $inventory->medicine->medicine_name ?? 'N/A' }}{{ $inventory->medicine->dosage ? ' - ' . $inventory->medicine->dosage : '' }}
-                            (Available: {{ $inventory->available_stock }})
-                            @if($expiry) · Exp: {{ $expiry }}@endif
-                        </option>
-                    @endforeach
+                    <option value="">Select medicine</option>
+                    @include('allocation._medicine_options')
                 </select>
-
-                {{-- Batch info panel --}}
-                <div id="batchInfo" style="display:none; margin-top:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:12px 14px;">
-                    <p style="font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#64748b; margin:0 0 6px 0;">This Batch</p>
-                    <div style="display:flex; flex-wrap:wrap; gap:8px 16px; font-size:13px; color:#0f172a;">
-                        <div><span style="color:#64748b;">Batch:</span> <strong id="info-batch" style="font-family:monospace;">—</strong></div>
-                        <div><span style="color:#64748b;">Expiry:</span> <strong id="info-expiry">—</strong></div>
-                        <div><span style="color:#64748b;">Packaging:</span> <strong id="info-packaging">—</strong></div>
-                    </div>
-                </div>
+                <p id="allocation-rotation-help" style="margin:6px 0;font-size:13px;color:#475569;">Stock comes from the earliest-expiring eligible batches. An allocation can use more than one batch.</p>
+                <p id="allocation-packaging" hidden style="margin:6px 0;font-size:13px;color:#475569;">Catalog packaging <strong id="info-packaging"></strong></p>
 
                 @error('inventory_id')
                     <p style="margin-top:4px; font-size:13px; color:#dc2626;">{{ $message }}</p>
@@ -176,9 +149,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const inventorySelect = document.getElementById('inventory_id');
-    const batchInfo       = document.getElementById('batchInfo');
-    const infoBatch       = document.getElementById('info-batch');
-    const infoExpiry      = document.getElementById('info-expiry');
+    const packaging       = document.getElementById('allocation-packaging');
     const infoPackage     = document.getElementById('info-packaging');
 
     const qtyInput   = document.getElementById('quantity_allocated');
@@ -193,29 +164,20 @@ document.addEventListener('DOMContentLoaded', function () {
     function updateFromSelection() {
         const opt = inventorySelect.options[inventorySelect.selectedIndex];
 
-        batchInfo.style.display = 'none';
+        packaging.hidden = true;
         qtyHelp.textContent = '';
         qtyUnitLbl.textContent = '';
 
         if (!opt || !opt.value) return;
 
-        const batch    = opt.dataset.batch || '';
-        const expiry   = opt.dataset.expiry || '';
         const packType = opt.dataset.packType || '';
         const ppp      = parseInt(opt.dataset.piecesPerPack || 0, 10);
         const unit     = opt.dataset.unit || '';
 
-        infoBatch.textContent  = batch || '—';
-        infoExpiry.textContent = expiry || '—';
-
-        if (packType && ppp) {
-            infoPackage.textContent = ppp + ' ' + pluralUnit(unit, ppp) + ' per ' + packType;
-        } else if (packType) {
-            infoPackage.textContent = packType;
-        } else {
-            infoPackage.textContent = '—';
+        if (packType) {
+            infoPackage.textContent = ppp ? ppp + ' ' + pluralUnit(unit, ppp) + ' per ' + packType : packType;
+            packaging.hidden = false;
         }
-        batchInfo.style.display = 'block';
 
         qtyUnitLbl.textContent = unit ? `(${unit}s)` : '';
 

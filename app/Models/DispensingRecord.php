@@ -16,10 +16,12 @@ class DispensingRecord extends Model
 
     protected $fillable = [
         'medicine_id',
+        'submission_token',
         'stock_source',
         'health_unit_id',
         'barangay',
-        'patient_name',              // ← NEW
+        'public_user_id',
+        'patient_name',
         'quantity_dispensed',
         'batch_no',
         'doctor_name',
@@ -50,9 +52,35 @@ class DispensingRecord extends Model
         return $this->belongsTo(User::class, 'dispensed_by');
     }
 
+    public function patient()
+    {
+        return $this->belongsTo(PublicUser::class, 'public_user_id');
+    }
+
     public function stockLogs()
     {
         return $this->hasMany(StockLog::class, 'dispensing_record_id');
+    }
+
+    public function issuedLots()
+    {
+        return $this->stockLogs()->whereNull('voided_at')->where('quantity_added', '>', 0)->orderBy('stock_logs.id');
+    }
+
+    public function lotBreakdown(): string
+    {
+        $lots = $this->issuedLots;
+        if ($lots->isEmpty()) {
+            return $this->batch_no ? $this->batch_no.' (saved lot, quantity unverified)' : '';
+        }
+
+        return $lots->map(fn (StockLog $lot) => ($lot->batch_no ?: 'Unnumbered lot').' ('.(int) $lot->quantity_added.')')->implode(' · ');
+    }
+
+    public function scopeForIssuedLot($query, string $pattern)
+    {
+        return $query->where(fn ($lots) => $lots->whereHas('issuedLots', fn ($lot) => $lot->where('batch_no', 'like', $pattern))
+            ->orWhere(fn ($legacy) => $legacy->whereDoesntHave('issuedLots')->where('batch_no', 'like', $pattern)));
     }
 
     /** Saved usage shared by totals, record lists, exports, and consumption analysis. */

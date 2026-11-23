@@ -114,7 +114,8 @@
 
         <form method="GET" action="{{ route('forecast.index') }}#forecast-stock" style="display:flex; flex-wrap:wrap; align-items:end; gap:12px; padding:0 26px 16px;">
             <label for="forecast-stock-filter" style="min-width:0; max-width:100%; color:#334155;">Show stock analysis items
-                <select id="forecast-stock-filter" name="stock_filter" data-native-select style="display:block; max-width:100%; min-height:44px; padding:8px 12px; font:inherit; border:1px solid #bec6cf; border-radius:10px; background:#fff; appearance:auto;">
+                <select id="forecast-stock-filter" name="stock_filter" data-native-select onchange="this.form.requestSubmit()"
+                        style="display:block; max-width:100%; min-height:44px; padding:8px 12px; font:inherit; border:1px solid #bec6cf; border-radius:10px; background:#fff; appearance:auto;">
                     <option value="all" @selected($stockFilter === 'all')>All analysed items</option>
                     <option value="shortage" @selected($stockFilter === 'shortage')>Projected need exceeds available stock</option>
                     <option value="low" @selected($stockFilter === 'low')>Low or critical forecast coverage</option>
@@ -123,7 +124,6 @@
                     <option value="unknown" @selected($stockFilter === 'unknown')>Without completed usage history</option>
                 </select>
             </label>
-            <button type="submit" class="btn btn-primary" style="min-height:44px;">Apply</button>
         </form>
         <p class="forecast-scroll-note">All quantities use medicine base units. The filter applies to the stock analysis table; overview metrics and charts show the full facility scope.</p>
         {{-- Scroll container: min-width:0 lets it shrink below the table's intrinsic width --}}
@@ -171,7 +171,7 @@
                                     @if($item['model']['periods'] > 0)
                                         <p style="margin:8px 0;">{{ number_format($item['history_total']) }} {{ $item['base_unit'] }} released from {{ $item['history_start'] }} to {{ $item['history_end'] }}, across {{ $item['model']['periods'] }} completed weeks.</p>
                                         <p style="margin:8px 0;">{{ $item['model']['method'] === 'linear_regression' ? 'Weekly release trend' : 'Limited-history weekly average' }} projects {{ number_format($item['forecast_full_weeks_need'], 1) }} {{ $item['base_unit'] }} over {{ $item['forecast_complete_weeks'] }} full weeks@if($item['forecast_remaining_days'] > 0), plus {{ number_format($item['forecast_partial_week_need'], 1) }} over the final {{ $item['forecast_remaining_days'] }} days@endif.</p>
-                                        <p style="margin:8px 0;">Total need {{ number_format($item['forecast_need_3mo']) }} {{ $item['base_unit'] }} for {{ $item['forecast_start'] }} to {{ $item['forecast_end'] }}. Available now {{ number_format($item['available_stock']) }}. Additional stock needed {{ number_format($item['shortage']) }} = max(total need &minus; available, 0).</p>
+                                        <p style="margin:8px 0;">Total need {{ number_format($item['forecast_need_3mo']) }} {{ $item['base_unit'] }} for {{ $item['forecast_start'] }} to {{ $item['forecast_end'] }}. Available now {{ number_format($item['available_stock']) }}. After expected daily use, {{ number_format($item['forecast_expiry_loss'] ?? 0) }} units are projected to expire unused. Additional stock needed {{ number_format($item['shortage']) }}.</p>
                                     @else
                                         <p style="margin:8px 0;">Completed release history is needed to estimate this item's future demand.</p>
                                     @endif

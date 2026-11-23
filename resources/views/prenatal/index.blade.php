@@ -1,6 +1,7 @@
 @extends('layouts.app')
 
 @section('content')
+<link rel="stylesheet" href="{{ asset('css/clinical-dialog.css') }}">
 <div style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
 
     {{-- Header --}}
@@ -22,13 +23,20 @@
             </p>
         </div>
         <div class="no-print" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <button onclick="openModal()" style="
+            @if(\App\Support\ClinicalAudit::archiveVisible())
+                <a href="{{ route('prenatal.index', $archived ? [] : ['archived' => 1]) }}" style="padding:10px 14px;color:#0f5c4b;text-decoration:underline;">
+                    {{ $archived ? 'Current records' : 'Voided records' }}
+                </a>
+            @endif
+            @unless($archived)
+            <button type="button" aria-haspopup="dialog" aria-controls="prenatal-modal" onclick="openModal()" style="
             padding:10px 18px; border-radius:10px;
-            background:#42ad8a; color:#fff; border:1px solid #42ad8a;
+            background:#0f5c4b; color:#fff; border:1px solid #0f5c4b;
             font-size:1.0625rem; font-weight:600; cursor:pointer;">
             + Record Visit
         </button>
             @include('imports._link', ['section' => 'prenatal'])
+            @endunless
         </div>
     </div>
 
@@ -66,15 +74,16 @@
         <form method="GET" action="{{ route('prenatal.index') }}"
               style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
             <div style="flex:2 1 240px;">
-                <label style="display:block; font-size:1.0625rem; font-weight:700; color:#475569; margin-bottom:6px; text-transform:uppercase;">Search</label>
-                <input type="text" name="search" value="{{ $search }}" placeholder="Patient name"
+                @if($archived)<input type="hidden" name="archived" value="1">@endif
+                <label for="prenatal-filter-search" style="display:block; font-size:1.0625rem; font-weight:700; color:#475569; margin-bottom:6px; text-transform:uppercase;">Search</label>
+                <input id="prenatal-filter-search" type="text" name="search" value="{{ $search }}" placeholder="Patient name"
                        style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem;
                               border:2px solid #bec6cf; border-radius:10px;
                               box-sizing:border-box; outline:none;">
             </div>
             <div style="flex:1 1 160px;">
-                <label style="display:block; font-size:1.0625rem; font-weight:700; color:#475569; margin-bottom:6px; text-transform:uppercase;">Trimester</label>
-                <select name="trimester" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem;
+                <label for="prenatal-filter-trimester" style="display:block; font-size:1.0625rem; font-weight:700; color:#475569; margin-bottom:6px; text-transform:uppercase;">Trimester</label>
+                <select id="prenatal-filter-trimester" name="trimester" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem;
                                                border:2px solid #bec6cf; border-radius:10px; background:#fff;">
                     <option value="">All</option>
                     <option value="1st" {{ $trimester === '1st' ? 'selected' : '' }}>1st</option>
@@ -83,7 +92,7 @@
                 </select>
             </div>
             <div style="display:flex; gap:8px;flex-wrap:wrap;">
-                <button type="submit" style="min-height:2.75rem;height:auto; padding:0 22px; background:#42ad8a; color:#fff; border:none; border-radius:10px; font-weight:600; font-size:1.0625rem; cursor:pointer;">
+                <button type="submit" style="min-height:2.75rem;height:auto; padding:0 22px; background:#0f5c4b; color:#fff; border:none; border-radius:10px; font-weight:600; font-size:1.0625rem; cursor:pointer;">
                     Filter
                 </button>
                 <a href="{{ route('prenatal.index') }}" style="min-height:2.75rem;height:auto; padding:0 22px; background:#fff; color:#334155; border:1px solid #e2e8f0; border-radius:10px; font-weight:600; font-size:1.0625rem; text-decoration:none; display:inline-flex; align-items:center;">
@@ -140,21 +149,30 @@
                                 @endif
                             </td>
                             <td style="padding:14px 16px; text-align:center;">
+                                @if($archived)
+                    <form action="{{ route('prenatal.restore', $v->id) }}" method="POST" style="margin:0;" onsubmit="return confirmDialog(event, 'Restore this clinical record?');">
+                        @csrf
+                        <button type="submit" style="color:#0f5c4b;text-decoration:underline;">Restore</button>
+                    </form>
+                                @else
                                 <form action="{{ route('prenatal.destroy', $v->id) }}" method="POST" style="margin:0;"
-                                      onsubmit="return confirmDialog(event, 'Delete this visit?');">
+                                      onsubmit="return confirmDialog(event, 'Void this clinical record and retain it in the archive?');">
                                     @csrf @method('DELETE')
                                     <button type="submit" style="background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; padding:6px 12px; border-radius:8px; font-size:1.0625rem; font-weight:600; cursor:pointer;">
-                                        Delete
+                                        Void
                                     </button>
                                 </form>
+                                @endif
                             </td>
                         </tr>
                     @empty
                         <tr>
                             <td colspan="10" style="padding:60px 20px; text-align:center; color:#64748b;">
                                 <p style="font-size:2rem; margin:0 0 8px 0;">🤰</p>
-                                <p style="font-size:1.0625rem; font-weight:600; color:#0f172a; margin:0;">No prenatal visits recorded</p>
+                                <p style="font-size:1.0625rem; font-weight:600; color:#0f172a; margin:0;">{{ $archived ? 'No voided records match these filters.' : 'No prenatal visits recorded' }}</p>
+                                @unless($archived)
                                 <p style="font-size:1.0625rem; margin:6px 0 0 0;">Click "Record Visit" to add the first one.</p>
+                                @endunless
                             </td>
                         </tr>
                     @endforelse
@@ -171,14 +189,8 @@
 </div>
 
 {{-- Modal --}}
-<div id="prenatal-modal" onclick="if(event.target===this)closeModal()"
-     style="display:none; position:fixed; inset:0; z-index:99999;
-            background:rgba(15,23,42,0.5); backdrop-filter:blur(2px);
-            align-items:center; justify-content:center; padding:20px;">
-    <div class="mw-page-card" style="background:#fff; border-radius:20px; max-width:560px; width:100%;
-                max-height:90vh; overflow-y:auto; padding:28px;
-                box-shadow:0 20px 40px rgba(0,0,0,0.2);">
-        <h3 style="font-size:1.25rem; font-weight:700; color:#0f172a; margin:0 0 20px 0;">Record Prenatal Visit</h3>
+<dialog id="prenatal-modal" class="clinical-dialog" aria-labelledby="prenatal-modal-title">
+        <h3 id="prenatal-modal-title" tabindex="-1" autofocus style="font-size:1.25rem; font-weight:700; color:#0f172a; margin:0 0 20px 0;">Record Prenatal Visit</h3>
 
         @if($errors->any())
             <div id="prenatal-errors" role="alert" tabindex="-1" style="background:#FCEBEB; border:1px solid #F7C1C1; border-radius:12px; padding:14px 20px; margin-bottom:16px; color:#991b1b;">
@@ -193,8 +205,8 @@
             @csrf
 
             <div>
-                <label style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Patient <span style="color:#dc2626;">*</span></label>
-                <select name="patient_id" required style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; background:#fff; box-sizing:border-box;">
+                <label for="prenatal-field-patient_id" style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Patient <span style="color:#dc2626;">*</span></label>
+                <select id="prenatal-field-patient_id" name="patient_id" required style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; background:#fff; box-sizing:border-box;">
                     <option value="">— Select patient —</option>
                     @foreach($patients as $p)
                         <option value="{{ $p->id }}" @selected((string) old('patient_id') === (string) $p->id)>
@@ -206,18 +218,18 @@
 
             <div class="mw-form-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
                 <div>
-                    <label style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Visit Date <span style="color:#dc2626;">*</span></label>
+                    <label for="prenatal-visit-date" style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Visit Date <span style="color:#dc2626;">*</span></label>
                     <input type="date" id="prenatal-visit-date" name="visit_date" required value="{{ old('visit_date', now()->toDateString()) }}" max="{{ now()->toDateString() }}" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
                 </div>
                 <div>
-                    <label style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Next Visit Date</label>
+                    <label for="prenatal-next-visit-date" style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Next Visit Date</label>
                     <input type="date" id="prenatal-next-visit-date" name="next_visit_date" value="{{ old('next_visit_date') }}" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
                 </div>
             </div>
 
             <div>
-                <label style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Trimester</label>
-                <select name="trimester" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; background:#fff; box-sizing:border-box;">
+                <label for="prenatal-field-trimester" style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Trimester</label>
+                <select id="prenatal-field-trimester" name="trimester" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; background:#fff; box-sizing:border-box;">
                     <option value="">—</option>
                     <option value="1st" @selected(old('trimester') === '1st')>1st</option>
                     <option value="2nd" @selected(old('trimester') === '2nd')>2nd</option>
@@ -227,29 +239,29 @@
 
             <div class="mw-form-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
                 <div>
-                    <label style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Blood Pressure</label>
-                    <input type="text" name="blood_pressure" value="{{ old('blood_pressure') }}" maxlength="20" placeholder="e.g. 120/80" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
+                    <label for="prenatal-field-blood_pressure" style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Blood Pressure</label>
+                    <input id="prenatal-field-blood_pressure" type="text" name="blood_pressure" value="{{ old('blood_pressure') }}" maxlength="20" placeholder="e.g. 120/80" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
                 </div>
                 <div>
-                    <label style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Weight (kg)</label>
-                    <input type="number" name="weight" value="{{ old('weight') }}" step="0.01" min="0" max="300" placeholder="e.g. 58.5" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
+                    <label for="prenatal-field-weight" style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Weight (kg)</label>
+                    <input id="prenatal-field-weight" type="number" name="weight" value="{{ old('weight') }}" step="0.01" min="0" max="300" placeholder="e.g. 58.5" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
                 </div>
             </div>
 
             <div class="mw-form-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
                 <div>
-                    <label style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Fundal Height (cm)</label>
-                    <input type="number" name="fundal_height" value="{{ old('fundal_height') }}" step="0.01" min="0" max="60" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
+                    <label for="prenatal-field-fundal_height" style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Fundal Height (cm)</label>
+                    <input id="prenatal-field-fundal_height" type="number" name="fundal_height" value="{{ old('fundal_height') }}" step="0.01" min="0" max="60" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
                 </div>
                 <div>
-                    <label style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Fetal Heart Tone</label>
-                    <input type="text" name="fetal_heart_tone" value="{{ old('fetal_heart_tone') }}" maxlength="20" placeholder="e.g. 140 bpm" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
+                    <label for="prenatal-field-fetal_heart_tone" style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Fetal Heart Tone</label>
+                    <input id="prenatal-field-fetal_heart_tone" type="text" name="fetal_heart_tone" value="{{ old('fetal_heart_tone') }}" maxlength="20" placeholder="e.g. 140 bpm" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
                 </div>
             </div>
 
             <div>
-                <label style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Tetanus Toxoid Dose</label>
-                <select name="tt_dose" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; background:#fff; box-sizing:border-box;">
+                <label for="prenatal-field-tt_dose" style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Tetanus Toxoid Dose</label>
+                <select id="prenatal-field-tt_dose" name="tt_dose" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; background:#fff; box-sizing:border-box;">
                     <option value="">—</option>
                     <option value="TT1" @selected(old('tt_dose') === 'TT1')>TT1</option>
                     <option value="TT2" @selected(old('tt_dose') === 'TT2')>TT2</option>
@@ -261,25 +273,24 @@
             </div>
 
             <div>
-                <label style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Remarks</label>
-                <textarea name="remarks" rows="2" maxlength="2000" style="width:100%; padding:12px 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box; resize:vertical;">{{ old('remarks') }}</textarea>
+                <label for="prenatal-field-remarks" style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Remarks</label>
+                <textarea id="prenatal-field-remarks" name="remarks" rows="2" maxlength="2000" style="width:100%; padding:12px 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box; resize:vertical;">{{ old('remarks') }}</textarea>
             </div>
 
-            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:8px;">
+            <div style="display:flex; flex-wrap:wrap; gap:10px; justify-content:flex-end; margin-top:8px;">
                 <button type="button" onclick="closeModal()" style="padding:10px 20px; border-radius:10px; background:#fff; color:#334155; border:1px solid #e2e8f0; font-weight:600; font-size:1.0625rem; cursor:pointer;">
                     Cancel
                 </button>
-                <button type="submit" style="padding:10px 20px; border-radius:10px; background:#42ad8a; color:#fff; border:none; font-weight:700; font-size:1.0625rem; cursor:pointer;">
+                <button type="submit" style="padding:10px 20px; border-radius:10px; background:#0f5c4b; color:#fff; border:none; font-weight:700; font-size:1.0625rem; cursor:pointer;">
                     Save Visit
                 </button>
             </div>
         </form>
-    </div>
-</div>
+</dialog>
 
 <script>
-function openModal()  { document.getElementById('prenatal-modal').style.display = 'flex'; document.body.style.overflow='hidden'; }
-function closeModal() { document.getElementById('prenatal-modal').style.display = 'none'; document.body.style.overflow=''; }
+function openModal() { document.getElementById('prenatal-modal').showModal(); }
+function closeModal() { document.getElementById('prenatal-modal').close(); }
 
 function updateNextVisitMinimum() {
     const visit = document.getElementById('prenatal-visit-date');
@@ -295,6 +306,5 @@ updateNextVisitMinimum();
 openModal();
 document.getElementById('prenatal-errors').focus();
 @endif
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 </script>
 @endsection

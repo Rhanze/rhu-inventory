@@ -4,13 +4,6 @@
 <div style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
 
     <style>
-        .table-scroll::-webkit-scrollbar { height: 10px; }
-        .table-scroll::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
-        .table-scroll::-webkit-scrollbar-thumb {
-            background: #cbd5e1; border-radius: 10px; border: 2px solid #f1f5f9;
-        }
-        .table-scroll::-webkit-scrollbar-thumb:hover { background: #42ad8a; }
-        .table-scroll { scrollbar-width: thin; scrollbar-color: #cbd5e1 #f1f5f9; }
         .stock-log-filters { min-width: 0; background: #fff; border: 1px solid #d6e5df; border-radius: 16px; padding: 18px 20px; }
         .stock-log-fields { display: flex; flex-wrap: wrap; gap: 12px; }
         .stock-log-fields label { display: grid; gap: 6px; flex: 1 1 12rem; min-width: 0; color: #334155; font-weight: 600; }
@@ -28,13 +21,8 @@
         .stock-log-filters a, .stock-log-results a { color: #0f5c4b; text-decoration: underline; }
         .stock-log-filters :is(input, select, button, a, summary):focus-visible { outline: 3px solid #0f766e; outline-offset: 2px; }
         .stock-log-results { margin: 0; color: #334155; }
-        .stock-movement-evidence { background: #fff; border-radius: 16px; padding: 18px 20px; min-width: 0; }
-        .stock-movement-evidence .inventory-history-scroll { overflow-x: auto; max-width: 100%; }
-        .stock-movement-evidence table { width: 100%; min-width: 72rem; border-collapse: collapse; }
-        .stock-movement-evidence :is(th, td) { padding: 12px; vertical-align: top; text-align: left; border-bottom: 1px solid #e2e8f0; }
-        .stock-movement-evidence th { background: #f8fafc; }
-        .stock-movement-evidence small { display: block; color: #475569; font-size: 1rem; }
-        .stock-movement-evidence .inventory-history-status { display: inline-block; white-space: nowrap; border: 1px solid #cbd5e1; border-radius: 8px; padding: 4px 8px; }
+        .stock-log-movements { min-width: 0; }
+        .stock-log-movements > p:not(.stock-movement-empty) { margin: 0 0 12px; color: #475569; }
     </style>
 
     {{-- Header Card --}}
@@ -97,134 +85,20 @@
     <p class="stock-log-results">
         <strong>{{ number_format($stockLogs->total()) }} {{ Str::plural('movement', $stockLogs->total()) }}</strong>
         &middot; {{ $stockLogFacilityLabel }} &middot; {{ $historyRange->label() }}
+        @if(request()->filled('inventory_id'))
+            &middot; Inventory batch #{{ request('inventory_id') }}
+        @endif
         @if(request('source') === 'stock_logs')
             &middot; <a href="{{ route('stock_logs.index', ['evidence' => 1] + request()->except('source', 'page')) }}">Include additional movement records</a>
         @endif
     </p>
 
-    @if($showEvidence)
-        <section class="stock-movement-evidence" aria-label="Stock movements">
-            @if(request()->filled('record_kind'))
-                <p style="margin:0 0 12px;color:#475569;">{{ request('record_kind') === 'allocation' ? 'Stock issued for allocations' : 'Stock issued through dispensing' }}. A single record can include several batches.</p>
-            @endif
-            @include('stock_logs._movement_table', ['movements' => $stockLogs])
-        </section>
-    @else
-    {{-- Table card --}}
-    <div style="
-        background: rgba(255,255,255,0.9);
-        backdrop-filter: blur(8px);
-        border-radius: 20px;
-        padding: 0;
-        border: 1px solid rgba(255,255,255,0.4);
-        box-shadow: 0 8px 20px rgba(0,0,0,0.06);
-        overflow: hidden;
-    ">
-        <div class="table-scroll" style="width: 100%; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch;">
-            <table style="width:100%; min-width: 1000px; border-collapse: collapse; font-size:1.0625rem;">
-                <thead>
-                    <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
-                        <th class="no-print" style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">#</th>
-                        <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Batch No.</th>
-                        <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Medicine</th>
-                        <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Type</th>
-                        <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Dosage</th>
-                        <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Quantity</th>
-                        <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Date</th>
-                        <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Added By</th>
-                        @if(is_null(session('health_unit_id')))
-                            <th style="padding: 14px 16px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">RHU</th>
-                        @endif
-                    </tr>
-                </thead>
-
-                <tbody>
-                    @forelse($stockLogs as $log)
-                        @php
-                            $isHighlighted = (string) request('highlight') === (string) $log->id;
-                            $rowBg = $isHighlighted ? '#f1f5f9' : 'transparent';
-                            $isRelease = $log->movement_direction === 'release';
-
-                            if ($isRelease) {
-                                $typeLabel   = 'Stock Out';
-                                $typeIcon    = '↑';
-                                $typeStyles  = 'background:#FFF0F0; color:#A32D2D; border:1px solid #F7C1C1;';
-                            } elseif ($log->movement_direction === 'addition') {
-                                $typeLabel   = 'Stock In';
-                                $typeIcon    = '↓';
-                                $typeStyles  = 'background:#E8F7F4; color:#0f5c4b; border:1px solid #42AD8A;';
-                            } else {
-                                $typeLabel = 'Unknown';
-                                $typeIcon = '';
-                                $typeStyles = 'background:#f1f5f9; color:#475569;';
-                            }
-
-                            $med  = $log->medicine;
-                            $unit = $med->unit ?? null;
-
-                            $pluralUnit = null;
-                            if ($unit) {
-                                if ((int) $log->quantity_added === 1) {
-                                    $pluralUnit = $unit;
-                                } else {
-                                    $pluralUnit = (substr($unit, -1) === 's') ? $unit : $unit . 's';
-                                }
-                            }
-                            $unitLabel = $pluralUnit ? ' (' . $pluralUnit . ')' : ' (units)';
-                        @endphp
-
-                        <tr id="stock-log-{{ $log->id }}" style="background: {{ $rowBg }}; border-bottom: 1px solid #f1f5f9; transition: background 0.2s; scroll-margin-top: 80px;"
-                            onmouseover="if('{{ $rowBg }}'=='transparent') this.style.background='#f8fafc';" 
-                            onmouseout="if('{{ $rowBg }}'=='transparent') this.style.background='transparent';">
-                            <td class="no-print" style="padding: 14px 16px; color: #334155; text-align: center;">{{ $loop->iteration + ($stockLogs->currentPage() - 1) * $stockLogs->perPage() }}</td>
-
-                            <td style="padding: 14px 16px; color: #334155; font-weight: 600;">{{ $log->batch_no ?? 'N/A' }}</td>
-
-                            <td style="padding: 14px 16px; font-weight: 600; color: #0f172a;">{{ $med->medicine_name ?? 'N/A' }}</td>
-
-                            <td style="padding: 14px 16px;">
-                                <span style="display:inline-flex; align-items:center; gap:4px; font-size:1.0625rem; font-weight:600; padding:3px 10px; border-radius:999px; {{ $typeStyles }}">
-                                    <span style="font-size:1.0625rem; line-height:1;">{{ $typeIcon }}</span>
-                                    {{ $typeLabel }}
-                                </span>
-                            </td>
-
-                            <td style="padding: 14px 16px; color: #334155;">
-                                <div>{{ $med->dosage ?? '—' }}</div>
-                                @if($med && $med->dosage_form)
-                                    <div style="font-size:1.0625rem; color: #64748b; margin-top: 2px;">{{ $med->dosage_form }}</div>
-                                @endif
-                            </td>
-
-                            <td style="padding: 14px 16px; color: #334155; font-weight: 600;">
-                                {{ $log->quantity_added }}<span style="font-weight: 500; color: #64748b;">{{ $unitLabel }}</span>
-                            </td>
-
-                            <td style="padding: 14px 16px; color: #334155;">{{ $log->date_added?->format('M j, Y') ?? 'Not recorded' }}</td>
-
-                            <td style="padding: 14px 16px; color: #334155;">{{ $log->addedByUser->name ?? 'N/A' }}</td>
-
-                            @if(is_null(session('health_unit_id')))
-                                <td style="padding: 14px 16px; color: #334155;">{{ $log->healthUnit->name ?? 'N/A' }}</td>
-                            @endif
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="@php
-                                $cols = 8;
-                                if (is_null(session('health_unit_id'))) $cols += 1;
-                                echo $cols;
-                            @endphp" style="padding: 40px 20px; text-align: center; color: #64748b; border-bottom: 1px solid #f1f5f9;">
-                                No stock log records found.
-                            </td>
-                        </tr>
-                    @endforelse
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    @endif
+    <section class="stock-log-movements" aria-label="Stock movements">
+        @if($showEvidence && request()->filled('record_kind'))
+            <p>{{ request('record_kind') === 'allocation' ? 'Stock issued for allocations' : 'Stock issued through dispensing' }}. A single record can include several batches.</p>
+        @endif
+        @include('stock_logs._movement_table', ['movements' => $stockLogs])
+    </section>
 
     {{-- Pagination --}}
     @if ($stockLogs->hasPages())

@@ -10,12 +10,14 @@ class PublicPortalSeparationTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_landing_offers_public_search_and_separate_staff_login(): void
+    public function test_root_opens_public_search_on_both_phone_and_desktop(): void
     {
-        $this->get('/')->assertOk()->assertSee('No account or login required.')
-            ->assertSee('Management portal')->assertSee(route('public.home.citizen'), false)
-            ->assertSee(route('login'), false);
-        $this->get(route('public.home.citizen'))->assertOk();
+        foreach (['Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'] as $agent) {
+            $this->withHeader('User-Agent', $agent)->get('/')->assertOk()->assertViewIs('public.home')
+                ->assertDontSee('name="password"', false);
+        }
+        $this->get(route('public.home.citizen'))->assertOk()
+            ->assertDontSee('>Home</a>', false)->assertDontSee('>Staff login</a>', false);
         $this->get(route('login'))->assertOk();
         $this->assertFalse(session()->has('user_id'));
     }
@@ -38,11 +40,11 @@ class PublicPortalSeparationTest extends TestCase
         $this->assertTrue(app('router')->has('gis.index'));
     }
 
-    public function test_signed_in_user_can_still_choose_public_search_or_own_dashboard(): void
+    public function test_staff_can_use_public_search_and_reach_dashboard_through_login(): void
     {
         $user = User::factory()->create(['role' => 'admin', 'health_unit_id' => null]);
         $this->withSession(['user_id' => $user->id, 'role' => 'admin', 'health_unit_id' => null])
-            ->get('/')->assertOk()->assertSee('Search medicines')->assertSee('Open your dashboard')
-            ->assertSee(route('dashboard'), false);
+            ->get('/')->assertOk()->assertViewIs('public.home');
+        $this->get(route('login'))->assertRedirect(route('dashboard'));
     }
 }

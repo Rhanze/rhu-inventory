@@ -182,22 +182,22 @@
 
         @if($isRhuAdmin)
             <span style="display:inline-flex; align-items:center; gap:8px; font-size:13px; color:#334155;">
-                <span style="width:16px; height:16px; border-radius:50%; background:#42ad8a; border:3px solid #facc15; box-shadow:0 0 0 1px #facc15;"></span>
+                <span style="width:16px; height:16px; border-radius:50%; background:#fff; border:3px solid #facc15; box-shadow:0 0 0 1px #facc15;"></span>
                 <strong>Your RHU</strong>
             </span>
         @endif
 
         <span style="display:inline-flex; align-items:center; gap:8px; font-size:13px; color:#334155;">
             <span style="width:14px; height:14px; border-radius:50%; background:#42ad8a; border:2px solid white; box-shadow:0 0 0 1px #42ad8a;"></span>
-            Healthy stock
+            All tracked items above minimum
         </span>
         <span style="display:inline-flex; align-items:center; gap:8px; font-size:13px; color:#334155;">
             <span style="width:14px; height:14px; border-radius:50%; background:#facc15; border:2px solid white; box-shadow:0 0 0 1px #facc15;"></span>
-            Low stock
+            Some items at or below minimum
         </span>
         <span style="display:inline-flex; align-items:center; gap:8px; font-size:13px; color:#334155;">
             <span style="width:14px; height:14px; border-radius:50%; background:#dc2626; border:2px solid white; box-shadow:0 0 0 1px #dc2626;"></span>
-            Critical
+            No usable stock
         </span>
         <span style="display:inline-flex; align-items:center; gap:8px; font-size:13px; color:#334155;">
             <span style="width:14px; height:14px; border-radius:50%; background:#94a3b8; border:2px solid white; box-shadow:0 0 0 1px #94a3b8;"></span>
@@ -221,6 +221,7 @@ let selectedLat    = null;
 let selectedLng    = null;
 
 const OWN_RHU_ID = {{ $isRhuAdmin && $ownRhu ? (int) $ownRhu->id : 'null' }};
+const OWN_RHU_COORDINATES_URL = {{ Illuminate\Support\Js::from($isRhuAdmin && $ownRhu ? route('gis.coordinates.update', $ownRhu->id) : null) }};
 const CSRF_TOKEN = '{{ csrf_token() }}';
 
 // ─── Antique province bounds ───
@@ -267,16 +268,18 @@ function loadMarkers() {
             rhus.forEach(rhu => {
                 if (!rhu.has_coords) return;
 
-                const totalStock = rhu.total_stock || 0;
+                const rhuId = Number(rhu.id);
                 const isOwn      = !!rhu.is_own_rhu;
 
-                let color = '#dc2626';
-                if (totalStock > 100) color = '#42ad8a';
-                else if (totalStock >= 30) color = '#facc15';
+                const stockStatus = {
+                    healthy: ['#42ad8a', 'All tracked items above minimum'],
+                    low: ['#facc15', 'Some items at or below minimum'],
+                    none: ['#dc2626', 'No usable stock'],
+                }[rhu.stock_status] ?? ['#94a3b8', 'Stock unavailable'];
 
                 const marker = L.circleMarker([rhu.latitude, rhu.longitude], {
                     radius:      isOwn ? 16 : 12,
-                    fillColor:   isOwn ? '#42ad8a' : color,
+                    fillColor:   stockStatus[0],
                     color:       isOwn ? '#facc15' : '#ffffff',
                     weight:      isOwn ? 4 : 3,
                     opacity:     1,
@@ -295,7 +298,7 @@ function loadMarkers() {
 
                 const requestButton = isOwn ? '' : `
                     <button type="button"
-                            onclick="goToTransfer(${rhu.id})"
+                            onclick="goToTransfer(${rhuId})"
                             style="
                                 width:100%; margin-top:10px; height:38px;
                                 font-size:13px; font-weight:700;
@@ -314,21 +317,21 @@ function loadMarkers() {
                     </button>
                 `;
 
-                const popupHtml = `
+                const popup = document.createElement('template');
+                popup.innerHTML = `
                     <div style="min-width:280px; font-family:Arial, sans-serif;">
                         <p style="font-size:15px; font-weight:700; color:#0f172a; margin:0 0 4px 0;">
-                            ${rhu.name}${ownBadge}
+                            <span data-facility-name></span>${ownBadge}
                         </p>
-                        <p style="font-size:12px; color:#64748b; margin:0 0 12px 0;">
-                            ${rhu.municipality || '—'}
-                        </p>
+                        <p data-municipality style="font-size:12px; color:#64748b; margin:0 0 4px 0;"></p>
+                        <p data-stock-status style="font-size:12px; color:#334155; margin:0 0 12px 0;"></p>
 
                         <div style="border-top:1px solid #e2e8f0; padding-top:12px;">
                             <label style="display:block; font-size:10px; font-weight:700; text-transform:uppercase; color:#475569; letter-spacing:0.06em; margin-bottom:5px;">
                                 Program Category
                             </label>
-                            <select id="popup-type-${rhu.id}"
-                                    onchange="fetchCategoryCount(${rhu.id}, this.value)"
+                            <select id="popup-type-${rhuId}"
+                                    onchange="fetchCategoryCount(${rhuId}, this.value)"
                                     style="
                                         width:100%; height:34px; padding:0 10px; font-size:13px;
                                         border:2px solid #bec6cf; border-radius:8px; background:white;
@@ -338,14 +341,17 @@ function loadMarkers() {
                                 ${typeOptions}
                             </select>
 
-                            <div id="popup-result-${rhu.id}" style="margin-top:10px; display:none;"></div>
+                            <div id="popup-result-${rhuId}" style="margin-top:10px; display:none;"></div>
 
                             ${requestButton}
                         </div>
                     </div>
                 `;
 
-                marker.bindPopup(popupHtml, { maxWidth: 340, minWidth: 300 });
+                popup.content.querySelector('[data-facility-name]').textContent = rhu.name;
+                popup.content.querySelector('[data-municipality]').textContent = rhu.municipality || '—';
+                popup.content.querySelector('[data-stock-status]').textContent = stockStatus[1];
+                marker.bindPopup(popup.content.firstElementChild, { maxWidth: 340, minWidth: 300 });
                 bounds.push([rhu.latitude, rhu.longitude]);
             });
 
@@ -380,10 +386,12 @@ function fetchCategoryCount(rhuId, category) {
     fetch(`{{ route('gis.category_count') }}?rhu_id=${rhuId}&category=${encodeURIComponent(category)}`, {
         headers: { 'Accept': 'application/json' }
     })
-    .then(r => r.json())
+    .then(r => {
+        if (!r.ok) throw new Error(`Stock counts unavailable (${r.status})`);
+        return r.json();
+    })
     .then(data => {
-        const types = data.medicine_types ?? 0;
-        const stock = data.total_stock ?? 0;
+        const types = Number(data.medicine_types ?? 0);
 
         if (types === 0) {
             resultEl.innerHTML = `
@@ -401,7 +409,7 @@ function fetchCategoryCount(rhuId, category) {
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
                     <div>
                         <p style="font-size:10px; font-weight:700; text-transform:uppercase; color:#0f5c4b; letter-spacing:0.06em; margin:0 0 2px 0;">
-                            Medicines
+                            Medicine types
                         </p>
                         <p style="font-size:18px; font-weight:700; color:#0f5c4b; margin:0; line-height:1;">
                             ${types}
@@ -409,15 +417,19 @@ function fetchCategoryCount(rhuId, category) {
                     </div>
                     <div>
                         <p style="font-size:10px; font-weight:700; text-transform:uppercase; color:#0f5c4b; letter-spacing:0.06em; margin:0 0 2px 0;">
-                            Total Stock
+                            Usable stock
                         </p>
-                        <p style="font-size:18px; font-weight:700; color:#0f5c4b; margin:0; line-height:1;">
-                            ${stock}
-                        </p>
+                        <div data-category-balances style="font-size:12px; font-weight:600; color:#0f5c4b;"></div>
                     </div>
                 </div>
             </div>
         `;
+        const balances = resultEl.querySelector('[data-category-balances]');
+        for (const row of data.stock_by_unit || []) {
+            const line = document.createElement('div');
+            line.textContent = `${Number(row.quantity).toLocaleString()} ${row.unit}`;
+            balances.append(line);
+        }
     })
     .catch(err => {
         console.error('Category count error:', err);
@@ -560,7 +572,7 @@ function saveLocation() {
     btn.disabled = true;
     label.textContent = 'Saving...';
 
-    fetch(`/gis/coordinates/${OWN_RHU_ID}`, {
+    fetch(OWN_RHU_COORDINATES_URL, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

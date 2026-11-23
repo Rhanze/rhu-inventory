@@ -63,17 +63,55 @@ class StockTrendService
 
     public function coverage(int $available, array $daily): array
     {
-        if ($available <= 0) {
-            return ['days' => 0, 'capped' => false];
-        }
-        $remaining = $available;
-        foreach ($daily as $index => $demand) {
-            if ($demand > 0 && $remaining <= $demand) {
-                return ['days' => $index + $remaining / $demand, 'capped' => false];
+        return $this->projectStock([['quantity' => $available, 'expires' => null]], $daily)['coverage'];
+    }
+
+    /** Fulfill each day's expected demand before removing unused lots that expire that day. */
+    public function projectStock(array $batches, array $daily): array
+    {
+        $start = CarbonImmutable::today();
+        $firstDay = $start->toDateString();
+        $batches = array_filter($batches, fn ($batch) => $batch['quantity'] > 0
+            && ($batch['expires'] === null || $batch['expires'] >= $firstDay));
+        usort($batches, fn ($left, $right) => ($left['expires'] ?? '9999-12-31') <=> ($right['expires'] ?? '9999-12-31'));
+        $remaining = array_sum(array_column($batches, 'quantity'));
+        $coverage = $remaining <= 0 ? 0 : null;
+        $unfilled = [];
+        $expired = [];
+
+        foreach ($daily as $offset => $demand) {
+            $date = $start->addDays($offset)->toDateString();
+            $demand = max(0, $demand);
+            if ($coverage === null && ($remaining <= 1e-9 || ($demand > 0 && $remaining <= $demand + 1e-9))) {
+                $coverage = $offset + ($demand > 0 ? min(1, $remaining / $demand) : 0);
             }
-            $remaining -= $demand;
+
+            $pending = $demand;
+            $expiryLoss = 0;
+            foreach ($batches as &$batch) {
+                $used = min($batch['quantity'], $pending);
+                $pending -= $used;
+                $batch['quantity'] -= $used;
+
+                if ($batch['expires'] !== null && $batch['expires'] <= $date) {
+                    $expiryLoss += $batch['quantity'];
+                    $batch['quantity'] = 0;
+                }
+            }
+            unset($batch);
+
+            $remaining = max(0, $remaining - ($demand - $pending) - $expiryLoss);
+            if ($coverage === null && $remaining <= 1e-9) {
+                $coverage = $offset + 1;
+            }
+            $unfilled[] = $pending;
+            $expired[] = $expiryLoss;
         }
 
-        return ['days' => count($daily), 'capped' => true];
+        return [
+            'coverage' => ['days' => $coverage ?? count($daily), 'capped' => $coverage === null],
+            'unfilled' => $unfilled,
+            'expired' => $expired,
+        ];
     }
 }

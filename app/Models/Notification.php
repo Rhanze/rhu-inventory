@@ -35,6 +35,19 @@ class Notification extends Model
         'archived_at' => 'datetime',
     ];
 
+    public function getIsReadAttribute($value): bool
+    {
+        return (bool) ($this->attributes['effective_is_read'] ?? $value);
+    }
+
+    public function getArchivedAtAttribute($value)
+    {
+        $value = array_key_exists('effective_archived_at', $this->attributes)
+            ? $this->attributes['effective_archived_at'] : $value;
+
+        return $value === null ? null : $this->asDateTime($value);
+    }
+
     // ─── Relationships ───
 
     public function healthUnit()

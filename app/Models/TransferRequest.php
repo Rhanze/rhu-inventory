@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -12,6 +13,8 @@ class TransferRequest extends Model
     public const PHO_REVIEW_APPROVED = 'approved';
 
     public const PHO_REVIEW_REJECTED = 'rejected';
+
+    public const RECEIPT_OVERDUE_AFTER_DAYS = 5;
 
     protected $table = 'transfer_requests';
 
@@ -31,6 +34,8 @@ class TransferRequest extends Model
         'category',
         'pack_type',
         'pieces_per_pack',
+        'reserved_expiration_date',
+        'has_batch_snapshot',
         // ▲ END
 
         'quantity',
@@ -66,6 +71,8 @@ class TransferRequest extends Model
         'reminder_sent_at' => 'datetime',
         'auto_completed' => 'boolean',
         'pieces_per_pack' => 'integer',
+        'reserved_expiration_date' => 'date:Y-m-d',
+        'has_batch_snapshot' => 'boolean',
         'quantity' => 'integer',
     ];
 
@@ -116,6 +123,11 @@ class TransferRequest extends Model
         return $this->belongsTo(User::class, 'received_by');
     }
 
+    public function receiptReview()
+    {
+        return $this->hasOne(TransferReceiptReview::class);
+    }
+
     public function scopeVisibleToViewer(Builder $query, ?int $healthUnitId, ?string $role): Builder
     {
         if ($healthUnitId === null) {
@@ -134,6 +146,16 @@ class TransferRequest extends Model
         return $query->where(fn (Builder $review) => $review
             ->whereNull('pho_review_status')
             ->orWhere('pho_review_status', self::PHO_REVIEW_APPROVED));
+    }
+
+    public function scopeAwaitingReceipt(Builder $query): Builder
+    {
+        return $query->where('status', 'accepted')->whereNull('received_at');
+    }
+
+    public function scopeOverdueForReceipt(Builder $query): Builder
+    {
+        return $query->awaitingReceipt()->where('approved_at', '<=', now()->subDays(self::RECEIPT_OVERDUE_AFTER_DAYS));
     }
 
     // ─── Status helpers ───
@@ -161,6 +183,18 @@ class TransferRequest extends Model
     public function isAccepted(): bool
     {
         return $this->status === 'accepted';
+    }
+
+    public function isReceiptOverdue(): bool
+    {
+        $overdueAt = $this->receiptOverdueAt();
+
+        return $this->isAccepted() && $this->received_at === null && $overdueAt !== null && now()->gte($overdueAt);
+    }
+
+    public function receiptOverdueAt(): ?CarbonInterface
+    {
+        return $this->approved_at?->copy()->addDays(self::RECEIPT_OVERDUE_AFTER_DAYS);
     }
 
     public function isReceived(): bool

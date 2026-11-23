@@ -104,13 +104,14 @@ class Inventory extends Model
 
     public function scopeAvailableAt($query, int $healthUnitId)
     {
-        return $query
-            ->where('health_unit_id', $healthUnitId)
-            ->where('available_stock', '>', 0)
-            ->where(function ($q) {
-                $q->whereNull('expiration_date')
-                  ->orWhereDate('expiration_date', '>=', now()->toDateString());
-            });
+        return $query->where('health_unit_id', $healthUnitId)->usableStock();
+    }
+
+    public function scopeUsableStock($query)
+    {
+        return $query->where('available_stock', '>', 0)
+            ->where(fn ($batch) => $batch->whereNull('expiration_date')
+                ->orWhereDate('expiration_date', '>=', today()));
     }
 
     public function scopeExpiringWithin($query, int $days = self::NEAR_EXPIRY_DAYS, ?CarbonInterface $from = null)

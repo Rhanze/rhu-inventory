@@ -488,6 +488,7 @@
                         type="text"
                         id="username"
                         name="username"
+                        autocomplete="username"
                         class="form-input"
                         value="{{ old('username') }}"
                         placeholder="Enter your username"
@@ -506,6 +507,7 @@
                             type="password"
                             id="password"
                             name="password"
+                            autocomplete="current-password"
                             class="form-input"
                             placeholder="Enter your password"
                             required

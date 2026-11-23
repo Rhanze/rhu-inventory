@@ -72,14 +72,14 @@ class ImmunizationService
         ];
     }
 
-    public function getBulkSchedulesForChildren($children): array
+    public function getBulkSchedulesForChildren($children, ?Collection $schedule = null): array
     {
         $childIds = collect($children)->pluck('id')->all();
         if (empty($childIds)) {
             return [];
         }
 
-        $schedule = ImmunizationSchedule::active()->ordered()->get();
+        $schedule ??= ImmunizationSchedule::active()->ordered()->get();
 
         $records = ImmunizationRecord::whereIn('public_user_id', $childIds)
             ->get()

@@ -1,0 +1,158 @@
+.stock-movement-list {
+    container-type: inline-size;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid #d6e5df;
+    border-radius: 12px;
+    background: #fff;
+}
+
+.stock-movement-entry + .stock-movement-entry {
+    border-top: 1px solid #d6e5df;
+}
+
+.stock-movement-details {
+    scroll-margin-top: 80px;
+}
+
+.stock-movement-summary {
+    display: grid;
+    grid-template:
+        "date toggle"
+        "medicine quantity"
+        "action action"
+        / minmax(0, 1fr) minmax(0, auto);
+    align-items: start;
+    gap: 6px 12px;
+    padding: 12px 14px;
+    overflow-wrap: anywhere;
+    cursor: pointer;
+    list-style: none;
+}
+
+.stock-movement-summary.has-facility {
+    grid-template-areas: "date toggle" "medicine quantity" "action action" "facility facility";
+}
+
+.stock-movement-summary::-webkit-details-marker {
+    display: none;
+}
+
+.stock-movement-summary:focus-visible {
+    outline: 3px solid #0f766e;
+    outline-offset: -3px;
+    border-radius: 8px;
+}
+
+.stock-movement-summary:hover,
+.stock-movement-details[open] .stock-movement-summary {
+    background: #f4f9f7;
+    border-radius: 8px;
+}
+
+.stock-movement-details:is(.is-highlighted, :target) .stock-movement-summary {
+    background: #e3f4ee;
+}
+
+.stock-movement-date { grid-area: date; color: #475569; }
+.stock-movement-medicine { grid-area: medicine; }
+.stock-movement-action { grid-area: action; }
+.stock-movement-facility { grid-area: facility; color: #475569; }
+
+.stock-movement-secondary {
+    display: block;
+    color: #475569;
+    font-size: .9375rem;
+}
+
+.stock-movement-quantity {
+    grid-area: quantity;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    max-width: 12ch;
+}
+
+.stock-movement-quantity.is-in { color: #0f5c4b; }
+.stock-movement-quantity.is-out { color: #962d2d; }
+.stock-movement-quantity.is-reserved { color: #724915; }
+
+.stock-movement-status {
+    display: inline-block;
+    margin-top: 4px;
+    padding: 2px 7px;
+    border: 1px solid #d2c5b8;
+    border-radius: 6px;
+    color: #6c492a;
+    background: #f8f2eb;
+    font-size: .875rem;
+}
+
+.stock-movement-toggle {
+    grid-area: toggle;
+    justify-self: end;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #0f5c4b;
+    font-size: .9375rem;
+    font-weight: 600;
+}
+
+.stock-movement-toggle::after {
+    content: "";
+    width: 6px;
+    height: 6px;
+    margin: 0 2px 3px;
+    border: solid currentColor;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+}
+
+.stock-movement-details[open] .stock-movement-toggle::after {
+    margin: 3px 2px 0;
+    transform: rotate(225deg);
+}
+
+.stock-movement-metadata {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+    gap: 12px;
+    border-top: 1px solid #d6e5df;
+    padding: 12px 14px;
+    margin: 0;
+    overflow-wrap: anywhere;
+}
+
+.stock-movement-metadata dt { font-weight: 600; color: #334155; }
+.stock-movement-metadata dd { margin: 2px 0 0; color: #475569; }
+.stock-movement-note { grid-column: 1 / -1; }
+.stock-movement-note dd { white-space: pre-line; }
+.stock-movement-empty { margin: 0; color: #475569; }
+
+@container (min-width: 42rem) {
+    .stock-movement-summary {
+        grid-template:
+            "date medicine action quantity toggle"
+            / 8rem minmax(0, 1fr) minmax(0, 1fr) minmax(6rem, auto) auto;
+        gap: 10px 14px;
+    }
+
+    .stock-movement-summary.has-facility {
+        grid-template-areas: "date medicine action quantity toggle" ". facility facility facility .";
+    }
+}
+
+@container (min-width: 55rem) {
+    .stock-movement-summary.has-facility {
+        grid-template:
+            "date medicine action quantity facility toggle"
+            / 8rem minmax(0, 1fr) minmax(0, 1fr) minmax(6rem, auto) minmax(0, .8fr) auto;
+    }
+}
+
+@media print {
+    .stock-movement-entry { break-inside: avoid; }
+    .stock-movement-summary, .stock-movement-metadata { padding: 6px 8px; gap: 4px 8px; }
+    .stock-movement-toggle { display: none; }
+}

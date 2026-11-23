@@ -155,7 +155,7 @@
                     Overdue Doses
                 </p>
                 <p style="font-size:14px; color:#64748b; margin:4px 0 0 0;">
-                    Children whose vaccine is past the recommended date
+                    Children whose vaccination session date has passed
                 </p>
             </div>
             @if($overdue->count() > 0)
@@ -167,7 +167,7 @@
 
         @forelse($overdue as $s)
             @php
-                $daysLate = \Carbon\Carbon::parse($s->due_date)->diffInDays(now());
+                $daysLate = (int) $s->session_date->diffInDays(today());
             @endphp
             <div class="fc-row">
                 <div style="min-width:0; flex:1;">
@@ -176,7 +176,7 @@
                     </p>
                     <p class="fc-row-meta">
                         {{ $s->vaccine_name }} (Dose {{ $s->dose_number }})
-                        · Due {{ $s->due_date->format('M d, Y') }}
+                        · Session {{ $s->session_date->format('M d, Y') }}
                         · {{ $s->patient?->barangay ?? '—' }}
                     </p>
                 </div>
@@ -226,7 +226,7 @@
 
         @forelse($upcoming as $s)
             @php
-                $daysUntil = now()->diffInDays(\Carbon\Carbon::parse($s->due_date), false);
+                $daysUntil = (int) today()->diffInDays($s->session_date, false);
             @endphp
             <div class="fc-row">
                 <div style="min-width:0; flex:1;">
@@ -235,7 +235,7 @@
                     </p>
                     <p class="fc-row-meta">
                         {{ $s->vaccine_name }} (Dose {{ $s->dose_number }})
-                        · Due {{ $s->due_date->format('M d, Y') }}
+                        · Session {{ $s->session_date->format('M d, Y') }}
                         · {{ $s->patient?->barangay ?? '—' }}
                     </p>
                 </div>

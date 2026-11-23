@@ -181,12 +181,12 @@
 
         .header-search button {
             min-height: 42px; padding: 8px 18px;
-            background: #42ad8a; color: white; border: none;
+            background: #0f5c4b; color: white; border: none;
             border-radius: 10px; font-weight: 600; font-size: 1rem;
             cursor: pointer; transition: background 0.25s, transform 0.1s;
         }
 
-        .header-search button:hover { background: #369f7d; }
+        .header-search button:hover { background: #0b483b; }
         .header-search button:active { transform: scale(0.97); }
 
         /* ===== NOTIFICATION BELL ===== */
@@ -218,17 +218,23 @@
         .autocomplete-suggestion-item {
             padding: 10px 14px; cursor: pointer; font-size: 0.9375rem;
             display: flex; justify-content: space-between; align-items: center;
-            border-bottom: 1px solid #f0f0f0; color: #333;
+            border-bottom: 1px solid #f0f0f0; color: #333; text-decoration: none;
         }
-        .autocomplete-suggestion-item:hover { background: #E8F7F4; }
-        .suggestion-type { color: #888; font-size: 0.8125rem; margin-left: 12px; white-space: nowrap; }
+        .autocomplete-suggestion-item:is(:hover, :focus-visible) { background: #E8F7F4; }
+        .autocomplete-suggestion-item:focus-visible { outline: 2px solid #0f5c4b; outline-offset: -2px; }
+        .suggestion-type { color: #475569; font-size: 0.8125rem; margin-left: 12px; white-space: nowrap; }
 
         /* ========== MAIN CONTENT ========== */
         .main-content { flex: 1; min-width: 0; padding: clamp(1rem, 2vw, 1.75rem); overflow: auto; }
         .main-content input, .main-content select, .main-content textarea { max-width: 100%; }
-        #confirm-modal > div { box-sizing: border-box; max-height: calc(100dvh - 40px); overflow: auto; }
+        #confirm-modal {
+            box-sizing: border-box; width: min(440px, calc(100% - 40px)); max-height: calc(100dvh - 40px);
+            inset: 0; margin: auto; overflow: auto; border: 0; border-radius: 20px;
+            padding: clamp(16px, 4vw, 28px);
+            background: #fff; color: #0f172a; box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        #confirm-modal::backdrop { background: rgba(15,23,42,0.5); backdrop-filter: blur(2px); }
         #confirm-message { overflow-wrap: break-word; }
-        #confirm-modal > div > div { flex-wrap: wrap; }
 
         .dashboard-page, .dashboard-page > * { min-width: 0; }
         .dashboard-page :is(h1, h2, h3, h4, p) { overflow-wrap: break-word; }
@@ -392,13 +398,22 @@
     @if(session('role') === 'midwife')
         @include('layouts._midwife_styles')
     @endif
-    <link rel="stylesheet" href="{{ asset('css/page-headings.css') }}?v={{ filemtime(public_path('css/page-headings.css')) }}">
-    <script src="{{ asset('js/page-headings.js') }}?v={{ filemtime(public_path('js/page-headings.js')) }}" defer></script>
-    <link rel="stylesheet" href="{{ asset('css/form-choice-search.css') }}?v={{ filemtime(public_path('css/form-choice-search.css')) }}">
-    <script src="{{ asset('js/form-choice-search.js') }}?v={{ filemtime(public_path('js/form-choice-search.js')) }}" defer></script>
-    @if(request()->routeIs('stock_logs.index') || (request()->routeIs('inventory.index') && request('view') === 'history'))
-        <link rel="stylesheet" href="{{ asset('css/stock-movements.css') }}?v={{ filemtime(public_path('css/stock-movements.css')) }}">
-    @endif
+    @php
+        $managementStyles = ['css/page-headings.css', 'css/form-choice-search.css'];
+        if (request()->routeIs('stock_logs.index') || (request()->routeIs('inventory.index') && request('view') === 'history')) {
+            $managementStyles[] = 'css/stock-movements.css';
+        }
+    @endphp
+    @foreach($managementStyles as $stylesheet)
+        @if(is_file(public_path($stylesheet)))
+            <link rel="stylesheet" href="{{ asset($stylesheet) }}?v={{ filemtime(public_path($stylesheet)) }}">
+        @endif
+    @endforeach
+    @foreach(['js/page-headings.js', 'js/form-choice-search.js'] as $script)
+        @if(is_file(public_path($script)))
+            <script src="{{ asset($script) }}?v={{ filemtime(public_path($script)) }}" defer></script>
+        @endif
+    @endforeach
 </head>
 <body class="{{ session('role') === 'midwife' ? 'role-midwife' : '' }}">
     <div class="app-shell">
@@ -787,7 +802,8 @@
 
                         {{-- Header search — now a real form (no more form= attribute gymnastics) --}}
                         <form class="header-search" action="{{ route('search.index') }}" method="GET">
-                            <input type="text" name="q" value="{{ request('q') }}" placeholder="Search...">
+                            <input type="text" name="q" value="{{ request('q') }}" placeholder="Search..."
+                                   aria-label="Search management records" autocomplete="off">
                             <select name="scope" data-native-select aria-label="Search section">
                                 @foreach(\App\Support\SearchSections::forViewer(session('role'), session('health_unit_id') !== null) as $searchSection => $searchLabel)
                                     <option value="{{ $searchSection }}" @selected(request('scope', 'all') === $searchSection)>{{ $searchLabel }}</option>
@@ -877,36 +893,20 @@
         @include('layouts._midwife_navigation')
     @endif
 
-    <div id="confirm-modal" style="
-        display: none; position: fixed; inset: 0; z-index: 99999;
-        background: rgba(15,23,42,0.5); backdrop-filter: blur(2px);
-        align-items: center; justify-content: center; padding: 20px;
-    ">
-        <div style="
-            background: #ffffff; border-radius: 20px;
-            padding: 28px; max-width: 440px; width: 100%;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-        ">
-            <h3 style="font-size: 1.3125rem; font-weight: 700; color: #0f172a; margin: 0 0 8px 0;">Are you sure?</h3>
-            <p id="confirm-message" style="font-size: 1rem; color: #475569; margin: 0 0 20px 0; line-height: 1.5;"></p>
-            <div style="display:flex; gap:10px; justify-content:flex-end;">
-                <button type="button" onclick="confirmCancel()" style="
-                    font-size: 0.9375rem; font-weight: 600; padding: 10px 20px; border-radius: 10px;
-                    background: #ffffff; color: #334155; border: 1px solid #e2e8f0;
-                    cursor: pointer; transition: background 0.2s;
-                " onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#ffffff'">
-                    Cancel
-                </button>
-                <button type="button" onclick="confirmAccept()" style="
-                    font-size: 0.9375rem; font-weight: 600; padding: 10px 20px; border-radius: 10px;
-                    background: #dc2626; color: #ffffff; border: none;
-                    cursor: pointer; transition: background 0.2s;
-                " onmouseover="this.style.background='#b91c1c'" onmouseout="this.style.background='#dc2626'">
-                    Confirm
-                </button>
-            </div>
+    <dialog id="confirm-modal" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+        <h3 id="confirm-title" style="font-size: 1.3125rem; font-weight: 700; margin: 0 0 8px;">Confirm action</h3>
+        <p id="confirm-message" style="font-size: 1rem; color: #475569; margin: 0 0 20px; line-height: 1.5;"></p>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; justify-content:flex-end;">
+            <button type="button" onclick="confirmCancel()" autofocus style="
+                font-weight: 600; padding: 10px 20px; border-radius: 10px;
+                background: #fff; color: #334155; border: 1px solid #94a3b8; cursor: pointer;
+            ">Cancel</button>
+            <button type="button" onclick="confirmAccept()" style="
+                font-weight: 600; padding: 10px 20px; border-radius: 10px;
+                background: #dc2626; color: #fff; border: none; cursor: pointer;
+            ">Confirm</button>
         </div>
-    </div>
+    </dialog>
 
     @include('layouts._empty_alert')
     <script src="{{ asset('js/scroll-navigation.js') }}" defer></script>
@@ -921,41 +921,50 @@
             const searchInput = document.querySelector('.header-search input[name="q"]');
             if (!searchInput) return;
 
+            const scopeSelect = document.querySelector('.header-search select[name="scope"]');
             let dropdown = null;
             let currentRequest = null;
+            let debounceTimer;
 
-            searchInput.addEventListener('input', function () {
-                const query = this.value.trim();
-                if (query.length < 2) {
-                    removeDropdown();
-                    return;
+            searchInput.addEventListener('input', scheduleSuggestions);
+            scopeSelect?.addEventListener('change', scheduleSuggestions);
+
+            searchInput.addEventListener('keydown', function (event) {
+                if (event.key === 'ArrowDown' && dropdown?.firstElementChild) {
+                    event.preventDefault();
+                    dropdown.firstElementChild.focus();
+                } else if (event.key === 'Escape') {
+                    dismissSuggestions();
                 }
-                const scopeSelect = document.querySelector('.header-search select[name="scope"]');
-                const scope = scopeSelect ? scopeSelect.value : 'all';
-                fetchSuggestions(query, scope);
             });
 
-            const scopeSelect = document.querySelector('.header-search select[name="scope"]');
-            if (scopeSelect) {
-                scopeSelect.addEventListener('change', function () {
-                    const query = searchInput.value.trim();
-                    if (query.length >= 2) {
-                        fetchSuggestions(query, this.value);
-                    }
-                });
+            function scheduleSuggestions() {
+                dismissSuggestions();
+                const query = searchInput.value.trim();
+                if (query.length >= 2) {
+                    const scope = scopeSelect?.value ?? 'all';
+                    debounceTimer = setTimeout(() => fetchSuggestions(query, scope), 250);
+                }
+            }
+
+            function dismissSuggestions() {
+                clearTimeout(debounceTimer);
+                currentRequest?.abort();
+                removeDropdown();
             }
 
             function fetchSuggestions(query, scope) {
-                if (currentRequest) currentRequest.abort();
-                currentRequest = new AbortController();
+                const request = new AbortController();
+                currentRequest = request;
                 fetch({{ Illuminate\Support\Js::from(route('search.autocomplete')) }} + '?q=' + encodeURIComponent(query) + '&scope=' + encodeURIComponent(scope), {
-                    signal: currentRequest.signal,
+                    signal: request.signal,
                     headers: { 'Accept': 'application/json' }
                 })
                 .then(response => response.json())
                 .then(data => {
+                    if (request.signal.aborted) return;
                     removeDropdown();
-                    if (data.length > 0) {
+                    if (Array.isArray(data) && data.length > 0) {
                         showDropdown(data);
                     }
                 })
@@ -968,18 +977,27 @@
                 dropdown = document.createElement('div');
                 dropdown.className = 'autocomplete-suggestions';
                 items.forEach(item => {
-                    const div = document.createElement('div');
-                    div.className = 'autocomplete-suggestion-item';
+                    const link = document.createElement('a');
+                    link.href = item.url;
+                    if (link.origin !== window.location.origin) return;
+                    link.className = 'autocomplete-suggestion-item';
                     const label = document.createElement('span');
                     label.textContent = item.text;
                     const type = document.createElement('span');
                     type.className = 'suggestion-type';
                     type.textContent = item.type;
-                    div.append(label, type);
-                    div.addEventListener('click', () => {
-                        window.location.href = item.url;
-                    });
-                    dropdown.appendChild(div);
+                    link.append(label, type);
+                    dropdown.appendChild(link);
+                });
+                dropdown.addEventListener('keydown', function (event) {
+                    if (event.key === 'Escape') {
+                        searchInput.focus();
+                        removeDropdown();
+                    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+                        event.preventDefault();
+                        const next = event.key === 'ArrowDown' ? event.target.nextElementSibling : event.target.previousElementSibling;
+                        (next || searchInput).focus();
+                    }
                 });
 
                 const rect = searchInput.getBoundingClientRect();
@@ -997,8 +1015,8 @@
             }
 
             document.addEventListener('click', function (e) {
-                if (!searchInput.contains(e.target) && dropdown && !dropdown.contains(e.target)) {
-                    removeDropdown();
+                if (!searchInput.contains(e.target) && !scopeSelect?.contains(e.target) && !dropdown?.contains(e.target)) {
+                    dismissSuggestions();
                 }
             });
         });
@@ -1032,46 +1050,33 @@
     {{-- ═══════════════════════════════════════════════════════════ --}}
     <script>
         (function () {
+            const modal = document.getElementById('confirm-modal');
             let pendingForm = null;
 
             window.confirmDialog = function (event, message) {
-                if (event) {
-                    event.preventDefault();
-                    pendingForm = event.target;
-                }
+                event.preventDefault();
+                pendingForm = event.currentTarget;
                 document.getElementById('confirm-message').textContent = message;
-                document.getElementById('confirm-modal').style.display = 'flex';
+                modal.showModal();
                 return false;
             };
 
             window.confirmCancel = function () {
                 pendingForm = null;
-                document.getElementById('confirm-modal').style.display = 'none';
+                modal.close();
             };
 
             window.confirmAccept = function () {
-                document.getElementById('confirm-modal').style.display = 'none';
-                if (pendingForm) {
-                    const form = pendingForm;
-                    pendingForm = null;
-                    form.onsubmit = null;
+                const form = pendingForm;
+                window.confirmCancel();
+                if (form) {
                     window.RhuNavigation?.rememberForm(form);
-                    form.submit();
+                    HTMLFormElement.prototype.submit.call(form);
                 }
             };
 
-            document.addEventListener('keydown', function (e) {
-                const modal = document.getElementById('confirm-modal');
-                if (modal && modal.style.display === 'flex' && e.key === 'Escape') {
-                    confirmCancel();
-                }
-            });
-
-            document.addEventListener('click', function (e) {
-                const modal = document.getElementById('confirm-modal');
-                if (modal && e.target === modal) {
-                    confirmCancel();
-                }
+            modal.addEventListener('cancel', function () {
+                pendingForm = null;
             });
         })();
     </script>

@@ -66,7 +66,7 @@ class MidwifeSupplyNavigationTest extends TestCase
             $user = User::factory()->create(['role' => $role, 'health_unit_id' => $unit->id]);
             $this->withSession(['user_id' => $user->id]);
             $this->get(route('transfers.index'))->assertOk()->assertSee('RHU transfer medicine');
-            $this->from(route('transfers.index'))->post(route('transfers.receive', $transfer->id))
+            $this->from(route('transfers.index'))->post(route('transfers.receive', $transfer->id), ['received_quantity' => 10])
                 ->assertRedirect(route('transfers.index'))->assertSessionHas('success');
             $this->assertSame('received', $transfer->fresh()->status);
             $this->assertSame($user->id, $transfer->fresh()->received_by);

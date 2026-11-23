@@ -7,6 +7,7 @@ use App\Models\HealthUnit;
 use App\Models\MidwifeBarangay;
 use App\Models\PublicUser;
 use App\Models\User;
+use App\Support\ClinicalAudit;
 use App\Support\CredentialRules;
 use Illuminate\Database\QueryException;
 use Illuminate\Http\Request;
@@ -17,6 +18,10 @@ use Illuminate\Validation\ValidationException;
 
 class UserController extends Controller
 {
+    private const ACCOUNT_FORM_FIELDS = [
+        'name', 'username', 'role', 'health_unit_id', 'barangays', 'barangay_names', 'primary_barangay',
+    ];
+
     private function checkAdminAccess()
     {
         if (! session()->has('user_id')) {
@@ -133,7 +138,7 @@ class UserController extends Controller
         ]);
 
         if (session('health_unit_id') && (int) $request->health_unit_id !== (int) session('health_unit_id')) {
-            return back()->withInput()->withErrors([
+            return back()->withInput($request->only(self::ACCOUNT_FORM_FIELDS))->withErrors([
                 'health_unit_id' => 'You can only create accounts for your own RHU.',
             ]);
         }
@@ -176,6 +181,7 @@ class UserController extends Controller
         }
 
         $user = User::where('is_emergency', false)
+            ->where('id', '!=', session('user_id'))
             ->when(session('health_unit_id'), function ($q) {
                 $q->where('health_unit_id', session('health_unit_id'));
             })
@@ -218,6 +224,7 @@ class UserController extends Controller
         }
 
         $user = User::where('is_emergency', false)
+            ->where('id', '!=', session('user_id'))
             ->when(session('health_unit_id'), function ($q) {
                 $q->where('health_unit_id', session('health_unit_id'));
             })
@@ -233,7 +240,7 @@ class UserController extends Controller
             'username' => ['required', 'string', 'max:50', Rule::unique('users', 'username')->ignore($user->id)],
             'role' => ['required', Rule::in($allowedRoles)],
             'password' => CredentialRules::password(),
-            'health_unit_id' => [Rule::requiredIf(! is_null(session('health_unit_id')) || $request->role === 'midwife'), 'nullable', 'exists:health_units,id'],
+            'health_unit_id' => [Rule::requiredIf(! is_null(session('health_unit_id')) || $request->role !== 'admin'), 'nullable', 'exists:health_units,id'],
             'barangays' => 'nullable|array',                      // ← NEW
             'barangays.*' => 'string|max:100',                      // ← NEW
             'barangay_names' => 'nullable|string|max:10100',
@@ -241,30 +248,22 @@ class UserController extends Controller
         ]);
 
         if (session('health_unit_id') && (int) $request->health_unit_id !== (int) session('health_unit_id')) {
-            return back()->withInput()->withErrors([
+            return back()->withInput($request->only(self::ACCOUNT_FORM_FIELDS))->withErrors([
                 'health_unit_id' => 'You can only manage accounts within your own RHU.',
             ]);
         }
 
-        // Preserve an active administrator at the facility the account is leaving.
-        $adminCount = User::where('health_unit_id', $user->health_unit_id)
-            ->where('role', 'admin')
-            ->where('is_active', true)
-            ->where('is_emergency', false)
-            ->where('id', '!=', $user->id)
-            ->count();
+        $updated = DB::transaction(function () use ($user, $request) {
+            [$user, $hasOtherAdmin] = $this->lockManagedAccount($user);
+            $leavesAdministration = $request->role !== 'admin'
+                || (int) $request->health_unit_id !== (int) $user->health_unit_id;
+            if ($user->role === 'admin' && $leavesAdministration && ! $hasOtherAdmin) {
+                return false;
+            }
 
-        $leavesAdministration = $request->role !== 'admin'
-            || (int) $request->health_unit_id !== (int) $user->health_unit_id;
-        if ($user->role === 'admin' && $leavesAdministration && $adminCount < 1) {
-            return redirect()->route('users.index')
-                ->with('error', 'You cannot remove or reassign the last active admin of this facility.');
-        }
+            $oldName = $user->name;
+            $oldRole = $user->role;
 
-        $oldName = $user->name;
-        $oldRole = $user->role;
-
-        DB::transaction(function () use ($user, $request) {
             if ($user->role === 'midwife' && ($request->role !== 'midwife'
                 || (int) $request->health_unit_id !== (int) $user->health_unit_id)) {
                 PublicUser::where('assigned_midwife_id', $user->id)->update(['assigned_midwife_id' => null]);
@@ -281,7 +280,11 @@ class UserController extends Controller
                 $data['password'] = Hash::make($request->password);
             }
 
-            $user->update($data);
+            $user->fill($data);
+            if ($user->isDirty(['password', 'role', 'health_unit_id'])) {
+                $user->auth_version = (int) $user->auth_version + 1;
+            }
+            $user->save();
 
             // ← NEW: sync barangay assignments
             if ($user->role === 'midwife') {
@@ -294,13 +297,21 @@ class UserController extends Controller
                 // If role changed away from midwife, clear the assignments
                 MidwifeBarangay::where('user_id', $user->id)->delete();
             }
-        });
 
-        ActivityLogger::log(
-            'Users',
-            'Update',
-            'Updated user account for '.$oldName.' from role '.$oldRole.' to '.$user->role.'.'
-        );
+            ActivityLogger::log(
+                'Users',
+                'Update',
+                'Updated user account for '.$oldName.' from role '.$oldRole.' to '.$user->role.'.'
+                .($request->filled('password') ? ' Password reset.' : '')
+            );
+
+            return true;
+        }, 3);
+
+        if (! $updated) {
+            return redirect()->route('users.index')
+                ->with('error', 'You cannot remove or reassign the last active admin of this facility.');
+        }
 
         return redirect()->route('users.index')->with('success', 'User updated successfully.');
     }
@@ -322,27 +333,21 @@ class UserController extends Controller
                 ->with('error', 'You cannot delete your own account while logged in.');
         }
 
-        $adminCount = User::where('health_unit_id', $user->health_unit_id)
-            ->where('role', 'admin')
-            ->where('is_active', true)
-            ->where('is_emergency', false)
-            ->where('id', '!=', $user->id)
-            ->count();
-
-        if ($user->role === 'admin' && $adminCount < 1) {
-            return redirect()->route('users.index')
-                ->with('error', 'You cannot delete the last active admin of this facility.');
-        }
-
         try {
-            DB::transaction(function () use ($user) {
+            $deleted = DB::transaction(function () use ($user) {
+                [$user, $hasOtherAdmin] = $this->lockManagedAccount($user);
+                if ($user->role === 'admin' && $user->is_active && ! $hasOtherAdmin) {
+                    return false;
+                }
+
+                $retainAccount = $user->activityLogs()->where('module', ClinicalAudit::MODULE)->exists();
                 ActivityLogger::log(
                     'Users',
-                    'Delete',
-                    'Deleted user account for '.$user->name.' ('.$user->role.').'
+                    $retainAccount ? 'Deactivate' : 'Delete',
+                    ($retainAccount ? 'Deactivated' : 'Deleted').' user account for '.$user->name.' ('.$user->role.').'
                 );
 
-                // Clear assignments only if deleting the account succeeds.
+                // Release assignments in the same transaction that removes account access.
                 if ($user->role === 'midwife') {
                     PublicUser::where('assigned_midwife_id', $user->id)
                         ->update(['assigned_midwife_id' => null]);
@@ -350,14 +355,61 @@ class UserController extends Controller
 
                 MidwifeBarangay::where('user_id', $user->id)->delete();
 
-                $user->delete();
-            });
+                if ($retainAccount) {
+                    $user->is_active = false;
+                    $user->auth_version = (int) $user->auth_version + 1;
+                    $user->save();
 
-            return redirect()->route('users.index')->with('success', 'User deleted successfully.');
+                    return 'deactivated';
+                }
+
+                $user->delete();
+
+                return true;
+            }, 3);
+
+            if (! $deleted) {
+                return redirect()->route('users.index')
+                    ->with('error', 'You cannot delete the last active admin of this facility.');
+            }
+
+            return redirect()->route('users.index')->with('success', $deleted === 'deactivated'
+                ? 'Account deactivated to retain its clinical audit history.' : 'User deleted successfully.');
         } catch (QueryException $e) {
             return redirect()->route('users.index')
                 ->with('error', 'This user cannot be deleted because it is already used by other records.');
         }
+    }
+
+    private function lockManagedAccount(User $expected): array
+    {
+        $actorId = (int) session('user_id');
+        // Every removal locks the active peer administrators in the same order before counting them.
+        $locked = User::query()->where(function ($users) use ($actorId, $expected) {
+            $users->whereKey([$actorId, $expected->id]);
+            if ($expected->role === 'admin') {
+                $users->orWhere(fn ($admins) => $admins->where('health_unit_id', $expected->health_unit_id)
+                    ->where('role', 'admin')->where('is_active', true)->where('is_emergency', false));
+            }
+        })->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+
+        $actor = $locked->get($actorId);
+        abort_unless($actor && $actor->is_active && $actor->role === 'admin'
+            && (int) $actor->health_unit_id === (int) session('health_unit_id')
+            && (int) $actor->auth_version === (int) session('auth_version', 0), 403);
+
+        $target = $locked->get($expected->id);
+        abort_unless($target && ! $target->is_emergency && ($actor->health_unit_id === null
+            || (int) $target->health_unit_id === (int) $actor->health_unit_id), 404);
+        abort_if((int) $target->auth_version !== (int) $expected->auth_version || $target->role !== $expected->role
+            || (int) $target->health_unit_id !== (int) $expected->health_unit_id, 409,
+            'This account changed while you were editing it. Reload and try again.');
+
+        $hasOtherAdmin = $locked->contains(fn (User $account) => $account->id !== $target->id
+            && (int) $account->health_unit_id === (int) $target->health_unit_id
+            && $account->role === 'admin' && $account->is_active && $account->is_emergency === false);
+
+        return [$target, $hasOtherAdmin];
     }
 
     public function editOwn()
@@ -369,25 +421,41 @@ class UserController extends Controller
 
     public function updateOwn(Request $request)
     {
-        $user = User::findOrFail(session('user_id'));
-
-        $request->validate([
+        $data = $request->validate([
             'name' => 'required|string|max:150',
+            'current_password' => ['required_with:password', 'nullable', 'string', 'max:4096'],
             'password' => CredentialRules::password(),
         ]);
+        $changingPassword = $request->filled('password');
 
-        $data = ['name' => $request->name];
-        if ($request->filled('password')) {
-            $data['password'] = Hash::make($request->password);
-        }
+        $user = DB::transaction(function () use ($request, $data, $changingPassword) {
+            $user = User::whereKey(session('user_id'))->lockForUpdate()->firstOrFail();
+            abort_if(! $user->is_active || (int) $user->auth_version !== (int) $request->session()->get('auth_version', 0), 409,
+                'Your account changed. Sign in again and retry.');
 
-        $user->update($data);
+            $user->name = $data['name'];
+            if ($changingPassword) {
+                if (! Hash::check($data['current_password'], $user->password)) {
+                    throw ValidationException::withMessages(['current_password' => 'The current password is incorrect.']);
+                }
+
+                $user->password = Hash::make($data['password']);
+                $user->auth_version = (int) $user->auth_version + 1;
+            }
+            $user->save();
+
+            return $user;
+        });
         session(['user_name' => $user->name]);
+        if ($changingPassword) {
+            $request->session()->put('auth_version', $user->auth_version);
+            $request->session()->regenerate(true);
+        }
 
         ActivityLogger::log(
             'Settings',
             'Update',
-            'User '.$user->name.' updated their own account settings.'
+            'User '.$user->name.($changingPassword ? ' changed their password.' : ' updated their own account settings.')
         );
 
         return redirect()->route('settings')->with('success', 'Your account has been updated.');

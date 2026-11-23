@@ -9,6 +9,7 @@ use App\Services\MedicineUsageTrendService;
 use App\Services\RecordedConsumptionGraphService;
 use App\Support\BarangayDemandScope;
 use App\Support\HistoricalDateRange;
+use App\Support\SpreadsheetCsv;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -87,7 +88,7 @@ class DiseaseReportController extends Controller
 
         $recorded = $service->recordsQuery($unitId, $selectedBarangay, $selectedBarangay ? null : $dispenserId);
         $savedConsumption = $historyRange->apply(clone $recorded, 'date_dispensed')
-            ->selectRaw('COUNT(*) AS record_count, MIN(date_dispensed) AS first_date, MAX(date_dispensed) AS last_date')->first();
+            ->selectRaw('COUNT(*) AS record_count, DATE(MIN(date_dispensed)) AS first_date, DATE(MAX(date_dispensed)) AS last_date')->first();
         $savedConsumptionCount = (int) $savedConsumption->record_count;
         $savedConsumptionFrom = $savedConsumption->first_date;
         $savedConsumptionTo = $savedConsumption->last_date;
@@ -174,10 +175,10 @@ class DiseaseReportController extends Controller
 
         return response()->streamDownload(function () use ($records, $mappings) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Disease', 'Medicine', 'Strength', 'Dosage form', 'Unit', 'Consumption date', 'Quantity consumed', 'Barangay', 'Recorded by']);
+            SpreadsheetCsv::writeRow($handle, ['Disease', 'Medicine', 'Strength', 'Dosage form', 'Unit', 'Consumption date', 'Quantity consumed', 'Barangay', 'Recorded by']);
             foreach ($records as $record) {
                 foreach ($mappings[$record->medicine_id] ?? [] as $disease) {
-                    fputcsv($handle, [$disease->name, $record->medicine->medicine_name ?? '', $record->medicine->dosage ?? '',
+                    SpreadsheetCsv::writeRow($handle, [$disease->name, $record->medicine->medicine_name ?? '', $record->medicine->dosage ?? '',
                         $record->medicine->dosage_form ?? '', $record->medicine?->unit ?: 'units',
                         $record->date_dispensed?->toDateString(), $record->quantity_dispensed, $record->barangay,
                         $record->dispensedByUser->name ?? '']);

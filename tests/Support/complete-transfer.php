@@ -17,4 +17,4 @@ if (isset($argv[2])) {
     }
     file_put_contents($readyFile, 'ready');
 }
-app(TransferService::class)->complete((int) $argv[1], null, null, true);
+app(TransferService::class)->complete((int) $argv[1], (int) $argv[3], (int) $argv[4]);

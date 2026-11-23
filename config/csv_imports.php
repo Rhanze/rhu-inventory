@@ -3,7 +3,7 @@
 return [
     'medicines' => [
         'title' => 'Medicines and Items', 'store' => 'medicine.store', 'index' => 'medicine.index',
-        'roles' => ['admin', 'staff'], 'scope' => 'any',
+        'roles' => ['admin'], 'scope' => 'pho',
         'columns' => ['medicine_name', 'description', 'dosage', 'category', 'dosage_form', 'unit', 'pack_type', 'pieces_per_pack', 'requires_prescription'],
         'required' => ['medicine_name', 'description', 'category'],
         'aliases' => ['item_name' => 'medicine_name', 'base_unit' => 'unit'],

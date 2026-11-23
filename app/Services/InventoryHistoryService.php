@@ -21,6 +21,7 @@ class InventoryHistoryService
             'search' => ['nullable', 'string', 'max:200'],
             'batch_no' => ['nullable', 'string', 'max:100'],
             'medicine_id' => ['nullable', 'integer', 'min:1', 'exists:medicines,id'],
+            'inventory_id' => ['nullable', 'integer', 'min:1'],
             'type' => ['nullable', 'string', 'in:addition,release,reversal,reservation'],
             'action' => ['nullable', 'string', 'in:addition,dispensing,allocation,transfer,reservation,reversal,adjustment'],
             'rhu_filter' => ['nullable', 'string', 'regex:/^(all|pho|[0-9]+)$/'],
@@ -34,6 +35,7 @@ class InventoryHistoryService
         $type = $filters['type'] ?? null;
         $status = $filters['status'] ?? ($type === 'reversal' ? 'reversal' : ($stockLogs ? 'active' : 'all'));
         $recordKind = $filters['record_kind'] ?? null;
+        $inventoryId = $filters['inventory_id'] ?? null;
         $unitId = session('health_unit_id');
         if ($unitId === null && ! empty($filters['rhu_filter']) && $filters['rhu_filter'] !== 'all') {
             $unitId = $filters['rhu_filter'] === 'pho' ? (HealthUnit::phoId() ?? -1) : (int) $filters['rhu_filter'];
@@ -49,6 +51,7 @@ class InventoryHistoryService
         ])->when($unitId !== null, fn ($query) => $query->where('stock_logs.health_unit_id', $unitId))
             ->when($excludePho !== null, fn ($query) => $query->where('stock_logs.health_unit_id', '!=', $excludePho))
             ->when(! empty($filters['medicine_id']), fn ($query) => $query->where('stock_logs.medicine_id', $filters['medicine_id']))
+            ->when($inventoryId !== null, fn ($query) => $query->where('stock_logs.inventory_id', $inventoryId))
             ->when(! empty($filters['batch_no']), fn ($query) => $query->where('stock_logs.batch_no', $filters['batch_no']));
         if ($recordKind === null) {
             $range->apply($logs, 'stock_logs.date_added');
@@ -88,27 +91,28 @@ class InventoryHistoryService
                 CASE WHEN movement.owner_type = 'allocations' THEN movement.owner_id END as allocation_id,
                 CASE WHEN movement.owner_type = 'transfer_requests' THEN movement.owner_id END as transfer_id,
                 movement.available_delta, movement.allocated_delta, movement.method, movement.created_at as recorded_at")
-            ->where(function ($unlogged) use ($reservation) {
+            ->where(function ($unlogged) use ($reservation, $inventoryId) {
                 $unlogged->whereNotNull('movement.reverses_id')
                     ->orWhereRaw('('.$reservation.')')
-                    ->orWhereNotExists(function ($existing) {
+                    ->orWhereNotExists(function ($existing) use ($inventoryId) {
                         $existing->selectRaw('1')->from('stock_logs as existing')
                             ->where(fn ($owner) => $this->matchingOwner($owner, 'movement', 'existing'))
                             ->where(fn ($state) => $state->where(fn ($active) => $active->whereNull('existing.voided_at')->whereNull('movement.reversed_at'))
                                 ->orWhere(fn ($voided) => $voided->whereNotNull('existing.voided_at')->whereNotNull('movement.reversed_at')))
-                            ->where(function ($matchingBatch) {
+                            ->where(function ($matchingBatch) use ($inventoryId) {
                                 $matchingBatch->whereColumn('existing.inventory_id', 'movement.inventory_id')
-                                    ->orWhere(fn ($legacy) => $legacy->whereNull('existing.inventory_id')
+                                    ->when($inventoryId === null, fn ($match) => $match->orWhere(fn ($legacy) => $legacy->whereNull('existing.inventory_id')
                                         ->whereColumn('existing.health_unit_id', 'batch.health_unit_id')
                                         ->whereColumn('existing.medicine_id', 'batch.medicine_id')
                                         ->where(fn ($number) => $number->whereColumn('existing.batch_no', 'batch.batch_no')
-                                            ->orWhere(fn ($blank) => $blank->whereNull('existing.batch_no')->whereNull('batch.batch_no'))));
+                                            ->orWhere(fn ($blank) => $blank->whereNull('existing.batch_no')->whereNull('batch.batch_no')))));
                             });
                     });
             })
             ->when($unitId !== null, fn ($query) => $query->where('batch.health_unit_id', $unitId))
             ->when($excludePho !== null, fn ($query) => $query->where('batch.health_unit_id', '!=', $excludePho))
             ->when(! empty($filters['medicine_id']), fn ($query) => $query->where('batch.medicine_id', $filters['medicine_id']))
+            ->when($inventoryId !== null, fn ($query) => $query->where('movement.inventory_id', $inventoryId))
             ->when(! empty($filters['batch_no']), fn ($query) => $query->where('batch.batch_no', $filters['batch_no']));
         if ($recordKind === null && $range->from !== null) {
             $ledger->whereRaw('DATE('.$ledgerDate.') >= ?', [$range->from]);
@@ -135,11 +139,16 @@ class InventoryHistoryService
         if ($stockLogs && ($filters['source'] ?? null) === 'stock_logs') {
             $events->where('events.event_source', 'log');
         }
+        $dispensing = "events.dispensing_record_id IS NOT NULL OR events.movement_type = 'dispensing'
+            OR (events.movement_type IS NULL AND (LOWER(TRIM(events.remarks)) LIKE 'dispensed%'
+                OR LOWER(TRIM(events.remarks)) LIKE 'released%dispensed%'))";
+        $reportRemarks = "CASE WHEN events.event_source = 'ledger' AND events.movement_type = 'reversal'
+            AND events.dispensing_record_id IS NOT NULL
+            AND events.remarks IN ('Dispensing record corrected', 'Dispensing record deleted') THEN events.remarks
+            WHEN ({$dispensing}) THEN NULL ELSE events.remarks END";
         $action = "CASE WHEN events.movement_type = 'reversal' THEN 'reversal'
             WHEN events.movement_type = 'reservation' THEN 'reservation'
-            WHEN events.dispensing_record_id IS NOT NULL OR events.movement_type = 'dispensing'
-                OR (events.movement_type IS NULL AND (LOWER(events.remarks) LIKE 'dispensed%'
-                    OR LOWER(events.remarks) LIKE 'released%dispensed%')) THEN 'dispensing'
+            WHEN ({$dispensing}) THEN 'dispensing'
             WHEN events.allocation_id IS NOT NULL OR events.movement_type = 'allocation'
                 OR (events.movement_type IS NULL AND (LOWER(events.remarks) LIKE 'allocated%'
                     OR LOWER(events.remarks) LIKE 'released%allocated%')) THEN 'allocation'
@@ -162,6 +171,7 @@ class InventoryHistoryService
             ->select('events.*', 'medicines.medicine_name', 'medicines.dosage', 'medicines.dosage_form', 'medicines.unit', 'facility.name as facility_name', 'actor.name as actor_name', 'transfer.status as transfer_status',
                 'allocation.date_allocated as allocation_date', 'dispensing.date_dispensed as dispensing_date')
             ->selectRaw('events.date_added as stock_effective_date, '.$action.' as event_type')
+            ->selectRaw($reportRemarks.' as report_remarks')
             ->selectRaw('COALESCE(transfer_from.name, allocation_from.name) as source_name,
                 COALESCE(transfer_to.name, allocation_to.name, allocation.destination) as destination_name');
 
@@ -215,9 +225,10 @@ class InventoryHistoryService
 
         if (! empty($filters['search'])) {
             $term = '%'.$filters['search'].'%';
-            $query->where(function ($search) use ($term, $filters) {
+            $query->where(function ($search) use ($term, $filters, $reportRemarks) {
                 $search->where('medicines.medicine_name', 'like', $term)->orWhere('medicines.dosage', 'like', $term)
-                    ->orWhere('actor.name', 'like', $term)->orWhere('actor.username', 'like', $term)->orWhere('events.remarks', 'like', $term)
+                    ->orWhere('actor.name', 'like', $term)->orWhere('actor.username', 'like', $term)
+                    ->orWhereRaw('('.$reportRemarks.') LIKE ?', [$term])
                     ->orWhere('events.batch_no', 'like', $term)->orWhere('facility.name', 'like', $term)
                     ->orWhere('transfer_from.name', 'like', $term)->orWhere('transfer_to.name', 'like', $term)
                     ->orWhere('allocation_from.name', 'like', $term)->orWhere('allocation_to.name', 'like', $term)
@@ -250,6 +261,7 @@ class InventoryHistoryService
                 $log = new StockLog((array) $row);
                 $row->direction = $row->event_source === 'log' ? $log->movement_direction
                     : (in_array($row->movement_type, ['addition', 'release'], true) ? $row->movement_type : null);
+                unset($row->remarks);
                 $row->mechanism = match (true) {
                     $row->movement_type === 'reversal' => 'Stock reversal',
                     $row->movement_type === 'reservation' => 'Stock reservation',

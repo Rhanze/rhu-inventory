@@ -140,10 +140,6 @@
             @csrf
             @method('PUT')
 
-            {{-- Preserve stock values --}}
-            <input type="hidden" name="available_stock"  value="{{ $inventory->available_stock }}">
-            <input type="hidden" name="allocated_stock"  value="{{ $inventory->allocated_stock }}">
-
             {{-- 1. Batch Number --}}
             <div>
                 <label style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">Batch Number</label>
@@ -219,13 +215,6 @@
                 @enderror
             </div>
 
-            <div>
-                <label for="remarks" style="display:block;margin-bottom:6px;font-size:1rem;font-weight:600;color:#0f172a;">Reason for stock adjustment (optional)</label>
-                <textarea name="remarks" id="remarks" rows="3" maxlength="2000" placeholder="Explain any change to the stock quantity"
-                          style="width:100%;padding:12px 16px;font:inherit;border:2px solid #bec6cf;border-radius:14px;box-sizing:border-box;">{{ old('remarks') }}</textarea>
-                @error('remarks')<p style="color:#dc2626;">{{ $message }}</p>@enderror
-            </div>
-
             {{-- Buttons --}}
             <div style="display:flex; gap:12px; margin-top:8px;">
                 <button type="submit" style="
@@ -244,6 +233,30 @@
                     Cancel
                 </a>
             </div>
+        </form>
+    </div>
+
+    <div style="background:#fff;border-radius:20px;padding:28px;border:1px solid #e2e8f0;">
+        <h3 style="margin:0 0 16px;color:#0f172a;">Adjust available stock</h3>
+        <form action="{{ route('inventory.adjust', $inventory->id) }}" method="POST" style="display:grid;gap:12px;">
+            @csrf
+            @method('PUT')
+            <input type="hidden" name="expected_available_stock" value="{{ $inventory->available_stock }}">
+
+            <div>
+                <label for="available_stock" style="display:block;margin-bottom:6px;font-weight:600;">Corrected available quantity</label>
+                <input id="available_stock" name="available_stock" type="number" min="0" max="2147483647" required
+                       value="{{ (string) old('expected_available_stock') === (string) $inventory->available_stock ? old('available_stock', $inventory->available_stock) : $inventory->available_stock }}"
+                       style="max-width:100%;padding:10px 14px;font:inherit;border:2px solid #bec6cf;border-radius:10px;">
+                @error('available_stock')<p role="alert" style="color:#b91c1c;">{{ $message }}</p>@enderror
+            </div>
+            <div>
+                <label for="remarks" style="display:block;margin-bottom:6px;font-weight:600;">Reason for adjustment</label>
+                <textarea name="remarks" id="remarks" rows="3" maxlength="255" required
+                          style="width:100%;padding:12px 16px;font:inherit;border:2px solid #bec6cf;border-radius:14px;box-sizing:border-box;">{{ old('remarks') }}</textarea>
+                @error('remarks')<p role="alert" style="color:#b91c1c;">{{ $message }}</p>@enderror
+            </div>
+            <button type="submit" style="justify-self:start;padding:10px 20px;border:0;border-radius:10px;background:#0f766e;color:#fff;font:inherit;font-weight:600;cursor:pointer;">Save stock adjustment</button>
         </form>
     </div>
 

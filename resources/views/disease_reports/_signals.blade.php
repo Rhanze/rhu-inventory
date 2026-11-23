@@ -16,7 +16,7 @@
         @if(session('role') === 'midwife')<input type="hidden" name="consumption_scope" value="{{ $barangayOptions->isEmpty() ? 'personal' : 'area' }}">@endif
         @if(request()->filled('periods'))<input type="hidden" name="periods" value="{{ request('periods') }}">@endif
         <div><label for="demand-barangay">{{ session('role') === 'midwife' ? ($consumptionScope === 'personal' && $barangayOptions->isNotEmpty() ? 'Analyze assigned barangay' : 'Your assigned barangay') : 'Area' }}</label>
-            <select id="demand-barangay" name="barangay" class="disease-control" @disabled(session('role') === 'midwife' && $barangayOptions->isEmpty())>
+            <select id="demand-barangay" name="barangay" class="disease-control" data-native-select @disabled(session('role') === 'midwife' && $barangayOptions->isEmpty())>
                 @if(session('role') !== 'midwife')<option value="">Entire RHU</option>@endif
                 @forelse($barangayOptions as $area)
                     <option value="{{ $area }}" @selected($selectedBarangay === $area)>{{ $area }}</option>
@@ -28,12 +28,12 @@
             </select>
         </div>
         <div><label for="disease-filter">Disease association</label>
-            <select id="disease-filter" name="disease_id" class="disease-control">
+            <select id="disease-filter" name="disease_id" class="disease-control" data-native-select>
                 <option value="">All associated diseases</option>
                 @foreach($diseases as $disease)<option value="{{ $disease->id }}" @selected($selectedDiseaseId === $disease->id)>{{ $disease->name }}</option>@endforeach
             </select>
         </div>
-        <div><label for="demand-period">Compare consumption by</label><select id="demand-period" class="disease-control" name="period_type">
+        <div><label for="demand-period">Compare consumption by</label><select id="demand-period" class="disease-control" name="period_type" data-native-select>
             <option value="weekly" @selected($periodType === 'weekly')>Week</option><option value="monthly" @selected($periodType === 'monthly')>Month</option>
         </select></div>
         <button type="submit" class="disease-button">Analyze trends</button>

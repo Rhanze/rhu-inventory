@@ -10,7 +10,7 @@
 <section class="stock-log-filters no-print" aria-label="Stock log filters">
     <p style="margin:0 0 14px;color:#475569;">Find individual receipts, issues, transfers, and corrections.</p>
     <form method="GET" action="{{ route('stock_logs.index') }}" data-empty-action="history">
-        @foreach(request()->only('source', 'action', 'record_kind', 'movement_type', 'category', 'batch_input') as $name => $value)
+        @foreach(request()->only('source', 'action', 'record_kind', 'movement_type', 'category', 'batch_input', 'inventory_id') as $name => $value)
             @if(is_scalar($value) && (string) $value !== '')
                 <input type="hidden" name="{{ $name }}" value="{{ $value }}">
             @endif
@@ -90,7 +90,7 @@
         </details>
         <div class="stock-log-actions">
             <button type="submit">Apply filters</button>
-            @if(request()->anyFilled(['search', 'rhu_filter', 'status', 'source', 'action', 'record_kind', 'movement_type', 'category', 'batch_input', ...$additionalFilters]))
+            @if(request()->anyFilled(['search', 'rhu_filter', 'status', 'source', 'action', 'record_kind', 'movement_type', 'category', 'batch_input', 'inventory_id', ...$additionalFilters]))
                 <a href="{{ route('stock_logs.index') }}">Clear filters</a>
             @endif
         </div>

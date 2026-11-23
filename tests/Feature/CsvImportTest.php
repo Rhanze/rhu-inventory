@@ -67,7 +67,7 @@ class CsvImportTest extends TestCase
     public static function activeSections(): array
     {
         return [
-            'medicines' => ['medicines', false, 'medicines', ['medicine_name' => 'Imported item', 'description' => 'Imported description', 'dosage' => '10 mg', 'category' => 'medicine']],
+            'medicines' => ['medicines', true, 'medicines', ['medicine_name' => 'Imported item', 'description' => 'Imported description', 'dosage' => '10 mg', 'category' => 'medicine']],
             'inventory' => ['inventory', false, 'inventory', ['medicine' => 'CSV medicine', 'available_stock' => 10, 'allocated_stock' => 0, 'date_added' => '2026-01-02', 'remarks' => 'Opening stock']],
             'stock additions' => ['stock_logs', false, 'stock_logs', ['medicine' => 'CSV medicine', 'quantity_added' => 10, 'date_added' => '2026-01-02', 'remarks' => 'Delivery']],
             'allocations' => ['allocations', false, 'allocations', ['medicine' => 'CSV medicine', 'destination' => 'Clinic', 'quantity_allocated' => 3, 'date_allocated' => '2026-01-02']],
@@ -92,7 +92,15 @@ class CsvImportTest extends TestCase
     #[DataProvider('activeSections')]
     public function test_each_active_section_imports_through_its_normal_workflow(string $section, bool $pho, string $table, array $row): void
     {
-        $this->fixture($pho);
+        $fixture = $this->fixture($pho);
+        if ($section === 'dispensing') {
+            $fixture['inventory']->update(['expiration_date' => '2026-01-20']);
+            StockLog::create([
+                'inventory_id' => $fixture['inventory']->id, 'medicine_id' => $fixture['medicine']->id,
+                'health_unit_id' => $fixture['unit']->id, 'quantity_added' => 100,
+                'batch_no' => 'CSV-BATCH', 'movement_type' => 'receipt', 'date_added' => '2026-01-01',
+            ]);
+        }
         $before = DB::table($table)->count();
         $this->get(route('imports.create', ['section' => $section]))->assertOk()->assertSee('Download template');
         $template = $this->get(route('imports.template', ['section' => $section]))->assertOk();
@@ -153,11 +161,20 @@ class CsvImportTest extends TestCase
 
     public function test_existing_export_headers_bom_boolean_labels_and_delimiters_are_supported(): void
     {
-        $this->fixture();
+        $this->fixture(true);
         $contents = "\xEF\xBB\xBF#;Item Name;Category;Dosage;Dosage Form;Base Unit;Pack Type;Pieces per Pack;Requires Prescription;Description\r\n1;Imported export;medicine;25 mg;Tablet;tablet;box;10;No;Export description\r\n";
         $this->post(route('imports.store', ['section' => 'medicines']), ['file' => UploadedFile::fake()->createWithContent('export.csv', $contents), 'import_token' => (string) Str::uuid()])
             ->assertSessionHasNoErrors()->assertSessionHas('success');
         $this->assertDatabaseHas('medicines', ['medicine_name' => 'Imported export', 'requires_prescription' => false, 'pieces_per_pack' => 10]);
+    }
+
+    public function test_catalog_import_permissions_match_the_provincial_catalog_editor(): void
+    {
+        $this->fixture();
+        $this->get(route('imports.index'))->assertOk()->assertDontSee(route('imports.create', ['section' => 'medicines']), false);
+        $this->get(route('imports.create', ['section' => 'medicines']))->assertForbidden();
+        $this->post(route('imports.store', ['section' => 'medicines']))->assertForbidden();
+        $this->assertDatabaseCount('medicines', 1);
     }
 
     public function test_stock_report_quantities_and_type_labels_resolve_and_releases_are_rejected(): void
@@ -313,7 +330,7 @@ class CsvImportTest extends TestCase
             ->assertSee(route('imports.create', ['section' => 'shipments']), false)
             ->assertDontSee(route('imports.create', ['section' => 'dispensing']), false);
         $this->get(route('imports.create', ['section' => 'dispensing']))->assertForbidden();
-        $staff = User::factory()->create(['role' => 'staff', 'health_unit_id' => null]);
+        $staff = User::factory()->create(['role' => 'staff', 'health_unit_id' => HealthUnit::where('name', 'CSV RHU')->value('id')]);
         $this->withSession(['user_id' => $staff->id])->get(route('reports.inventory'))->assertOk()
             ->assertSee(route('imports.index'), false)->assertSee('>Import</a>', false)
             ->assertDontSee('Import source data');
@@ -322,7 +339,7 @@ class CsvImportTest extends TestCase
     public function test_export_views_include_appropriate_source_import_entry_points(): void
     {
         $fixture = $this->fixture();
-        foreach (['medicine.index', 'medicine.stock_on_hand', 'inventory.index', 'stock_logs.index',
+        foreach (['inventory.index', 'stock_logs.index',
             'allocation.index', 'dispensing.index', 'reports.inventory', 'reports.stock', 'reports.allocation',
             'reports.dispensing', 'reports.near_expiry', 'vaccination.monthly',
             'activity_logs.index', 'elmis.export'] as $route) {
@@ -334,7 +351,7 @@ class CsvImportTest extends TestCase
 
         $pho = User::factory()->create(['role' => 'admin', 'health_unit_id' => null]);
         $this->withSession(['user_id' => $pho->id]);
-        foreach (['redistribution.index', 'inventory.pho_receive'] as $route) {
+        foreach (['medicine.index', 'medicine.stock_on_hand', 'redistribution.index', 'inventory.pho_receive'] as $route) {
             $response = $this->get(route($route))->assertOk()->assertSee('/imports', false);
             $this->assertImportBesideExport($response->getContent(), $route);
         }
@@ -383,7 +400,7 @@ class CsvImportTest extends TestCase
 
     public function test_import_content_uses_a_compact_dialog_with_a_template_and_no_preparation_panel(): void
     {
-        $this->fixture();
+        $this->fixture(true);
         $this->get(route('medicine.index'))->assertOk()->assertSee('<dialog', false)
             ->assertSee('class="csv-import-dialog"', false)->assertSee('Download template')
             ->assertSee('name="import_dialog" value="1"', false)->assertDontSee('Prepare your data');

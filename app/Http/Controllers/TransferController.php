@@ -7,6 +7,8 @@ use App\Models\HealthUnit;
 use App\Models\Inventory;
 use App\Models\Medicine;
 use App\Models\Notification;
+use App\Models\StockLog;
+use App\Models\TransferReceiptResolution;
 use App\Models\TransferRequest;
 use App\Services\TransferService;
 use Illuminate\Http\Request;
@@ -27,7 +29,7 @@ class TransferController extends Controller
         return null;
     }
 
-    public function index()
+    public function index(Request $request)
     {
         if ($redirect = $this->checkAccess()) {
             return $redirect;
@@ -35,18 +37,23 @@ class TransferController extends Controller
 
         $healthUnitId = session('health_unit_id');
         $isPHO = is_null($healthUnitId);
+        $reviewOnly = $request->boolean('receipt_review');
+        $overdueOnly = ! $reviewOnly && $request->boolean('overdue');
 
         $query = TransferRequest::with([
             'fromHealthUnit', 'toHealthUnit', 'medicine',
-            'requestedBy', 'inventory', 'receivedByUser', 'phoReviewer',
+            'requestedBy', 'inventory', 'receivedByUser', 'phoReviewer', 'receiptReview.resolution',
         ])->visibleToViewer($healthUnitId, session('role'));
 
-        $transfers = $query->orderByDesc('created_at')->orderByDesc('id')->paginate(20);
+        $transfers = $query->when($reviewOnly, fn ($query) => $query->where('status', 'received')
+            ->where(fn ($receipts) => $receipts->where('auto_completed', true)->orWhereHas('receiptReview')))
+            ->when($overdueOnly, fn ($query) => $query->overdueForReceipt()->orderBy('approved_at'))
+            ->orderByDesc('created_at')->orderByDesc('id')->paginate(20)->withQueryString();
 
-        return view('transfers.index', compact('transfers', 'isPHO'));
+        return view('transfers.index', compact('transfers', 'isPHO', 'reviewOnly', 'overdueOnly'));
     }
 
-    public function create()
+    public function create(Request $request)
     {
         if ($redirect = $this->checkAccess()) {
             return $redirect;
@@ -57,8 +64,17 @@ class TransferController extends Controller
         }
 
         $currentRhu = HealthUnit::find(session('health_unit_id'));
+        $selection = $request->validate([
+            'source_rhu_id' => 'nullable|integer|min:1',
+            'medicine_id' => 'nullable|integer|min:1',
+        ]);
+        $previousMedicineId = $request->old('medicine_id', $selection['medicine_id'] ?? null);
+        $previousMedicine = is_scalar($previousMedicineId)
+            ? Medicine::find((int) $previousMedicineId)?->only(['id', 'medicine_name', 'category', 'dosage_form', 'dosage', 'unit'])
+            : null;
+        $selectedFacilityId = $request->old('source_rhu_id', $selection['source_rhu_id'] ?? null);
 
-        return view('transfers.create', compact('currentRhu'));
+        return view('transfers.create', compact('currentRhu', 'previousMedicine', 'selectedFacilityId'));
     }
 
     public function store(Request $request)
@@ -76,7 +92,7 @@ class TransferController extends Controller
             'dosage' => 'nullable|string|max:100',
             'dosage_form' => 'nullable|string|max:100',
             'category' => 'nullable|string|max:100',
-            'quantity' => 'required|integer|min:1',
+            'quantity' => 'required|integer|min:1|max:2147483647',
             'notes' => 'nullable|string|max:500',
         ]);
 
@@ -89,10 +105,13 @@ class TransferController extends Controller
 
         $medicine = Medicine::findOrFail($request->medicine_id);
 
-        $sourceHasStock = Inventory::availableFefo((int) $fromRhuId, $medicine->id)->exists();
-
-        if (! $sourceHasStock) {
-            return back()->with('error', 'The source RHU does not have this medicine in stock.');
+        $largestBatch = (int) Inventory::availableAt((int) $fromRhuId)
+            ->where('medicine_id', $medicine->id)->max('available_stock');
+        if ($largestBatch === 0) {
+            return back()->withInput()->with('error', 'The source RHU does not have this medicine in stock.');
+        }
+        if ($largestBatch < $request->integer('quantity')) {
+            return back()->withInput()->withErrors(['quantity' => 'No unexpired batch at the source can supply this quantity.']);
         }
 
         DB::transaction(function () use ($request, $fromRhuId, $toRhuId, $medicine) {
@@ -168,13 +187,107 @@ class TransferController extends Controller
         if ($redirect = $this->checkAccess()) {
             return $redirect;
         }
+        $transfer = TransferRequest::findOrFail($id);
+        abort_unless(session('health_unit_id') && $transfer->to_health_unit_id == session('health_unit_id'), 403);
+        $receipt = $request->validate([
+            'received_quantity' => 'required|integer|min:0|max:2147483647',
+            'evidence_reference' => 'nullable|string|max:120',
+        ]);
         try {
-            app(TransferService::class)->complete((int) $id, session('user_id'), (int) session('health_unit_id'));
+            app(TransferService::class)->complete((int) $id, session('user_id'), (int) session('health_unit_id'),
+                (int) $receipt['received_quantity'], $receipt['evidence_reference'] ?? null);
         } catch (ValidationException $e) {
-            return back()->withErrors($e->errors());
+            return back()->withInput()->withErrors($e->errors());
         }
 
         return back()->with('success', 'Transfer updated successfully.');
+    }
+
+    public function receiptReview(int $id)
+    {
+        $transfer = $this->reviewableTransfer()->with(['medicine', 'fromHealthUnit', 'receiptReview.resolution'])->findOrFail($id);
+
+        return view('transfers.receipt_review', compact('transfer'));
+    }
+
+    public function storeReceiptReview(Request $request, int $id)
+    {
+        $transfer = $this->reviewableTransfer()->where('auto_completed', true)->findOrFail($id);
+        $attributes = $request->validate([
+            'received_quantity' => 'required|integer|min:0|max:2147483647',
+            'evidence_reference' => 'required|string|max:120',
+        ]);
+
+        DB::transaction(function () use ($transfer, $attributes) {
+            $current = $this->reviewableTransfer()->lockForUpdate()->findOrFail($transfer->id);
+            if ($current->receiptReview()->exists()) {
+                throw ValidationException::withMessages(['received_quantity' => 'A review already exists for this transfer.']);
+            }
+
+            $current->receiptReview()->create($attributes + [
+                'expected_quantity' => $current->quantity,
+                'reviewed_by' => session('user_id'),
+                'reviewed_at' => now(),
+            ]);
+        }, 3);
+
+        return redirect()->route('transfers.receipt_review', $transfer->id)->with('success', 'Receipt review saved. The receiving RHU administrator can resolve any discrepancy.');
+    }
+
+    public function resolveReceiptDiscrepancy(Request $request, int $id)
+    {
+        abort_unless(session('role') === 'admin', 403);
+        $transfer = $this->reviewableTransfer()->findOrFail($id);
+        $data = $request->validate([
+            'decision' => 'required|in:adjustment,no_adjustment',
+            'stock_log_id' => 'nullable|required_if:decision,adjustment|prohibited_unless:decision,adjustment|integer|min:1',
+            'reason' => 'required|string|max:500',
+        ]);
+
+        DB::transaction(function () use ($transfer, $data) {
+            $current = $this->reviewableTransfer()->lockForUpdate()->findOrFail($transfer->id);
+            $review = $current->receiptReview()->with('resolution')->first();
+            if (! $review || $review->matchesQuantity() || $review->resolution) {
+                throw ValidationException::withMessages(['decision' => 'This receipt has no unresolved discrepancy.']);
+            }
+
+            $stockLogId = null;
+            if ($data['decision'] === 'adjustment') {
+                $difference = $review->received_quantity - $review->expected_quantity;
+                if (! $current->auto_completed && $difference < 0) {
+                    throw ValidationException::withMessages(['decision' => 'The reported shortage was already reflected in the receiving balance. Document its reconciliation without a second stock adjustment.']);
+                }
+                $receivedBatches = StockLog::activeForReporting()->select('inventory_id')
+                    ->where('transfer_id', $current->id)->where('movement_type', 'transfer_in')
+                    ->where('health_unit_id', $current->to_health_unit_id)->where('medicine_id', $current->medicine_id)
+                    ->whereNotNull('inventory_id');
+                $adjustment = StockLog::whereKey($data['stock_log_id'])->whereNull('voided_at')
+                    ->where('health_unit_id', $current->to_health_unit_id)->where('medicine_id', $current->medicine_id)
+                    ->where('movement_type', $difference > 0 ? 'adjustment_in' : 'adjustment_out')
+                    ->where('quantity_added', abs($difference))->whereIn('inventory_id', $receivedBatches)
+                    ->whereDate('date_added', '>=', $current->received_at ?? $review->reviewed_at)
+                    ->lockForUpdate()->first();
+
+                if (! $adjustment || TransferReceiptResolution::where('stock_log_id', $adjustment->id)->lockForUpdate()->first()) {
+                    throw ValidationException::withMessages(['stock_log_id' => 'Choose an unused adjustment for this receipt batch that matches the discrepancy.']);
+                }
+                $stockLogId = $adjustment->id;
+            }
+
+            $review->resolution()->create(['stock_log_id' => $stockLogId, 'decision' => $data['decision'],
+                'reason' => $data['reason'], 'resolved_by' => session('user_id'), 'resolved_at' => now()]);
+        }, 3);
+
+        return redirect()->route('transfers.receipt_review', $transfer->id)->with('success', 'Receipt discrepancy resolved.');
+    }
+
+    private function reviewableTransfer()
+    {
+        abort_unless(in_array(session('role'), ['admin', 'staff'], true) && session('health_unit_id'), 403);
+
+        return TransferRequest::where('to_health_unit_id', session('health_unit_id'))
+            ->where('status', 'received')
+            ->where(fn ($receipts) => $receipts->where('auto_completed', true)->orWhereHas('receiptReview'));
     }
 
     public function reject(Request $request, $id)

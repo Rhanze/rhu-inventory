@@ -1,6 +1,7 @@
 @extends('layouts.app')
 
 @section('content')
+<link rel="stylesheet" href="{{ asset('css/clinical-dialog.css') }}">
 <div style="display:flex; flex-direction:column; gap:20px; padding-bottom:2rem;">
 
     {{-- Header --}}
@@ -22,13 +23,20 @@
             </p>
         </div>
         <div class="no-print" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <button onclick="openModal()" style="
+            @if(\App\Support\ClinicalAudit::archiveVisible())
+                <a href="{{ route('postpartum.index', $archived ? [] : ['archived' => 1]) }}" style="padding:10px 14px;color:#0f5c4b;text-decoration:underline;">
+                    {{ $archived ? 'Current records' : 'Voided records' }}
+                </a>
+            @endif
+            @unless($archived)
+            <button type="button" aria-haspopup="dialog" aria-controls="pp-modal" onclick="openModal()" style="
             padding:10px 18px; border-radius:10px;
-            background:#42ad8a; color:#fff; border:1px solid #42ad8a;
+            background:#0f5c4b; color:#fff; border:1px solid #0f5c4b;
             font-size:1.0625rem; font-weight:600; cursor:pointer;">
             + Record Visit
         </button>
             @include('imports._link', ['section' => 'postpartum'])
+            @endunless
         </div>
     </div>
 
@@ -61,12 +69,13 @@
         <form method="GET" action="{{ route('postpartum.index') }}"
               style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
             <div style="flex:2 1 240px;">
-                <label style="display:block; font-size:1.0625rem; font-weight:700; color:#475569; margin-bottom:6px; text-transform:uppercase;">Search</label>
-                <input type="text" name="search" value="{{ $search }}" placeholder="Patient name" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
+                @if($archived)<input type="hidden" name="archived" value="1">@endif
+                <label for="postpartum-filter-search" style="display:block; font-size:1.0625rem; font-weight:700; color:#475569; margin-bottom:6px; text-transform:uppercase;">Search</label>
+                <input id="postpartum-filter-search" type="text" name="search" value="{{ $search }}" placeholder="Patient name" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
             </div>
             <div style="flex:1 1 160px;">
-                <label style="display:block; font-size:1.0625rem; font-weight:700; color:#475569; margin-bottom:6px; text-transform:uppercase;">Visit #</label>
-                <select name="visit_number" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; background:#fff;">
+                <label for="postpartum-filter-visit_number" style="display:block; font-size:1.0625rem; font-weight:700; color:#475569; margin-bottom:6px; text-transform:uppercase;">Visit #</label>
+                <select id="postpartum-filter-visit_number" name="visit_number" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; background:#fff;">
                     <option value="">All</option>
                     @for($n = 1; $n <= 5; $n++)
                         <option value="{{ $n }}" {{ (string) $visitNumber === (string) $n ? 'selected' : '' }}>Visit {{ $n }}</option>
@@ -74,7 +83,7 @@
                 </select>
             </div>
             <div style="display:flex; gap:8px;flex-wrap:wrap;">
-                <button type="submit" style="min-height:2.75rem;height:auto; padding:0 22px; background:#42ad8a; color:#fff; border:none; border-radius:10px; font-weight:600; font-size:1.0625rem; cursor:pointer;">Filter</button>
+                <button type="submit" style="min-height:2.75rem;height:auto; padding:0 22px; background:#0f5c4b; color:#fff; border:none; border-radius:10px; font-weight:600; font-size:1.0625rem; cursor:pointer;">Filter</button>
                 <a href="{{ route('postpartum.index') }}" style="min-height:2.75rem;height:auto; padding:0 22px; background:#fff; color:#334155; border:1px solid #e2e8f0; border-radius:10px; font-weight:600; font-size:1.0625rem; text-decoration:none; display:inline-flex; align-items:center;">Reset</a>
             </div>
         </form>
@@ -121,19 +130,28 @@
                                 </span>
                             </td>
                             <td style="padding:14px 16px; text-align:center;">
+                                @if($archived)
+                    <form action="{{ route('postpartum.restore', $v->id) }}" method="POST" style="margin:0;" onsubmit="return confirmDialog(event, 'Restore this clinical record?');">
+                        @csrf
+                        <button type="submit" style="color:#0f5c4b;text-decoration:underline;">Restore</button>
+                    </form>
+                                @else
                                 <form action="{{ route('postpartum.destroy', $v->id) }}" method="POST" style="margin:0;"
-                                      onsubmit="return confirmDialog(event, 'Delete this visit?');">
+                                      onsubmit="return confirmDialog(event, 'Void this clinical record and retain it in the archive?');">
                                     @csrf @method('DELETE')
-                                    <button type="submit" style="background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; padding:6px 12px; border-radius:8px; font-size:1.0625rem; font-weight:600; cursor:pointer;">Delete</button>
+                                    <button type="submit" style="background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; padding:6px 12px; border-radius:8px; font-size:1.0625rem; font-weight:600; cursor:pointer;">Void</button>
                                 </form>
+                                @endif
                             </td>
                         </tr>
                     @empty
                         <tr>
                             <td colspan="8" style="padding:60px 20px; text-align:center; color:#64748b;">
                                 <p style="font-size:2rem; margin:0 0 8px 0;">👶</p>
-                                <p style="font-size:1.0625rem; font-weight:600; color:#0f172a; margin:0;">No postpartum visits recorded</p>
+                                <p style="font-size:1.0625rem; font-weight:600; color:#0f172a; margin:0;">{{ $archived ? 'No voided records match these filters.' : 'No postpartum visits recorded' }}</p>
+                                @unless($archived)
                                 <p style="font-size:1.0625rem; margin:6px 0 0 0;">Click "Record Visit" to add the first one.</p>
+                                @endunless
                             </td>
                         </tr>
                     @endforelse
@@ -150,14 +168,8 @@
 </div>
 
 {{-- Modal --}}
-<div id="pp-modal" onclick="if(event.target===this)closeModal()"
-     style="display:none; position:fixed; inset:0; z-index:99999;
-            background:rgba(15,23,42,0.5); backdrop-filter:blur(2px);
-            align-items:center; justify-content:center; padding:20px;">
-    <div class="mw-page-card" style="background:#fff; border-radius:20px; max-width:560px; width:100%;
-                max-height:90vh; overflow-y:auto; padding:28px;
-                box-shadow:0 20px 40px rgba(0,0,0,0.2);">
-        <h3 style="font-size:1.25rem; font-weight:700; color:#0f172a; margin:0 0 20px 0;">Record Postpartum Visit</h3>
+<dialog id="pp-modal" class="clinical-dialog" aria-labelledby="pp-modal-title">
+        <h3 id="pp-modal-title" tabindex="-1" autofocus style="font-size:1.25rem; font-weight:700; color:#0f172a; margin:0 0 20px 0;">Record Postpartum Visit</h3>
 
         @if($errors->any())
             <div id="postpartum-errors" role="alert" tabindex="-1" style="background:#FCEBEB; border:1px solid #F7C1C1; border-radius:12px; padding:14px 20px; margin-bottom:16px; color:#991b1b;">
@@ -172,8 +184,8 @@
             @csrf
 
             <div>
-                <label style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Patient <span style="color:#dc2626;">*</span></label>
-                <select name="patient_id" required style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; background:#fff; box-sizing:border-box;">
+                <label for="postpartum-field-patient_id" style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Patient <span style="color:#dc2626;">*</span></label>
+                <select id="postpartum-field-patient_id" name="patient_id" required style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; background:#fff; box-sizing:border-box;">
                     <option value="">— Select patient —</option>
                     @foreach($patients as $p)
                         <option value="{{ $p->id }}" @selected((string) old('patient_id') === (string) $p->id)>{{ $p->full_name }} ({{ $p->age_display }})</option>
@@ -183,34 +195,34 @@
 
             <div class="mw-form-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
                 <div>
-                    <label style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Delivery Date <span style="color:#dc2626;">*</span></label>
-                    <input type="date" name="delivery_date" value="{{ old('delivery_date') }}" required max="{{ now()->toDateString() }}" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
+                    <label for="postpartum-field-delivery_date" style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Delivery Date <span style="color:#dc2626;">*</span></label>
+                    <input id="postpartum-field-delivery_date" type="date" name="delivery_date" value="{{ old('delivery_date') }}" required max="{{ now()->toDateString() }}" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
                 </div>
                 <div>
-                    <label style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Visit Date <span style="color:#dc2626;">*</span></label>
+                    <label for="postpartum-visit-date" style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Visit Date <span style="color:#dc2626;">*</span></label>
                     <input type="date" id="postpartum-visit-date" name="visit_date" required value="{{ old('visit_date', now()->toDateString()) }}" max="{{ now()->toDateString() }}" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
                 </div>
             </div>
 
             <div>
-                <label style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Next Visit Date</label>
+                <label for="postpartum-next-visit-date" style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Next Visit Date</label>
                 <input type="date" id="postpartum-next-visit-date" name="next_visit_date" value="{{ old('next_visit_date') }}" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
             </div>
 
             <div class="mw-form-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
                 <div>
-                    <label style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Place of Delivery</label>
-                    <input type="text" name="place_of_delivery" value="{{ old('place_of_delivery') }}" maxlength="100" placeholder="e.g. RHU, Hospital, Home" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
+                    <label for="postpartum-field-place_of_delivery" style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Place of Delivery</label>
+                    <input id="postpartum-field-place_of_delivery" type="text" name="place_of_delivery" value="{{ old('place_of_delivery') }}" maxlength="100" placeholder="e.g. RHU, Hospital, Home" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
                 </div>
                 <div>
-                    <label style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Attended By</label>
-                    <input type="text" name="attended_by" value="{{ old('attended_by') }}" maxlength="100" placeholder="e.g. Dr. Cruz, Midwife Santos" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
+                    <label for="postpartum-field-attended_by" style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Attended By</label>
+                    <input id="postpartum-field-attended_by" type="text" name="attended_by" value="{{ old('attended_by') }}" maxlength="100" placeholder="e.g. Dr. Cruz, Midwife Santos" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box;">
                 </div>
             </div>
 
             <div>
-                <label style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Visit Number</label>
-                <select name="visit_number" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; background:#fff; box-sizing:border-box;">
+                <label for="postpartum-field-visit_number" style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Visit Number</label>
+                <select id="postpartum-field-visit_number" name="visit_number" style="width:100%; min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; background:#fff; box-sizing:border-box;">
                     <option value="1" @selected((string) old('visit_number', 1) === '1')>Visit 1 (within 24h)</option>
                     <option value="2" @selected((string) old('visit_number', 1) === '2')>Visit 2 (Day 3–7)</option>
                     <option value="3" @selected((string) old('visit_number', 1) === '3')>Visit 3 (Week 2–4)</option>
@@ -219,21 +231,20 @@
             </div>
 
             <div>
-                <label style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Remarks</label>
-                <textarea name="remarks" rows="2" maxlength="2000" style="width:100%; padding:12px 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box; resize:vertical;">{{ old('remarks') }}</textarea>
+                <label for="postpartum-field-remarks" style="display:block; font-size:1.0625rem; font-weight:600; margin-bottom:6px;">Remarks</label>
+                <textarea id="postpartum-field-remarks" name="remarks" rows="2" maxlength="2000" style="width:100%; padding:12px 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; box-sizing:border-box; resize:vertical;">{{ old('remarks') }}</textarea>
             </div>
 
-            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:8px;">
+            <div style="display:flex; flex-wrap:wrap; gap:10px; justify-content:flex-end; margin-top:8px;">
                 <button type="button" onclick="closeModal()" style="padding:10px 20px; border-radius:10px; background:#fff; color:#334155; border:1px solid #e2e8f0; font-weight:600; font-size:1.0625rem; cursor:pointer;">Cancel</button>
-                <button type="submit" style="padding:10px 20px; border-radius:10px; background:#42ad8a; color:#fff; border:none; font-weight:700; font-size:1.0625rem; cursor:pointer;">Save Visit</button>
+                <button type="submit" style="padding:10px 20px; border-radius:10px; background:#0f5c4b; color:#fff; border:none; font-weight:700; font-size:1.0625rem; cursor:pointer;">Save Visit</button>
             </div>
         </form>
-    </div>
-</div>
+</dialog>
 
 <script>
-function openModal()  { document.getElementById('pp-modal').style.display = 'flex'; document.body.style.overflow='hidden'; }
-function closeModal() { document.getElementById('pp-modal').style.display = 'none'; document.body.style.overflow=''; }
+function openModal() { document.getElementById('pp-modal').showModal(); }
+function closeModal() { document.getElementById('pp-modal').close(); }
 
 function updateNextVisitMinimum() {
     const visit = document.getElementById('postpartum-visit-date');
@@ -249,6 +260,5 @@ updateNextVisitMinimum();
 openModal();
 document.getElementById('postpartum-errors').focus();
 @endif
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 </script>
 @endsection

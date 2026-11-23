@@ -34,6 +34,7 @@ use App\Http\Controllers\SupplyRequestController;
 use App\Http\Controllers\TransferController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VaccinationForecastController;
+use App\Http\Middleware\AuditClinicalAccess;
 use App\Http\Middleware\CheckSessionRole;
 use App\Http\Middleware\EnsureAdminRole;
 use App\Http\Middleware\EnsureNotMidwife;
@@ -67,6 +68,8 @@ Route::domain(config('portals.enabled') ? config('portals.management_domain') : 
     Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
     Route::get('/internal/scheduler', SchedulerController::class)->name('internal.scheduler');
     Route::post('/login', [AuthController::class, 'login'])->name('login.submit');
+    Route::get('/login/verification', [AuthController::class, 'showVerification'])->name('login.verification');
+    Route::post('/login/verification', [AuthController::class, 'verify'])->name('login.verify');
 
     // ============================================================
     // 2. AUTHENTICATED ROUTES (admin + staff + midwife)
@@ -78,7 +81,9 @@ Route::domain(config('portals.enabled') ? config('portals.management_domain') : 
         Route::get('/imports/{section}/template', [CsvImportController::class, 'template'])->name('imports.template');
         Route::post('/imports/{section}', [CsvImportController::class, 'store'])->name('imports.store');
 
-        Route::get('/public-users/search-suggestions', [PublicUserController::class, 'searchSuggestions'])->name('public_users.search.suggestions');
+        Route::get('/public-users/search-suggestions', fn () => redirect()->route('public_users.index'));
+        Route::post('/public-users/search-suggestions', [PublicUserController::class, 'searchSuggestions'])
+            ->middleware(['throttle:60,1', AuditClinicalAccess::class.':patient_directory'])->name('public_users.search.suggestions');
 
         Route::get('/dashboard', function () {
             if (session('role') === 'midwife') {
@@ -99,33 +104,46 @@ Route::domain(config('portals.enabled') ? config('portals.management_domain') : 
         // ========== Medicines ==========
         Route::get('/medicine', [MedicineController::class, 'index'])->name('medicine.index');
         Route::get('/medicine/stock-on-hand', [MedicineController::class, 'stockOnHand'])->name('medicine.stock_on_hand');
+        Route::get('/medicine/stock-on-hand/autocomplete', [MedicineController::class, 'stockOnHandAutocomplete'])->name('medicine.stock_on_hand.autocomplete');
         Route::get('/medicine/stock-on-hand/csv', [MedicineController::class, 'stockOnHandCsv'])->name('medicine.stock_on_hand.csv');
         Route::get('/medicine/export/csv', [MedicineController::class, 'exportCsv'])->name('medicine.export');
 
         // ========== Dispensing ==========
-        Route::get('/dispensing', [DispensingController::class, 'index'])->name('dispensing.index');
+        Route::get('/dispensing', [DispensingController::class, 'index'])
+            ->middleware(AuditClinicalAccess::class.':dispensing_register')->name('dispensing.index');
         Route::get('/dispensing/create', [DispensingController::class, 'create'])->name('dispensing.create');
+        Route::post('/dispensing/stock-preview', [DispensingController::class, 'preview'])->name('dispensing.preview');
+        Route::post('/dispensing/patient-lookup', [DispensingController::class, 'patientMatches'])
+            ->middleware(['throttle:30,1', AuditClinicalAccess::class.':dispensing_patient_directory'])->name('dispensing.patient_lookup');
         Route::post('/dispensing/store', [DispensingController::class, 'store'])->name('dispensing.store');
-        Route::get('/dispensing/edit/{id}', [DispensingController::class, 'edit'])->name('dispensing.edit');
+        Route::get('/dispensing/edit/{id}', [DispensingController::class, 'edit'])
+            ->middleware(AuditClinicalAccess::class.':dispensing_record')->name('dispensing.edit');
+        Route::post('/dispensing/edit/{id}/stock-preview', [DispensingController::class, 'preview'])
+            ->whereNumber('id')->name('dispensing.preview_edit');
         Route::put('/dispensing/update/{id}', [DispensingController::class, 'update'])->name('dispensing.update');
         Route::delete('/dispensing/delete/{id}', [DispensingController::class, 'destroy'])->name('dispensing.destroy');
-        Route::get('/dispensing/export/csv', [DispensingController::class, 'exportCsv'])->name('dispensing.export');
+        Route::get('/dispensing/export/csv', [DispensingController::class, 'exportCsv'])
+            ->middleware(AuditClinicalAccess::class.':dispensing_register')->name('dispensing.export');
 
         Route::get('/dispensing/{id}/prescription', [DispensingController::class, 'showPrescription'])
-            ->middleware('throttle:60,1')
+            ->middleware(['throttle:60,1', AuditClinicalAccess::class.':prescription'])
             ->name('dispensing.prescription');
 
         // ========== Public Users ==========
-        Route::get('/public-users', [PublicUserController::class, 'index'])->name('public_users.index');
+        Route::get('/public-users', [PublicUserController::class, 'index'])
+            ->middleware(AuditClinicalAccess::class.':patient_directory')->name('public_users.index');
+        Route::post('/public-users/search', [PublicUserController::class, 'filter'])->name('public_users.filter');
         Route::get('/public-users/create', [PublicUserController::class, 'create'])->name('public_users.create');
         Route::post('/public-users', [PublicUserController::class, 'store'])->name('public_users.store');
-        Route::get('/public-users/{id}/edit', [PublicUserController::class, 'edit'])->name('public_users.edit');
+        Route::get('/public-users/{id}/edit', [PublicUserController::class, 'edit'])
+            ->middleware(AuditClinicalAccess::class.':patient_profile')->name('public_users.edit');
         Route::put('/public-users/{id}', [PublicUserController::class, 'update'])->name('public_users.update');
         Route::delete('/public-users/{id}', [PublicUserController::class, 'destroy'])->name('public_users.destroy');
 
         // ========== Patient 360 ==========
         Route::get('/patients/{id}', [Patient360Controller::class, 'show'])
             ->where('id', '[0-9]+')
+            ->middleware(AuditClinicalAccess::class.':patient_profile')
             ->name('patients.show');
 
         // ========== Notifications ==========
@@ -152,36 +170,43 @@ Route::domain(config('portals.enabled') ? config('portals.management_domain') : 
         // ========== Immunization ==========
         Route::prefix('immunization')->group(function () {
             Route::get('/tcl', [ImmunizationController::class, 'tcl'])
+                ->middleware(AuditClinicalAccess::class.':immunization_register')
                 ->name('immunization.tcl');
 
             Route::post('/record', [ImmunizationController::class, 'store'])
                 ->name('immunization.store');
 
             Route::get('/history/{patient}', [ImmunizationController::class, 'history'])
+                ->middleware(AuditClinicalAccess::class.':immunization_history')
                 ->name('immunization.history');
         });
 
         // ========== Vaccination ==========
         Route::prefix('vaccination')->group(function () {
             Route::get('/forecast', [VaccinationForecastController::class, 'index'])
+                ->middleware(AuditClinicalAccess::class.':vaccination_forecast')
                 ->name('vaccination.forecast');
 
             Route::get('/calendar', [VaccinationForecastController::class, 'calendar'])
+                ->middleware(AuditClinicalAccess::class.':clinical_calendar')
                 ->name('vaccination.calendar');
 
             Route::post('/calendar/programs/{program}/materials', [\App\Http\Controllers\DohEventPlanController::class, 'store'])
                 ->name('vaccination.program_materials.store');
 
             Route::get('/child/{patient}', [VaccinationForecastController::class, 'childSchedule'])
+                ->middleware(AuditClinicalAccess::class.':vaccination_schedule')
                 ->name('vaccination.child');
 
             Route::post('/regenerate', [VaccinationForecastController::class, 'regenerate'])
                 ->name('vaccination.regenerate');
 
             Route::get('/monthly', [VaccinationForecastController::class, 'monthly'])
+                ->middleware(AuditClinicalAccess::class.':vaccination_monthly')
                 ->name('vaccination.monthly');
 
             Route::get('/monthly/export', [VaccinationForecastController::class, 'monthlyExport'])
+                ->middleware(AuditClinicalAccess::class.':vaccination_monthly')
                 ->name('vaccination.monthly.export');
 
             Route::post('/session-pattern', [VaccinationForecastController::class, 'updateSessionPattern'])
@@ -209,21 +234,24 @@ Route::domain(config('portals.enabled') ? config('portals.management_domain') : 
 
         // ========== Maternal Care ==========
         Route::prefix('prenatal')->group(function () {
-            Route::get('/', [PrenatalController::class, 'index'])->name('prenatal.index');
+            Route::get('/', [PrenatalController::class, 'index'])->middleware(AuditClinicalAccess::class.':prenatal_visits')->name('prenatal.index');
             Route::post('/', [PrenatalController::class, 'store'])->name('prenatal.store');
             Route::delete('/{id}', [PrenatalController::class, 'destroy'])->name('prenatal.destroy');
+            Route::post('/{id}/restore', [PrenatalController::class, 'restore'])->name('prenatal.restore');
         });
 
         Route::prefix('postpartum')->group(function () {
-            Route::get('/', [PostpartumController::class, 'index'])->name('postpartum.index');
+            Route::get('/', [PostpartumController::class, 'index'])->middleware(AuditClinicalAccess::class.':postpartum_visits')->name('postpartum.index');
             Route::post('/', [PostpartumController::class, 'store'])->name('postpartum.store');
             Route::delete('/{id}', [PostpartumController::class, 'destroy'])->name('postpartum.destroy');
+            Route::post('/{id}/restore', [PostpartumController::class, 'restore'])->name('postpartum.restore');
         });
 
         Route::prefix('family-planning')->group(function () {
-            Route::get('/', [FamilyPlanningController::class, 'index'])->name('family_planning.index');
+            Route::get('/', [FamilyPlanningController::class, 'index'])->middleware(AuditClinicalAccess::class.':family_planning')->name('family_planning.index');
             Route::post('/', [FamilyPlanningController::class, 'store'])->name('family_planning.store');
             Route::delete('/{id}', [FamilyPlanningController::class, 'destroy'])->name('family_planning.destroy');
+            Route::post('/{id}/restore', [FamilyPlanningController::class, 'restore'])->name('family_planning.restore');
         });
 
         // ========== Supply Requests ==========
@@ -251,6 +279,9 @@ Route::domain(config('portals.enabled') ? config('portals.management_domain') : 
             Route::get('/create', [TransferController::class, 'create'])->name('transfers.create');
             Route::post('/store', [TransferController::class, 'store'])->name('transfers.store');
             Route::post('/{id}/receive', [TransferController::class, 'receive'])->name('transfers.receive');
+            Route::get('/{id}/receipt-review', [TransferController::class, 'receiptReview'])->whereNumber('id')->name('transfers.receipt_review');
+            Route::post('/{id}/receipt-review', [TransferController::class, 'storeReceiptReview'])->whereNumber('id')->name('transfers.receipt_review.store');
+            Route::post('/{id}/receipt-review/resolve', [TransferController::class, 'resolveReceiptDiscrepancy'])->whereNumber('id')->name('transfers.receipt_review.resolve');
             Route::post('/{id}/cancel', [TransferController::class, 'cancel'])->name('transfers.cancel');
         });
 
@@ -275,6 +306,7 @@ Route::domain(config('portals.enabled') ? config('portals.management_domain') : 
             Route::post('/inventory/store', [InventoryController::class, 'store'])->name('inventory.store');
             Route::get('/inventory/edit/{id}', [InventoryController::class, 'edit'])->name('inventory.edit');
             Route::put('/inventory/update/{id}', [InventoryController::class, 'update'])->name('inventory.update');
+            Route::put('/inventory/{id}/adjust-stock', [InventoryController::class, 'adjust'])->name('inventory.adjust');
             Route::delete('/inventory/delete/{id}', [InventoryController::class, 'destroy'])->name('inventory.destroy');
             Route::get('/inventory/export/csv', [InventoryController::class, 'exportCsv'])->name('inventory.export');
 
@@ -318,12 +350,14 @@ Route::domain(config('portals.enabled') ? config('portals.management_domain') : 
             Route::get('/reports/inventory', [ReportController::class, 'inventoryReport'])->name('reports.inventory');
             Route::get('/reports/stock-logs', [ReportController::class, 'stockLogsReport'])->name('reports.stock');
             Route::get('/reports/allocations', [ReportController::class, 'allocationReport'])->name('reports.allocation');
-            Route::get('/reports/dispensing', [ReportController::class, 'dispensingReport'])->name('reports.dispensing');
+            Route::get('/reports/dispensing', [ReportController::class, 'dispensingReport'])
+                ->middleware(AuditClinicalAccess::class.':dispensing_report')->name('reports.dispensing');
             Route::get('/reports/near-expiry', [ReportController::class, 'nearExpiryReport'])->name('reports.near_expiry');
             Route::get('/reports/inventory/csv', [ReportController::class, 'inventoryCsv'])->name('reports.inventory.csv');
             Route::get('/reports/stock-logs/csv', [ReportController::class, 'stockLogsCsv'])->name('reports.stock.csv');
             Route::get('/reports/allocations/csv', [ReportController::class, 'allocationCsv'])->name('reports.allocation.csv');
-            Route::get('/reports/dispensing/csv', [ReportController::class, 'dispensingCsv'])->name('reports.dispensing.csv');
+            Route::get('/reports/dispensing/csv', [ReportController::class, 'dispensingCsv'])
+                ->middleware(AuditClinicalAccess::class.':dispensing_report')->name('reports.dispensing.csv');
             Route::get('/reports/near-expiry/csv', [ReportController::class, 'nearExpiryCsv'])->name('reports.near_expiry.csv');
 
             Route::get('/activity-logs', [ActivityLogController::class, 'index'])->name('activity_logs.index');

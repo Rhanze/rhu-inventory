@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Models\Allocation;
 use App\Models\HealthUnit;
 use App\Models\Inventory;
 use App\Models\Medicine;
 use App\Models\StockLog;
 use App\Models\User;
 use App\Services\ForecastService;
+use App\Services\StockMovementService;
 use App\Services\StockTrendService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -111,5 +113,32 @@ class StockTrendForecastTest extends TestCase
         $this->assertSame('unknown', $item['status']);
         $this->assertSame('N/A', $item['days_remaining']);
         $this->assertNull($item['reorder_point']);
+    }
+
+    public function test_forecast_removes_expiring_shared_and_recipient_stock_after_daily_fefo_use(): void
+    {
+        $unit = HealthUnit::create(['name' => 'Forecast expiry RHU']);
+        $recipient = User::factory()->create(['health_unit_id' => $unit->id, 'role' => 'midwife']);
+        $medicine = Medicine::create(['medicine_name' => 'Forecast expiry test item', 'category' => 'medicine']);
+        $expiring = Inventory::create(['medicine_id' => $medicine->id, 'health_unit_id' => $unit->id,
+            'available_stock' => 20, 'allocated_stock' => 30, 'expiration_date' => today()]);
+        Inventory::create(['medicine_id' => $medicine->id, 'health_unit_id' => $unit->id, 'available_stock' => 10,
+            'allocated_stock' => 0, 'expiration_date' => today()->addYear()]);
+        $allocation = Allocation::create(['health_unit_id' => $unit->id, 'medicine_id' => $medicine->id,
+            'quantity_allocated' => 30, 'date_allocated' => today(), 'allocated_by' => $recipient->id,
+            'recipient_user_id' => $recipient->id, 'status' => 'received', 'dispensing_enabled' => true]);
+        app(StockMovementService::class)->record($allocation, $expiring, -30, 30);
+        $this->release($unit, $medicine, 14, today()->subWeek());
+
+        $item = app(ForecastService::class)->getForecast($unit->id)['items']->sole();
+
+        $this->assertSame(30, $item['shared_available_stock']);
+        $this->assertSame(30, $item['recipient_available_stock']);
+        $this->assertSame(60, $item['available_stock']);
+        $this->assertSame(180, $item['forecast_need_3mo']);
+        $this->assertSame(48, $item['forecast_expiry_loss']);
+        $this->assertSame(168, $item['shortage']);
+        $this->assertSame(6, $item['days_remaining']);
+        $this->assertTrue($item['reorder_due']);
     }
 }

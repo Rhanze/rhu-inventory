@@ -334,9 +334,10 @@
                         @foreach($vaccinations as $v)
                             @php
                                 $sc = match(true) {
-                                    $v->status === 'given' => ['bg' => '#E8F7F4', 'text' => '#0f5c4b', 'border' => '#42ad8a', 'label' => 'Given'],
-                                    $v->status === 'missed' => ['bg' => '#FCEBEB', 'text' => '#991b1b', 'border' => '#F7C1C1', 'label' => 'Missed'],
-                                    default                 => ['bg' => '#FEF3C7', 'text' => '#92400E', 'border' => '#FAC775', 'label' => 'Pending'],
+                                    $v->superseded_at !== null || $v->status === 'skipped' => ['bg' => '#f1f5f9', 'text' => '#475569', 'border' => '#cbd5e1'],
+                                    $v->status === 'given' => ['bg' => '#E8F7F4', 'text' => '#0f5c4b', 'border' => '#42ad8a'],
+                                    $v->status === 'missed' => ['bg' => '#FCEBEB', 'text' => '#991b1b', 'border' => '#F7C1C1'],
+                                    default => ['bg' => '#FEF3C7', 'text' => '#92400E', 'border' => '#FAC775'],
                                 };
                             @endphp
                             <tr style="border-bottom:1px solid #f1f5f9;">
@@ -352,7 +353,7 @@
                                     <span style="display:inline-block; padding:4px 12px; border-radius:999px;
                                                  font-size:12px; font-weight:700;
                                                  background:{{ $sc['bg'] }}; color:{{ $sc['text'] }}; border:1px solid {{ $sc['border'] }};">
-                                        {{ $sc['label'] }}
+                                        {{ $v->status_label }}
                                     </span>
                                 </td>
                             </tr>
@@ -522,7 +523,7 @@
             <span style="font-size:14px; color:#64748b; font-weight:500;">(last 30)</span>
         </h3>
         <p class="no-print" style="font-size:12px; color:#94a3b8; margin:0 0 16px 0;">
-            Matched by patient name + RHU.
+            Shows dispensing linked to this patient record.
         </p>
 
         @if($dispensingRecords->isEmpty())
@@ -548,7 +549,7 @@
                                     {{ !empty($d->date_dispensed) ? \Carbon\Carbon::parse($d->date_dispensed)->format('M d, Y') : '—' }}
                                 </td>
                                 <td style="padding:10px 12px; color:#334155; font-family:monospace;">
-                                    {{ $d->batch_no ?? '—' }}
+                                    {{ $d->lotBreakdown() ?: '—' }}
                                 </td>
                                 <td style="padding:10px 12px; text-align:center; color:#0f172a; font-weight:600;">
                                     {{ $d->quantity_dispensed ?? '—' }}

@@ -2,15 +2,19 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\DispensingRecord;
 use App\Models\MidwifeBarangay;
 use App\Models\PublicUser;
 use App\Models\User;
-use App\Models\VaccinationSchedule;
 use App\Services\VaccinationScheduleService;
 use App\Support\BarangayDemandScope;
+use App\Support\ClinicalAudit;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class PublicUserController extends Controller
 {
@@ -88,8 +92,15 @@ class PublicUserController extends Controller
             return $redirect;
         }
 
-        $search = $request->search;
-        $request->validate(['barangay' => 'nullable|string|max:100']);
+        if ($request->query->has('search')) {
+            return redirect()->route('public_users.index', $request->only('barangay', 'age_group', 'assigned_midwife_id'));
+        }
+
+        $request->validate(['barangay' => 'nullable|string|max:100', 'criteria' => 'nullable|uuid']);
+        $criteria = $request->input('criteria');
+        $stored = $criteria ? $request->session()->get('patient_directory_searches', [])[$criteria] ?? null : null;
+        $search = $stored && $stored['user'] === session('user_id') && $stored['facility'] === session('health_unit_id')
+            ? $stored['term'] : null;
         $barangay = BarangayDemandScope::validateForViewer((int) session('health_unit_id'), $request->input('barangay'));
         if (session('role') === 'midwife' && $barangay !== null) {
             $request->merge(['barangay' => $barangay]);
@@ -151,7 +162,7 @@ class PublicUserController extends Controller
             ->orderBy('first_name')
             ->paginate(20)
             ->appends([
-                'search' => $search,
+                'criteria' => $search ? $criteria : null,
                 'barangay' => $barangay,
                 'age_group' => $rawAgeGroup,
                 'assigned_midwife_id' => $assignedFilter,
@@ -168,8 +179,34 @@ class PublicUserController extends Controller
                 ->get(['id', 'name']);
 
         return view('public_users.index', compact(
-            'members', 'barangays', 'midwifeList'
+            'members', 'barangays', 'midwifeList', 'search'
         ));
+    }
+
+    public function filter(Request $request)
+    {
+        if ($redirect = $this->checkRhuAccess()) {
+            return $redirect;
+        }
+
+        $filters = $request->validate([
+            'search' => 'nullable|string|max:120',
+            'barangay' => 'nullable|string|max:100',
+            'age_group' => 'nullable|string|max:32',
+            'assigned_midwife_id' => 'nullable|integer|min:1',
+        ]);
+        $term = trim($filters['search'] ?? '');
+        unset($filters['search']);
+        if ($term !== '') {
+            $token = (string) Str::uuid();
+            $previous = $request->session()->get('patient_directory_searches', []);
+            $request->session()->put('patient_directory_searches', [
+                $token => ['term' => $term, 'user' => session('user_id'), 'facility' => session('health_unit_id')],
+            ] + array_slice($previous, 0, 9, true));
+            $filters['criteria'] = $token;
+        }
+
+        return redirect()->route('public_users.index', $filters);
     }
 
     public function create()
@@ -217,7 +254,7 @@ class PublicUserController extends Controller
         // ← NEW: auto-assign the midwife for this barangay
         $assignedMidwifeId = $this->resolveMidwifeForBarangay($validated['barangay']);
 
-        $member = PublicUser::create([
+        $attributes = [
             'health_unit_id' => session('health_unit_id'),
             'registered_by' => session('user_id'),
             'assigned_midwife_id' => $assignedMidwifeId,   // ← NEW
@@ -235,15 +272,11 @@ class PublicUserController extends Controller
             'gravida' => $validated['gravida'] ?? null,
             'para' => $validated['para'] ?? null,
             'risk_codes' => $validated['risk_codes'] ?? null,
-        ]);
-
-        $scheduleMsg = '';
-        if ($member->birth_date && $member->is_under_five) {
-            $created = $this->scheduleService->generateFor($member);
-            $scheduleMsg = $created > 0
-                ? " {$created} vaccination dose(s) scheduled."
-                : '';
-        }
+        ];
+        $created = DB::transaction(function () use ($attributes) {
+            return $this->scheduleService->generateFor(PublicUser::create($attributes));
+        }, 3);
+        $scheduleMsg = $created > 0 ? " {$created} vaccination dose(s) scheduled." : '';
 
         return redirect()->route('public_users.index')
             ->with('success', 'Patient registered successfully.'.$scheduleMsg);
@@ -281,12 +314,19 @@ class PublicUserController extends Controller
             return $redirect;
         }
 
+        DB::transaction(fn () => $this->updateLockedPatient($request, $id), 3);
+
+        return redirect()->route('public_users.index')
+            ->with('success', 'Patient record updated.');
+    }
+
+    private function updateLockedPatient(Request $request, $id): void
+    {
         $member = PublicUser::where('health_unit_id', session('health_unit_id'))
             ->when(session('role') === 'midwife',
                 fn ($q) => $q->where('assigned_midwife_id', session('user_id')))
-            ->findOrFail($id);
+            ->lockForUpdate()->findOrFail($id);
 
-        $oldBirthDate = $member->birth_date ? $member->birth_date->toDateString() : null;
         $oldBarangay = $member->barangay;
         $keepHistoricalBarangay = session('role') === 'midwife' && ! $request->filled('barangay')
             && ! $this->barangayOptions()->containsStrict($oldBarangay);
@@ -318,6 +358,18 @@ class PublicUserController extends Controller
         $validated['barangay'] = $keepHistoricalBarangay ? $oldBarangay
             : BarangayDemandScope::validateForViewer((int) session('health_unit_id'), $validated['barangay'], 'barangay', true);
 
+        $newBirthDate = Carbon::parse($validated['birth_date'])->toDateString();
+        $birthDateChanged = $member->birth_date?->toDateString() !== $newBirthDate;
+        if ($birthDateChanged && ($member->immunizationRecords()->whereDate('date_given', '<', $newBirthDate)->exists()
+            || $member->vaccinationSchedules()->given()->whereDate('given_date', '<', $newBirthDate)->exists())) {
+            throw ValidationException::withMessages(['birth_date' => 'The birth date cannot be later than a recorded vaccination date.']);
+        }
+        if ($birthDateChanged && ($member->prenatalVisits()->whereDate('visit_date', '<', $newBirthDate)->exists()
+            || $member->postpartumVisits()->whereDate('delivery_date', '<', $newBirthDate)->exists()
+            || $member->familyPlanning()->whereDate('date_accepted', '<', $newBirthDate)->exists())) {
+            throw ValidationException::withMessages(['birth_date' => 'The birth date cannot be later than a recorded clinical visit.']);
+        }
+
         // ← NEW: figure out the assigned midwife
         if (! $member->assigned_midwife_id && session('role') !== 'midwife' && ! $request->filled('assigned_midwife_id')) {
             // If it's never been set, auto-assign
@@ -339,7 +391,7 @@ class PublicUserController extends Controller
             'philhealth_id' => $validated['philhealth_id'] ?? null,
             'first_name' => $validated['first_name'],
             'last_name' => $validated['last_name'],
-            'birth_date' => $validated['birth_date'],
+            'birth_date' => $newBirthDate,
             'barangay' => $validated['barangay'],
             'address' => $validated['address'],
             'contact_number' => $validated['contact_number'] ?? null,
@@ -353,19 +405,10 @@ class PublicUserController extends Controller
             'assigned_midwife_id' => $assignedMidwifeId,   // ← NEW
         ]);
 
-        $newBirthDate = $member->fresh()->birth_date?->toDateString();
-        if ($oldBirthDate !== $newBirthDate) {
-            VaccinationSchedule::where('public_user_id', $member->id)
-                ->whereIn('status', ['pending', 'missed'])
-                ->delete();
-
-            if ($member->is_under_five) {
-                $this->scheduleService->generateFor($member);
-            }
+        if ($birthDateChanged) {
+            $this->scheduleService->regenerateForCorrectedBirthDate($member);
+            ClinicalAudit::record('Correct birth date', 'patient_directory', (int) $id);
         }
-
-        return redirect()->route('public_users.index')
-            ->with('success', 'Patient record updated.');
     }
 
     public function destroy($id)
@@ -378,19 +421,24 @@ class PublicUserController extends Controller
             return back()->with('error', 'Midwives cannot delete patient records. Ask an RHU admin or staff.');
         }
 
-        $member = PublicUser::where('health_unit_id', session('health_unit_id'))
-            ->findOrFail($id);
+        $deleted = DB::transaction(function () use ($id) {
+            $member = PublicUser::where('health_unit_id', session('health_unit_id'))->lockForUpdate()->findOrFail($id);
+            if ($member->immunizationRecords()->exists() || $member->prenatalVisits()->withTrashed()->exists()
+                || $member->postpartumVisits()->withTrashed()->exists() || $member->familyPlanning()->withTrashed()->exists()
+                || $member->vaccinationSchedules()->whereIn('status', ['given', 'missed'])->exists()
+                || DispensingRecord::withTrashed()->where('public_user_id', $member->id)->exists()) {
+                return false;
+            }
 
-        if ($member->immunizationRecords()->exists() || $member->prenatalVisits()->exists()
-            || $member->postpartumVisits()->exists() || $member->familyPlanning()->exists()
-            || $member->vaccinationSchedules()->where('status', 'given')->exists()) {
-            return back()->with('error',
-                'Cannot delete — this patient has clinical records. Preserve the history instead.');
+            $member->vaccinationSchedules()->delete();
+            $member->delete();
+            ClinicalAudit::record('Delete', 'patient_directory', (int) $id);
+
+            return true;
+        }, 3);
+        if (! $deleted) {
+            return back()->with('error', 'Cannot delete — this patient has clinical records. Preserve the history instead.');
         }
-
-        VaccinationSchedule::where('public_user_id', $member->id)->delete();
-
-        $member->delete();
 
         return redirect()->route('public_users.index')
             ->with('success', 'Patient deleted.');
@@ -398,7 +446,8 @@ class PublicUserController extends Controller
 
     public function searchSuggestions(Request $request)
     {
-        $search = trim($request->get('q', ''));
+        $validated = $request->validate(['q' => 'required|string|min:2|max:120']);
+        $search = trim($validated['q']);
         if (strlen($search) < 2) {
             return response()->json([]);
         }
@@ -419,7 +468,7 @@ class PublicUserController extends Controller
                     ->orWhere('philhealth_id', 'like', "%{$search}%")
                     ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
             })
-            ->select('id', 'philhealth_id', 'first_name', 'last_name', 'birth_date', 'barangay')
+            ->select('id', 'first_name', 'last_name', 'birth_date', 'barangay')
             ->orderBy('last_name')
             ->orderBy('first_name')
             ->limit(8)
@@ -427,13 +476,12 @@ class PublicUserController extends Controller
 
         return response()->json($members->map(function ($m) {
             $cleanName = trim($m->first_name.' '.$m->last_name);
-            $idPart = $m->philhealth_id ? $m->philhealth_id.' — ' : '';
             $age = $m->birth_date ? Carbon::parse($m->birth_date)->age : '?';
 
             return [
                 'id' => $m->id,
                 'name' => $cleanName,
-                'text' => $idPart.$cleanName
+                'text' => $cleanName
                           .' ('.$age.'y'
                           .($m->barangay ? ', '.$m->barangay : '')
                           .')',

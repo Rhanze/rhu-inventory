@@ -280,7 +280,8 @@
                                 <td style="padding:12px 14px; text-align:center;">
                                     <form method="POST"
                                           action="{{ route('vaccination.epi_schedule.destroy', $sched->id) }}"
-                                          onsubmit="return confirmDialog(event, 'Remove the EPI schedule for {{ addslashes($sched->area_label) }}? Existing calendar events will be kept.');"
+                                          data-confirm-message="Remove the EPI schedule for {{ $sched->area_label }}? Existing calendar events will be kept."
+                                          onsubmit="return confirmDialog(event, this.dataset.confirmMessage);"
                                           style="display:inline; margin:0;">
                                         @csrf
                                         @method('DELETE')
@@ -841,7 +842,7 @@
                         {{ $statusColor['label'] }}
                     </span>
                     @if($item['status'] !== 'given')
-                        <a href="{{ route('immunization.tcl', ['search' => $item['child_name']]) }}"
+                        <a href="{{ route('immunization.tcl', ['patient' => $item['patient_id']]) }}"
                            style="background:#42ad8a; color:#fff; padding:8px 16px; border-radius:10px; font-size:14px; font-weight:700; text-decoration:none;">
                             Record Dose
                         </a>

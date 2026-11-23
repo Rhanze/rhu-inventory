@@ -113,29 +113,20 @@
                 @enderror
             </div>
 
-            {{-- 6. Available Stock + Allocated Stock --}}
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
-                <div>
-                    <label style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">Available Stock <span style="color:#dc2626;">*</span></label>
-                    <input type="number" name="available_stock" value="{{ old('available_stock', 0) }}" min="0"
-                           style="width:100%; padding:12px 16px; font-size:14px; border:2px solid #bec6cf; border-radius:14px; outline:none; background:white; color:#0f172a; box-sizing:border-box;"
-                           onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
-                           onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'" required>
-                    @error('available_stock')
-                        <p style="margin-top:4px; font-size:13px; color:#dc2626;">{{ $message }}</p>
-                    @enderror
-                </div>
-
-                <div>
-                    <label style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">Allocated Stock <span style="color:#dc2626;">*</span></label>
-                    <input type="number" name="allocated_stock" value="{{ old('allocated_stock', 0) }}" min="0"
-                           style="width:100%; padding:12px 16px; font-size:14px; border:2px solid #bec6cf; border-radius:14px; outline:none; background:white; color:#0f172a; box-sizing:border-box;"
-                           onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
-                           onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'" required>
-                    @error('allocated_stock')
-                        <p style="margin-top:4px; font-size:13px; color:#dc2626;">{{ $message }}</p>
-                    @enderror
-                </div>
+            {{-- 6. Opening stock --}}
+            <div>
+                <label for="opening-available-stock" style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">Available Stock <span style="color:#dc2626;">*</span></label>
+                <input id="opening-available-stock" type="number" name="available_stock" value="{{ old('available_stock', 0) }}" min="0"
+                       style="width:100%; padding:12px 16px; font-size:14px; border:2px solid #bec6cf; border-radius:14px; outline:none; background:white; color:#0f172a; box-sizing:border-box;"
+                       onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
+                       onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'" required>
+                @error('available_stock')
+                    <p style="margin-top:4px; font-size:13px; color:#dc2626;">{{ $message }}</p>
+                @enderror
+                <small style="color:#475569;">Use an allocation or transfer to reserve stock for a recipient.</small>
+                @error('allocated_stock')
+                    <p style="margin-top:4px; font-size:13px; color:#dc2626;">{{ $message }}</p>
+                @enderror
             </div>
 
             <div>

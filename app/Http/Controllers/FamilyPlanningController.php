@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\FamilyPlanning;
 use App\Models\PublicUser;
+use App\Support\ClinicalAudit;
 use Illuminate\Http\Request;
 
 class FamilyPlanningController extends Controller
@@ -32,8 +33,10 @@ class FamilyPlanningController extends Controller
         $method = $request->input('method');
         $supplyFilter = $request->input('supply');  // 'due' = next supply in next 30 days' = next supply in next 30 days
 
-        $records = FamilyPlanning::whereHas('patient', fn ($q) => $q->forViewer())->with('patient')
-            ->where('health_unit_id', $healthUnitId)
+        $archived = $request->boolean('archived');
+        abort_unless(! $archived || ClinicalAudit::archiveVisible(), 403);
+        $records = ClinicalAudit::scopedVisits(FamilyPlanning::class)->with('patient')
+            ->when($archived, fn ($query) => $query->onlyTrashed())
             ->when($search, function ($q) use ($search) {
                 $q->whereHas('patient', function ($p) use ($search) {
                     $p->where('first_name', 'like', "%{$search}%")
@@ -47,7 +50,7 @@ class FamilyPlanningController extends Controller
             })
             ->orderByDesc('date_accepted')
             ->paginate(20)
-            ->appends(['search' => $search, 'method' => $method, 'supply' => $supplyFilter]);
+            ->appends(['search' => $search, 'method' => $method, 'supply' => $supplyFilter, 'archived' => $archived ? 1 : null]);
 
         $patients = PublicUser::forViewer()->where('health_unit_id', $healthUnitId)
             ->orderBy('last_name')
@@ -86,7 +89,7 @@ class FamilyPlanningController extends Controller
 
         return view('family_planning.index', compact(
             'records', 'patients', 'methods', 'commonMethods',
-            'stats', 'search', 'method', 'supplyFilter'
+            'stats', 'search', 'method', 'supplyFilter', 'archived'
         ));
     }
 
@@ -106,11 +109,7 @@ class FamilyPlanningController extends Controller
 
         $validated['health_unit_id'] = session('health_unit_id');
 
-        $patient = PublicUser::forViewer()->where('id', $validated['patient_id'])
-            ->where('health_unit_id', session('health_unit_id'))
-            ->firstOrFail();
-
-        FamilyPlanning::create($validated);
+        $patient = ClinicalAudit::createVisit(FamilyPlanning::class, $validated);
 
         return back()->with('success', 'Family planning record added for '.$patient->full_name.'.');
     }
@@ -121,9 +120,19 @@ class FamilyPlanningController extends Controller
             return $redirect;
         }
 
-        $record = FamilyPlanning::whereHas('patient', fn ($q) => $q->forViewer())->where('health_unit_id', session('health_unit_id'))->findOrFail($id);
-        $record->delete();
+        ClinicalAudit::setVoided(FamilyPlanning::class, (int) $id, true);
 
-        return back()->with('success', 'Record deleted.');
+        return back()->with('success', 'Record voided and retained in the archive.');
+    }
+
+    public function restore($id)
+    {
+        if ($redirect = $this->guard()) {
+            return $redirect;
+        }
+
+        ClinicalAudit::setVoided(FamilyPlanning::class, (int) $id, false);
+
+        return back()->with('success', 'Record restored.');
     }
 }

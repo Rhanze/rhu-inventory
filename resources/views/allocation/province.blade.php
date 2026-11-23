@@ -12,7 +12,6 @@
         <p style="font-size:1.0625rem; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:#42ad8a; margin:0 0 6px 0;">PHO Allocation</p>
         <h2 style="font-size:1.5rem; font-weight:700; color:#0f172a; margin:0;">Allocate Stock to RHU</h2>
         <p style="font-size:1.0625rem; color:#475569; margin:6px 0 0 0;">Send medicines directly from the Provincial Health Office to a Rural Health Unit.</p>
-        @include('imports._link', ['section' => 'provincial_allocations'])
     </div>
 
     {{-- Form Card --}}

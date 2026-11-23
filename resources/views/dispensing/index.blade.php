@@ -92,6 +92,7 @@
                 'printAction' => route('dispensing.index'),
             ])
             @include('imports._link', ['section' => 'dispensing', 'fallback' => true])
+            @include('dispensing._barangay_filter')
 
             @if(session('health_unit_id'))
                 <a href="{{ route('dispensing.create') }}" style="
@@ -109,18 +110,21 @@
     @if(session('role') === 'midwife')
         <nav aria-label="Dispensing scope" style="display:flex;gap:12px;flex-wrap:wrap;">
             @if($assignedAreas->isNotEmpty())
-                <a href="{{ route('dispensing.index', array_merge(request()->except('page', 'barangay'), ['dispensing_scope' => 'area'])) }}" @if($dispensingScope === 'area') aria-current="page" @endif>Assigned barangays</a>
+                <a href="{{ route('dispensing.index', array_merge(request()->except('page', 'barangay', 'barangay_missing'), ['dispensing_scope' => 'area'])) }}" @if($dispensingScope === 'area') aria-current="page" @endif>Assigned barangays</a>
             @endif
-            <a href="{{ route('dispensing.index', array_merge(request()->except('page', 'barangay'), ['dispensing_scope' => 'personal'])) }}" @if($dispensingScope === 'personal') aria-current="page" @endif>My recorded dispensing</a>
+            <a href="{{ route('dispensing.index', array_merge(request()->except('page', 'barangay', 'barangay_missing'), ['dispensing_scope' => 'personal'])) }}" @if($dispensingScope === 'personal') aria-current="page" @endif>My recorded dispensing</a>
         </nav>
         <p style="margin:0;color:#475569;">{{ $dispensingScope === 'area' ? 'Activity for assigned barangays: '.$assignedAreas->join(', ') : 'Your own saved dispensing, including previously served areas.' }}</p>
     @endif
-    @include('dispensing._read_filters')
+    @include('dispensing._medicine_filter_context')
     @include('shared.history_filters')
     @if(session('role') !== 'midwife')
         @include('dispensing._barangay_breakdown')
     @endif
     @include('shared.empty_result', ['resultKey' => 'history', 'recordCount' => $records->total()])
+    @if(session('dispensing_prescription_archive'))
+        <a class="no-print" href="{{ route('dispensing.prescription', ['id' => session('dispensing_prescription_archive'), 'history' => 1]) }}">View retained prescription for the voided record</a>
+    @endif
     <p style="margin:0; color:#64748b; font-size:1rem;">Showing saved transactions. Cancelled or reversed transactions are excluded. For prescription medicines, Not recorded means the source entry has no saved doctor name.</p>
 
     {{-- Table card --}}
@@ -139,7 +143,7 @@
                     <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                         <th class="no-print" style="padding: 14px 20px; text-align: left; font-size:1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">#</th>
                         <th style="padding: 14px 20px; text-align: left; font-size:1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Date</th>
-                        <th style="padding: 14px 20px; text-align: left; font-size:1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Batch #</th>
+                        <th style="padding: 14px 20px; text-align: left; font-size:1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Lots and quantities</th>
                         <th style="padding: 14px 20px; text-align: left; font-size:1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Medicine</th>
                         <th style="padding: 14px 20px; text-align: left; font-size:1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Prescription</th>
                         <th style="padding: 14px 20px; text-align: left; font-size:1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Qty</th>
@@ -191,13 +195,7 @@
                             <td style="padding: 14px 20px; color: #334155; white-space:nowrap;">{{ $formattedDate }}</td>
 
                             <td style="padding: 14px 20px; color: #334155;">
-                                @if($record->batch_no)
-                                    <span style="font-family:monospace; font-size:1rem; background:#f1f5f9; padding:2px 8px; border-radius:6px;">
-                                        {{ $record->batch_no }}
-                                    </span>
-                                @else
-                                    <span style="color:#94a3b8;">—</span>
-                                @endif
+                                {{ $record->lotBreakdown() ?: 'Not recorded' }}
                             </td>
 
                             <td style="padding: 14px 20px; color: #334155; font-weight: 600;">{{ $record->medicine->medicine_name ?? 'N/A' }}</td>
@@ -237,7 +235,7 @@
                                             data-description="{{ $med->description ?? '' }}"
                                             data-date="{{ $formattedDate }}"
                                             data-quantity="{{ $record->quantity_dispensed }}"
-                                            data-batch-no="{{ $record->batch_no ?? '' }}"
+                                            data-batch-no="{{ $record->lotBreakdown() }}"
                                             data-prescription="{{ $med && $med->requires_prescription ? 'Required' : 'Not Required' }}"
                                             data-doctor="{{ $record->prescribingDoctorName() ?? '' }}"
                                             data-doctor-display="{{ $record->prescribingDoctorDisplay() }}"
@@ -444,7 +442,7 @@
                 <span class="value" id="dm-pieces-per-pack">—</span>
             </div>
             <div>
-                <label>Batch No.</label>
+                <label>Lots and quantities</label>
                 <span class="value" id="dm-batch-no" style="font-family:monospace;">—</span>
             </div>
             <div>

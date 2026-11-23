@@ -18,6 +18,7 @@ class DohShipment extends Model
         'received_date',
         'received_by',
         'remarks',
+        'delivery_key',
     ];
 
     protected $casts = [

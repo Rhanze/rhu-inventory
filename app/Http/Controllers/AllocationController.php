@@ -15,6 +15,7 @@ use App\Services\NotificationService;
 use App\Services\StockMovementService;
 use App\Support\BarangayDemandScope;
 use App\Support\HistoricalDateRange;
+use App\Support\SpreadsheetCsv;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -52,19 +53,17 @@ class AllocationController extends Controller
         $search = $request->search;
         $rhuFilter = $request->rhu_filter;
         $category = $request->category;
-        $batchInput = $request->batch_input;
+        $batchInput = $request->validate(['batch_input' => 'nullable|string|max:1000'])['batch_input'] ?? null;
         $expiryFilter = $request->expiry_filter;
         $healthUnitId = session('health_unit_id');
 
-        $allocations = Allocation::with(['medicine', 'allocatedBy', 'recipient', 'healthUnit', 'destinationHealthUnit', 'inventory'])
-            ->when($healthUnitId, function ($q) use ($healthUnitId) {
-                $q->where(fn ($units) => $units->where('health_unit_id', $healthUnitId)->orWhere('destination_health_unit_id', $healthUnitId));
-            })
+        $allocations = Allocation::with(['medicine', 'allocatedBy', 'recipient', 'healthUnit', 'destinationHealthUnit', 'inventory', 'sourceBatchLogs'])
+            ->when($healthUnitId, fn ($q) => $q->involvingHealthUnit($healthUnitId))
             ->when(is_null($healthUnitId) && $rhuFilter, function ($q) use ($rhuFilter) {
                 if ($rhuFilter === 'pho') {
                     $q->where('health_unit_id', HealthUnit::phoId());
                 } else {
-                    $q->where(fn ($units) => $units->where('health_unit_id', $rhuFilter)->orWhere('destination_health_unit_id', $rhuFilter));
+                    $q->involvingHealthUnit($rhuFilter);
                 }
             })
             ->when($search, function ($query, $search) {
@@ -85,6 +84,7 @@ class AllocationController extends Controller
             ->when($category, function ($q) use ($category) {
                 $q->whereHas('medicine', fn ($mq) => $mq->where('category', $category));
             })
+            ->matchingSourceBatches($batchInput)
             ->when($historyRange->isFiltered(), fn ($q) => $historyRange->apply($q, 'date_allocated'))
             ->orderByDesc('date_allocated')
             ->orderByDesc('id')
@@ -313,6 +313,7 @@ class AllocationController extends Controller
         }
 
         $allocation = $this->findAllocationForCurrentUser($id);
+        abort_unless($allocation->canEditStock(), 404);
 
         $inventories = Inventory::with('medicine')
             ->where('health_unit_id', $allocation->health_unit_id)
@@ -356,7 +357,7 @@ class AllocationController extends Controller
         try {
             DB::transaction(function () use ($request, $allocation, $medicine) {
                 $allocation = Allocation::whereKey($allocation->id)->lockForUpdate()->firstOrFail();
-                if ($allocation->destination_health_unit_id || in_array($allocation->status, ['pending', 'rejected'])) {
+                if (! $allocation->canEditStock()) {
                     throw new \DomainException('Reverse a provincial allocation before replacing it; approve a supply request before editing its stock.');
                 }
                 $isSupplyRequest = in_array($allocation->status, ['approved', 'received']);
@@ -916,16 +917,15 @@ class AllocationController extends Controller
         $rhuFilter = $request->rhu_filter;
         $category = $request->category;
         $healthUnitId = session('health_unit_id');
+        $batchInput = $request->validate(['batch_input' => 'nullable|string|max:1000'])['batch_input'] ?? null;
 
-        $allocations = Allocation::with(['medicine', 'allocatedBy', 'recipient', 'healthUnit', 'destinationHealthUnit', 'inventory'])
-            ->when($healthUnitId, function ($q) use ($healthUnitId) {
-                $q->where(fn ($units) => $units->where('health_unit_id', $healthUnitId)->orWhere('destination_health_unit_id', $healthUnitId));
-            })
+        $allocations = Allocation::with(['medicine', 'allocatedBy', 'recipient', 'healthUnit', 'destinationHealthUnit', 'inventory', 'sourceBatchLogs'])
+            ->when($healthUnitId, fn ($q) => $q->involvingHealthUnit($healthUnitId))
             ->when(is_null($healthUnitId) && $rhuFilter, function ($q) use ($rhuFilter) {
                 if ($rhuFilter === 'pho') {
                     $q->where('health_unit_id', HealthUnit::phoId());
                 } else {
-                    $q->where(fn ($units) => $units->where('health_unit_id', $rhuFilter)->orWhere('destination_health_unit_id', $rhuFilter));
+                    $q->involvingHealthUnit($rhuFilter);
                 }
             })
             ->when($search, function ($query, $search) {
@@ -946,6 +946,7 @@ class AllocationController extends Controller
             ->when($category, function ($q) use ($category) {
                 $q->whereHas('medicine', fn ($mq) => $mq->where('category', $category));
             })
+            ->matchingSourceBatches($batchInput)
             ->when($historyRange->isFiltered(), fn ($q) => $historyRange->apply($q, 'date_allocated'))
             ->orderByDesc('date_allocated')
             ->orderByDesc('id')
@@ -956,7 +957,7 @@ class AllocationController extends Controller
         return response()->streamDownload(function () use ($allocations) {
             $handle = fopen('php://output', 'w');
 
-            fputcsv($handle, [
+            SpreadsheetCsv::writeRow($handle, [
                 'ID', 'Medicine', 'Batch No.', 'Destination',
                 'Quantity Allocated', 'Date Allocated', 'Status', 'Recipient', 'Source RHU',
             ]);
@@ -966,10 +967,10 @@ class AllocationController extends Controller
                     ? ($allocation->destinationHealthUnit->name ?? 'N/A').' (RHU)'
                     : ($allocation->destination ?? 'N/A');
 
-                fputcsv($handle, [
+                SpreadsheetCsv::writeRow($handle, [
                     $allocation->id,
                     $allocation->medicine->medicine_name ?? '',
-                    $allocation->inventory->batch_no ?? '',
+                    $allocation->source_batch_labels ?? '',
                     $destination,
                     $allocation->quantity_allocated,
                     $allocation->date_allocated,

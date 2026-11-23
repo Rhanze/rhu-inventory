@@ -153,17 +153,11 @@
                 <tbody>
                     @forelse($schedules as $s)
                         @php
-                            $statusColor = match ($s->status) {
+                            $statusColor = match ($s->superseded_at ? 'superseded' : $s->status) {
                                 'given'  => ['bg' => '#E8F7F4', 'text' => '#0f5c4b', 'border' => '#42ad8a'],
                                 'missed' => ['bg' => '#FCEBEB', 'text' => '#991b1b', 'border' => '#F7C1C1'],
-                                default  => $s->is_overdue
-                                    ? ['bg' => '#FEF3C7', 'text' => '#92400E', 'border' => '#FAC775']
-                                    : ['bg' => '#FEF3C7', 'text' => '#92400E', 'border' => '#FAC775'],
-                            };
-                            $statusLabel = match ($s->status) {
-                                'given'  => 'Given',
-                                'missed' => 'Missed',
-                                default  => $s->is_overdue ? 'Overdue' : 'Pending',
+                                'skipped', 'superseded' => ['bg' => '#f1f5f9', 'text' => '#475569', 'border' => '#cbd5e1'],
+                                default => ['bg' => '#FEF3C7', 'text' => '#92400E', 'border' => '#FAC775'],
                             };
                         @endphp
                         <tr style="border-bottom:1px solid #f1f5f9;">
@@ -183,7 +177,7 @@
                                 <span style="display:inline-block; padding:4px 12px; border-radius:999px;
                                              font-size:12px; font-weight:700;
                                              background:{{ $statusColor['bg'] }}; color:{{ $statusColor['text'] }}; border:1px solid {{ $statusColor['border'] }};">
-                                    {{ $statusLabel }}
+                                    {{ $s->status_label }}
                                 </span>
                             </td>
                         </tr>

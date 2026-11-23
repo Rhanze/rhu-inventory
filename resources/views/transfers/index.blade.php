@@ -19,6 +19,12 @@
         </div>
 
         <div style="display:flex; gap:8px;flex-wrap:wrap;">
+            <a href="{{ route('transfers.index', $overdueOnly ? [] : ['overdue' => 1]) }}" style="padding:10px 14px;color:#0f5c4b;text-decoration:underline;">
+                {{ $overdueOnly ? 'All transfers' : 'Overdue receipts' }}
+            </a>
+            <a href="{{ route('transfers.index', $reviewOnly ? [] : ['receipt_review' => 1]) }}" style="padding:10px 14px;color:#0f5c4b;text-decoration:underline;">
+                {{ $reviewOnly ? 'All transfers' : 'Receipt reviews' }}
+            </a>
             @if($isPHO)
                 <a href="{{ route('transfers.distribute') }}" style="
                     padding:10px 18px; border-radius:10px; background:#42ad8a; color:white;
@@ -81,7 +87,8 @@
                             'completed' => 'background:#E8F7F4; color:#0f5c4b; border:1px solid #42ad8a;',
                             'cancelled' => 'background:#f1f5f9; color:#64748b; border:1px solid #cbd5e1;',
                         ];
-                        $statusStyle = $statusColors[$t->status] ?? $statusColors['pending'];
+                        $receiptOverdue = $t->isReceiptOverdue();
+                        $statusStyle = $statusColors[$receiptOverdue ? 'rejected' : $t->status] ?? $statusColors['pending'];
 
                         $isPhoAdmin = $isPHO && session('role') === 'admin';
                         $canApprove = $isPhoAdmin && $t->isAwaitingPhoReview();
@@ -102,6 +109,8 @@
                             $t->isAwaitingPhoReview() => 'Awaiting PHO approval',
                             $t->isAwaitingSourceResponse() => 'Awaiting source acceptance',
                             $t->pho_review_status === \App\Models\TransferRequest::PHO_REVIEW_REJECTED => 'Rejected by PHO',
+                            $receiptOverdue => 'Receipt overdue',
+                            $t->isAccepted() => 'Awaiting receipt',
                             default => ucfirst($t->status),
                         };
                     @endphp
@@ -172,10 +181,18 @@
                         <td style="padding:14px 16px; text-align:center;">
                             <span style="padding:4px 12px; border-radius:999px; font-size:1.0625rem; font-weight:600; {{ $statusStyle }} white-space:nowrap;">
                                 {{ $statusLabel }}
-                                @if($t->auto_completed)
-                                    <span title="Auto-completed after 7 days" style="font-size:1.0625rem;"> ⚙</span>
-                                @endif
                             </span>
+                            @if($t->auto_completed || $t->receiptReview)
+                                @if($t->auto_completed)
+                                    <p style="margin:6px 0 0; color:#475569;">System-recorded receipt</p>
+                                @else
+                                    <p style="margin:6px 0 0; color:#475569;">Counted {{ number_format($t->receiptReview->received_quantity) }} {{ $t->base_unit }}</p>
+                                @endif
+                                <p style="margin:4px 0 0; color:#334155;">{{ $t->receiptReview?->statusLabel() ?? 'Awaiting delivery review' }}</p>
+                                @if($t->isReceived() && (int) session('health_unit_id') === (int) $t->to_health_unit_id)
+                                    <a href="{{ route('transfers.receipt_review', $t->id) }}" style="color:#0f5c4b;text-decoration:underline;">{{ $t->receiptReview ? 'View receipt review' : 'Review delivery' }}</a>
+                                @endif
+                            @endif
                             @if($isPhoAdmin && $t->pho_reviewed_at)
                                 <p style="margin:6px 0 0; color:#475569;">
                                     Reviewed by {{ $t->phoReviewer?->name ?? 'PHO' }}<br>
@@ -222,22 +239,7 @@
                                 @endif
 
                                 @if($canReceive)
-                                    <form method="POST" action="{{ route('transfers.receive', $t->id) }}"
-                                          style="display:inline; margin:0;"
-                                          onsubmit="return confirm('Confirm you have physically received these items? Stock will move immediately.');">
-                                        @csrf
-                                        <button type="submit"
-                                                style="
-                                                    padding:6px 12px; border-radius:8px;
-                                                    background:#0f5c4b; color:#ffffff; border:none;
-                                                    font-size:1.0625rem; font-weight:600; cursor:pointer;
-                                                    white-space:nowrap; line-height:1.2;
-                                                    transition: background 0.2s;
-                                                "
-                                                onmouseover="this.style.background='#0a4437'" onmouseout="this.style.background='#0f5c4b'">
-                                            Receive
-                                        </button>
-                                    </form>
+                                    @include('transfers._receive_form', ['transfer' => $t])
                                 @endif
 
                                 @if($canCancel)
@@ -268,7 +270,7 @@
                 @empty
                     <tr>
                         <td colspan="8" style="padding:40px; text-align:center; color:#94a3b8;">
-                            No transfer requests found.
+                            {{ $overdueOnly ? 'No overdue receipts found.' : 'No transfer requests found.' }}
                         </td>
                     </tr>
                 @endforelse

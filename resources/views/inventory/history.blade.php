@@ -14,10 +14,12 @@
         .history-filter-fields.is-facility-scoped{grid-template-columns:repeat(2,minmax(0,1fr))}
         .history-date-fields{margin-top:16px}
         .history-more-filters{margin-top:18px;border-top:1px solid #e2e8f0;padding-top:12px}
-        .history-more-filters>summary,.history-facilities>summary,.history-reading-help>summary{cursor:pointer;min-height:44px;box-sizing:border-box;padding:10px 0;font-weight:600;color:#0f5c4b}
+        .history-more-filters>summary,.history-facilities>summary,.history-reading-help>summary,.history-preview-filters>summary{cursor:pointer;min-height:44px;box-sizing:border-box;padding:10px 0;font-weight:600;color:#0f5c4b}
         .history-more-filters .history-filter-fields{margin-top:12px}
-        .history-preview-filters{margin-top:18px;padding-top:14px;border-top:1px solid #e2e8f0}
-        .history-preview-filters h3{margin:0;font-size:1.0625rem;color:#334155}
+        .history-movement-preview>summary{cursor:pointer;font-size:1.35rem;font-weight:650;color:#0f172a;scroll-margin-top:1rem}
+        .history-movement-preview[open]>summary{margin-bottom:8px}
+        .history-preview-filters{margin:12px 0 16px;border-bottom:1px solid #e2e8f0}
+        .history-preview-filters form{padding:8px 0 16px}
         .history-period-summary,.history-metric-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
         .history-period-summary{margin:16px 0}
         .history-period-summary>div,.history-metric-group{padding:12px 16px;border-radius:10px}
@@ -42,7 +44,7 @@
         .history-facilities{margin-top:8px}
         .history-facilities[open]>summary{margin-bottom:8px}
         .history-reading-help{margin-top:12px}
-        .history-preview-count{font-weight:400;color:#64748b;margin-left:8px}
+        .history-preview-count{font-size:1rem;font-weight:400;color:#64748b;margin-left:8px}
         .inventory-history label{display:flex;flex-direction:column;gap:8px;min-width:0;font-weight:600}
         .inventory-history-form label>input,.inventory-history-form label>select{width:100%}
         .inventory-history-form select{padding-right:2rem;text-overflow:ellipsis}
@@ -50,15 +52,7 @@
         .inventory-history button{background:#258663;color:#fff;border-color:#258663;font-weight:600;cursor:pointer}
         .inventory-history-actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding-top:18px}
         .inventory-history-clear{display:inline-flex;align-items:center;text-decoration:none}
-        .inventory-history-scroll{overflow-x:auto;max-width:100%;min-width:0;overscroll-behavior-x:contain;margin-top:16px}
-        .inventory-history table{width:100%;min-width:68rem;border-collapse:collapse;font:inherit}
-        .inventory-history th,.inventory-history td{padding:14px;vertical-align:top;text-align:left;border-bottom:1px solid #e2e8f0;overflow-wrap:break-word}
-        .inventory-history th{font-size:1rem;background:#f8fafc;color:#334155}
-        .inventory-history td{min-width:8rem;max-width:22rem}
-        .inventory-history td small{display:block;margin-top:6px;font-size:1rem;color:#475569}
-        .inventory-history .history-count{font-weight:600;font-variant-numeric:tabular-nums}
         .inventory-history .history-medicines a,.inventory-history .history-note a{color:#0f5c4b;text-decoration:underline;text-underline-offset:3px}
-        .inventory-history-status{display:inline-block;padding:3px 8px;border:1px solid #cbd5e1;border-radius:8px;font-size:1rem;color:#475569}
         .inventory-history .history-warning{color:#92400e;font-size:1rem}
         .inventory-history .history-note{font-size:1rem;color:#475569}
         .inventory-history .history-period-field[hidden]{display:none}
@@ -69,10 +63,6 @@
         @media print{
             .history-preview-filters,.history-movement-preview:not([open]),.history-facilities>summary,.history-reading-help>summary{display:none}
             .inventory-history-card{padding:12px;background:#fff;box-shadow:none}
-            .inventory-history-scroll{overflow:visible}
-            .inventory-history table{min-width:0;table-layout:fixed;font-size:.8rem}
-            .inventory-history th,.inventory-history td{min-width:0;max-width:none;padding:6px;font-size:inherit}
-            .inventory-history td small{font-size:inherit}
             .history-period-summary>div,.history-metric-group{padding:6px;background:#fff}
             .history-facility,.history-metric-groups{break-inside:avoid}
         }
@@ -241,54 +231,69 @@
         <div style="margin-top:20px;">{{ $stockSummary->links() }}</div>
     </section>
 
+    @php
+        $movementStatus = request('status') ?? (request('type') === 'reversal' ? 'reversal' : 'all');
+        $movementLogScope = array_replace($periodStockLogScope, [
+            'date_to' => $historyRange->to,
+            'status' => $movementStatus,
+        ], request()->only('search', 'action', 'type'));
+    @endphp
     <details class="inventory-history-card history-movement-preview" @if($movementFiltersActive || request()->filled('page')) open @endif>
-        <summary id="inventory-transactions-title" style="cursor:pointer;font-weight:700;">Individual movements <span class="history-preview-count">{{ number_format($movements->total()) }} entries</span></summary>
-        <p class="history-note">Batch activity by date and staff. <a href="{{ route('stock_logs.index', array_replace($periodStockLogScope, request()->only('search', 'action', 'type', 'status'))) }}">Open Stock Logs</a></p>
-        <form method="GET" action="{{ route('inventory.index') }}#inventory-transactions-title" class="inventory-history-form history-preview-filters">
-            <input type="hidden" name="view" value="history">
-            <input type="hidden" name="history_period" value="{{ $historyPeriod }}">
-            @foreach(request()->only('rhu_filter', 'medicine_id', 'batch_no') as $name => $value)
-                @if(is_scalar($value) && $value !== '')<input type="hidden" name="{{ $name }}" value="{{ $value }}">@endif
-            @endforeach
-            @if($historyPeriod === 'day')
-                <input type="hidden" name="on_date" value="{{ request('on_date', today()->toDateString()) }}">
-            @elseif($historyPeriod === 'range')
-                @foreach(request()->only('date_from', 'date_to', 'year') as $name => $value)
+        <summary id="inventory-transactions-title">Individual movements <span class="history-preview-count">{{ number_format($movements->total()) }} {{ \Illuminate\Support\Str::plural('entry', $movements->total()) }}</span></summary>
+        <div class="history-summary-tools history-note">
+            <p><strong>{{ $unitId === null ? 'All facilities' : ($historyFacility?->name ?? 'Selected facility') }}</strong></p>
+            <a href="{{ route('stock_logs.index', $movementLogScope) }}">View these movements in Stock Logs</a>
+        </div>
+        <p class="history-note">A transaction can use several batches. Transfers can have separate sending and receiving entries.</p>
+        <details class="history-preview-filters" @if($movementFiltersActive) open @endif>
+            <summary>Search and filter movements</summary>
+            <form method="GET" action="{{ route('inventory.index') }}#inventory-transactions-title" class="inventory-history-form">
+                <input type="hidden" name="view" value="history">
+                <input type="hidden" name="history_period" value="{{ $historyPeriod }}">
+                @foreach(request()->only('rhu_filter', 'medicine_id', 'batch_no', 'summary_page') as $name => $value)
                     @if(is_scalar($value) && $value !== '')<input type="hidden" name="{{ $name }}" value="{{ $value }}">@endif
                 @endforeach
-            @endif
-            <div class="history-filter-fields">
-                <label>Search movements
-                    <input type="search" name="search" maxlength="200" value="{{ request('search') }}" placeholder="Staff, medicine or reference">
-                </label>
-                <label>Transaction
-                    <select name="action">
-                        <option value="">All transactions</option>
-                        @foreach(['addition' => 'Stock receipts', 'dispensing' => 'Dispensing', 'allocation' => 'Allocations', 'transfer' => 'Transfers', 'adjustment' => 'Adjustments', 'reservation' => 'Reservations', 'reversal' => 'Reversals'] as $value => $label)
-                            <option value="{{ $value }}" @selected(request('action') === $value)>{{ $label }}</option>
-                        @endforeach
-                    </select>
-                </label>
-                <label>Preview status
-                    <select name="status">
-                        @foreach(['all' => 'All statuses', 'active' => 'Active', 'cancelled' => 'Cancellations', 'reversed' => 'Reversed originals', 'reversal' => 'Reversal entries'] as $value => $label)
-                            <option value="{{ $value }}" @selected(request('status', request('type') === 'reversal' ? 'reversal' : 'all') === $value)>{{ $label }}</option>
-                        @endforeach
-                    </select>
-                </label>
-            </div>
-            @if(request()->filled('type'))
-                <input type="hidden" name="type" value="{{ request('type') }}">
-                <p class="history-note">Movement direction: {{ ['addition' => 'Receipts', 'release' => 'Releases', 'reservation' => 'Reservations', 'reversal' => 'Reversals'][request('type')] ?? request('type') }}. <a href="{{ request()->fullUrlWithoutQuery(['type', 'page']) }}#inventory-transactions-title">Clear direction</a></p>
-            @endif
-            <div class="inventory-history-actions">
-                <button type="submit">Filter movements</button>
-                @if($movementFiltersActive)<a class="inventory-history-clear" href="{{ request()->fullUrlWithoutQuery(['search', 'action', 'status', 'type', 'page']) }}#inventory-transactions-title">Clear movement filters</a>@endif
-            </div>
-            <p class="history-note">Movement filters apply only to these entries. Summary totals above stay the same.</p>
-        </form>
+                @if($historyPeriod === 'day')
+                    <input type="hidden" name="on_date" value="{{ request('on_date', today()->toDateString()) }}">
+                @elseif($historyPeriod === 'range')
+                    @foreach(request()->only('date_from', 'date_to', 'year') as $name => $value)
+                        @if(is_scalar($value) && $value !== '')<input type="hidden" name="{{ $name }}" value="{{ $value }}">@endif
+                    @endforeach
+                @endif
+                <div class="history-filter-fields">
+                    <label>Search movements
+                        <input type="search" name="search" maxlength="200" value="{{ request('search') }}" placeholder="Medicine, batch, staff or reference">
+                    </label>
+                    <label>Event type
+                        <select name="action">
+                            <option value="">All events</option>
+                            @foreach(['addition' => 'Stock receipts', 'dispensing' => 'Dispensing', 'allocation' => 'Allocations', 'transfer' => 'Transfers', 'adjustment' => 'Adjustments', 'reservation' => 'Reservations', 'reversal' => 'Reversals'] as $value => $label)
+                                <option value="{{ $value }}" @selected(request('action') === $value)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+                    <label>Movement status
+                        <select name="status" aria-describedby="history-movement-status-help">
+                            @foreach(['all' => 'All statuses', 'active' => 'Active entries', 'cancelled' => 'Cancelled entries', 'reversed' => 'Reversed or corrected originals', 'reversal' => 'Reversal entries'] as $value => $label)
+                                <option value="{{ $value }}" @selected($movementStatus === $value)>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </label>
+                </div>
+                <p class="history-note" id="history-movement-status-help">Reversed originals show earlier entries. Reversal entries show the stock changes that undid them.</p>
+                @if(request()->filled('type'))
+                    <input type="hidden" name="type" value="{{ request('type') }}">
+                    <p class="history-note">{{ ['addition' => 'Receipts', 'release' => 'Releases', 'reservation' => 'Reservations', 'reversal' => 'Reversals'][request('type')] }} only. <a href="{{ request()->fullUrlWithoutQuery(['type', 'page']) }}#inventory-transactions-title">Clear direction filter</a></p>
+                @endif
+                <div class="inventory-history-actions">
+                    <button type="submit">Apply movement filters</button>
+                    @if($movementFiltersActive)<a class="inventory-history-clear" href="{{ request()->fullUrlWithoutQuery(['search', 'action', 'status', 'type', 'page']) }}#inventory-transactions-title">Clear movement filters</a>@endif
+                </div>
+                <p class="history-note">These filters apply to individual movements.</p>
+            </form>
+        </details>
         @include('stock_logs._movement_table', ['movements' => $movements])
-        <div style="margin-top:20px;">{{ $movements->links() }}</div>
+        <div style="margin-top:20px;">{{ $movements->fragment('inventory-transactions-title')->links() }}</div>
     </details>
 </div>
 <script>
@@ -306,6 +311,10 @@
     period.addEventListener('change', updateFields);
     form.addEventListener('reset', () => requestAnimationFrame(updateFields));
     updateFields();
+    if (location.hash === '#inventory-transactions-title') {
+        const movementSection = document.querySelector('.history-movement-preview');
+        if (movementSection) movementSection.open = true;
+    }
     const printDetails = new Map();
     window.addEventListener('beforeprint', () => {
         document.querySelectorAll('.inventory-history .history-facilities, .inventory-history .history-reading-help').forEach(details => {

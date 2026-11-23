@@ -30,11 +30,16 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'mfa_secret',
+        'mfa_last_step',
     ];
 
     protected $casts = [
         'is_active'    => 'boolean',
         'is_emergency' => 'boolean',
+        'auth_version' => 'integer',
+        'mfa_secret' => 'encrypted',
+        'mfa_last_step' => 'integer',
     ];
 
     // ─── Relationships ───

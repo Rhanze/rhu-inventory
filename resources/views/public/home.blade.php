@@ -86,8 +86,8 @@
         }
 
         .public-search-form .search-submit {
-            border-color: #42ad8a;
-            background: #42ad8a;
+            border-color: #0f5c4b;
+            background: #0f5c4b;
             color: #fff;
             font-weight: 700;
             cursor: pointer;
@@ -95,8 +95,8 @@
         }
 
         .public-search-form .search-submit:hover {
-            background: #369f7d;
-            border-color: #369f7d;
+            background: #0b483b;
+            border-color: #0b483b;
         }
 
         .public-search-form :is(input, select, .search-submit):focus-visible {

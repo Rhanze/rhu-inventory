@@ -8,7 +8,11 @@ use App\Models\Inventory;
 use App\Models\StockLog;
 use App\Models\Allocation;
 use App\Models\DispensingRecord;
+use App\Models\TransferRequest;
 use App\Helpers\ActivityLogger;
+use App\Support\SpreadsheetCsv;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Query\Expression;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
@@ -45,6 +49,12 @@ class MedicineController extends Controller
             return redirect()->route('login');
         }
         return null;
+    }
+
+    private function ensurePhoCatalogEditor(): void
+    {
+        abort_unless(session('role') === 'admin' && session('health_unit_id') === null, 403,
+            'Only a Provincial Health Office administrator can change the item masterlist.');
     }
 
     public function index(Request $request)
@@ -104,87 +114,26 @@ class MedicineController extends Controller
             return redirect()->route('login');
         }
 
-        $search       = $request->search;
-        $category     = $request->category;
-        $rhuFilter    = $request->rhu_filter;
-        $availability = $request->availability;
-        $healthUnitId = session('health_unit_id');
+        $filters = $this->stockOnHandFilters($request);
+        $targetUnitId = session('health_unit_id') ?? ($filters['rhu_filter'] ?? null);
+        $baseQuery = $this->stockOnHandQuery($filters, $targetUnitId);
+        $batches = $this->stockAtFacility(Inventory::query(), $targetUnitId)
+            ->whereIn('medicine_id', (clone $baseQuery)->select('id'));
 
-        $targetUnitId = $healthUnitId ?: ($rhuFilter ?: null);
-
-        $baseQuery = Medicine::query()
-            ->when($search, function ($q, $s) {
-                $q->where('medicine_name', 'like', "%{$s}%");
-            })
-            ->when($category, function ($q, $category) {
-                $q->where('category', $category);
-            })
-            ->when($availability === 'available', function ($q) use ($targetUnitId) {
-                $q->whereHas('inventories', function ($sub) use ($targetUnitId) {
-                    if ($targetUnitId) $sub->where('health_unit_id', $targetUnitId);
-                    $sub->where('available_stock', '>', 0);
-                });
-            })
-            ->when($availability === 'unavailable', function ($q) use ($targetUnitId) {
-                $q->whereDoesntHave('inventories', function ($sub) use ($targetUnitId) {
-                    if ($targetUnitId) $sub->where('health_unit_id', $targetUnitId);
-                    $sub->where('available_stock', '>', 0);
-                });
-            });
-
-        $grandAvailable = (int) Inventory::query()
-            ->whereIn('medicine_id', (clone $baseQuery)->select('id'))
-            ->when($targetUnitId, fn ($q) => $q->where('health_unit_id', $targetUnitId))
-            ->sum('available_stock');
-
-        $availableMedicineCount = (clone $baseQuery)->whereHas('inventories', function ($query) use ($targetUnitId) {
-            $query->when($targetUnitId, fn ($query) => $query->where('health_unit_id', $targetUnitId))
-                ->where('available_stock', '>', 0)
-                ->where(fn ($expiry) => $expiry->whereNull('expiration_date')
-                    ->orWhereDate('expiration_date', '>=', today()));
-        })->count();
-
-        $grandAllocated = (int) Inventory::query()
-            ->whereIn('medicine_id', (clone $baseQuery)->select('id'))
-            ->when($targetUnitId, fn ($q) => $q->where('health_unit_id', $targetUnitId))
-            ->sum('allocated_stock');
-
-        $items = (clone $baseQuery)
-            ->withSum(['inventories as available_total' => function ($q) use ($targetUnitId) {
-                if ($targetUnitId) $q->where('health_unit_id', $targetUnitId);
-            }], 'available_stock')
-            ->withSum(['inventories as allocated_total' => function ($q) use ($targetUnitId) {
-                if ($targetUnitId) $q->where('health_unit_id', $targetUnitId);
-            }], 'allocated_stock')
-            ->withCount(['inventories as rhus_count' => function ($q) use ($targetUnitId) {
-                $q->where('available_stock', '>', 0);
-                if ($targetUnitId) $q->where('health_unit_id', $targetUnitId);
-            }])
-            ->orderBy('medicine_name', 'asc')
-            ->paginate(20)
-            ->appends([
-                'search'       => $search,
-                'category'     => $category,
-                'rhu_filter'   => $rhuFilter,
-                'availability' => $availability,
-            ]);
-
-        $items->getCollection()->transform(function ($item) {
-            $item->available_total = (int) ($item->available_total ?? 0);
-            $item->allocated_total = (int) ($item->allocated_total ?? 0);
-            $item->rhus_count      = (int) ($item->rhus_count ?? 0);
-            return $item;
-        });
+        $grandAvailable = (int) (clone $batches)->usableStock()->sum('available_stock');
+        $grandAllocated = (int) $batches->sum('allocated_stock');
+        $availableMedicineCount = (clone $baseQuery)
+            ->whereHas('inventories', fn (Builder $query) => $this->stockAtFacility($query, $targetUnitId)->usableStock())
+            ->count();
+        $items = $this->withStockOnHandBalances($baseQuery, $targetUnitId)
+            ->paginate(20)->appends($filters);
 
         $healthUnits = HealthUnit::rhuOnly()->orderBy('name')->get();
 
         return view('medicine.stock_on_hand', compact(
             'items',
             'healthUnits',
-            'search',
-            'category',
-            'rhuFilter',
-            'availability',
+            'targetUnitId',
             'availableMedicineCount',
             'grandAvailable',
             'grandAllocated'
@@ -197,59 +146,22 @@ class MedicineController extends Controller
             return redirect()->route('login');
         }
 
-        $search       = $request->search;
-        $category     = $request->category;
-        $rhuFilter    = $request->rhu_filter;
-        $availability = $request->availability;
-        $healthUnitId = session('health_unit_id');
-
-        $targetUnitId = $healthUnitId ?: ($rhuFilter ?: null);
-
-        $items = Medicine::query()
-            ->when($search, function ($q, $s) {
-                $q->where('medicine_name', 'like', "%{$s}%");
-            })
-            ->when($category, function ($q, $category) {
-                $q->where('category', $category);
-            })
-            ->when($availability === 'available', function ($q) use ($targetUnitId) {
-                $q->whereHas('inventories', function ($sub) use ($targetUnitId) {
-                    if ($targetUnitId) $sub->where('health_unit_id', $targetUnitId);
-                    $sub->where('available_stock', '>', 0);
-                });
-            })
-            ->when($availability === 'unavailable', function ($q) use ($targetUnitId) {
-                $q->whereDoesntHave('inventories', function ($sub) use ($targetUnitId) {
-                    if ($targetUnitId) $sub->where('health_unit_id', $targetUnitId);
-                    $sub->where('available_stock', '>', 0);
-                });
-            })
-            ->withSum(['inventories as available_total' => function ($q) use ($targetUnitId) {
-                if ($targetUnitId) $q->where('health_unit_id', $targetUnitId);
-            }], 'available_stock')
-            ->withSum(['inventories as allocated_total' => function ($q) use ($targetUnitId) {
-                if ($targetUnitId) $q->where('health_unit_id', $targetUnitId);
-            }], 'allocated_stock')
-            ->withCount(['inventories as rhus_count' => function ($q) use ($targetUnitId) {
-                $q->where('available_stock', '>', 0);
-                if ($targetUnitId) $q->where('health_unit_id', $targetUnitId);
-            }])
-            ->orderBy('medicine_name', 'asc')
-            ->get();
-
-        $items->transform(function ($item) {
-            $item->available_total = (int) ($item->available_total ?? 0);
-            $item->allocated_total = (int) ($item->allocated_total ?? 0);
-            $item->rhus_count      = (int) ($item->rhus_count ?? 0);
-            return $item;
-        });
+        $filters = $this->stockOnHandFilters($request);
+        $targetUnitId = session('health_unit_id') ?? ($filters['rhu_filter'] ?? null);
+        $items = $this->withStockOnHandBalances($this->stockOnHandQuery($filters, $targetUnitId), $targetUnitId)
+            ->withAggregate(
+                ['inventories as rhus_count' => fn (Builder $query) => $this->stockAtFacility($query, $targetUnitId)
+                    ->usableStock()->whereHas('healthUnit', fn (Builder $unit) => $unit->rhuOnly())],
+                new Expression('distinct inventory.health_unit_id'),
+                'count',
+            )->get();
 
         $filename = 'stock_on_hand_' . now()->format('Ymd_His') . '.csv';
 
         return response()->streamDownload(function () use ($items) {
             $handle = fopen('php://output', 'w');
 
-            fputcsv($handle, [
+            SpreadsheetCsv::writeRow($handle, [
                 'Item Name',
                 'Category',
                 'Dosage',
@@ -261,15 +173,15 @@ class MedicineController extends Controller
             ]);
 
             foreach ($items as $item) {
-                fputcsv($handle, [
+                SpreadsheetCsv::writeRow($handle, [
                     $item->medicine_name ?? '',
                     $item->category ?? '',
                     $item->dosage ?? '',
                     $item->dosage_form ?? '',
                     $item->unit ?? '',
-                    $item->rhus_count,
-                    $item->available_total,
-                    $item->allocated_total,
+                    (int) $item->rhus_count,
+                    (int) $item->available_total,
+                    (int) $item->allocated_total,
                 ]);
             }
 
@@ -279,11 +191,60 @@ class MedicineController extends Controller
         ]);
     }
 
+    public function stockOnHandAutocomplete(Request $request)
+    {
+        $filters = $this->stockOnHandFilters($request);
+        if (mb_strlen($filters['search'] ?? '') < 2) {
+            return response()->json([]);
+        }
+
+        $targetUnitId = session('health_unit_id') ?? ($filters['rhu_filter'] ?? null);
+
+        return response()->json($this->stockOnHandQuery($filters, $targetUnitId)
+            ->distinct()->orderBy('medicine_name')->limit(15)->pluck('medicine_name'));
+    }
+
+    private function stockOnHandFilters(Request $request): array
+    {
+        return $request->validate([
+            'search' => 'nullable|string|max:255',
+            'category' => 'nullable|string|max:100',
+            'dosage_form' => 'nullable|string|max:100',
+            'rhu_filter' => 'nullable|integer|min:1',
+            'availability' => ['nullable', Rule::in(['available', 'unavailable'])],
+        ]);
+    }
+
+    private function stockOnHandQuery(array $filters, ?int $targetUnitId): Builder
+    {
+        $availability = $filters['availability'] ?? null;
+        $usableStock = fn (Builder $query) => $this->stockAtFacility($query, $targetUnitId)->usableStock();
+
+        return Medicine::query()
+            ->when($filters['search'] ?? null, fn (Builder $query, string $search) => $query->byName($search))
+            ->when($filters['category'] ?? null, fn (Builder $query, string $category) => $query->byCategory($category))
+            ->when($filters['dosage_form'] ?? null, fn (Builder $query, string $form) => $query->where('dosage_form', $form))
+            ->when($availability === 'available', fn (Builder $query) => $query->whereHas('inventories', $usableStock))
+            ->when($availability === 'unavailable', fn (Builder $query) => $query->whereDoesntHave('inventories', $usableStock));
+    }
+
+    private function withStockOnHandBalances(Builder $query, ?int $targetUnitId): Builder
+    {
+        return $query
+            ->withSum(['inventories as available_total' => fn (Builder $batch) => $this->stockAtFacility($batch, $targetUnitId)->usableStock()], 'available_stock')
+            ->withSum(['inventories as allocated_total' => fn (Builder $batch) => $this->stockAtFacility($batch, $targetUnitId)], 'allocated_stock')
+            ->orderBy('medicine_name')
+            ->orderBy('id');
+    }
+
+    private function stockAtFacility(Builder $query, ?int $targetUnitId): Builder
+    {
+        return $query->when($targetUnitId !== null, fn (Builder $batch) => $batch->where('health_unit_id', $targetUnitId));
+    }
+
     public function create()
     {
-        if ($redirect = $this->checkAccess()) {
-            return $redirect;
-        }
+        $this->ensurePhoCatalogEditor();
         $categories     = self::CATEGORIES;
         $categoryLabels = self::CATEGORY_LABELS;
         return view('medicine.create', compact('categories', 'categoryLabels'));
@@ -291,9 +252,7 @@ class MedicineController extends Controller
 
     public function store(Request $request)
     {
-        if ($redirect = $this->checkAccess()) {
-            return $redirect;
-        }
+        $this->ensurePhoCatalogEditor();
 
         $validated = $request->validate([
             'medicine_name'         => 'required|string|max:150',
@@ -350,9 +309,7 @@ class MedicineController extends Controller
 
     public function edit($id)
     {
-        if ($redirect = $this->checkAccess()) {
-            return $redirect;
-        }
+        $this->ensurePhoCatalogEditor();
         $medicine       = Medicine::findOrFail($id);
         $categories     = self::CATEGORIES;
         $categoryLabels = self::CATEGORY_LABELS;
@@ -361,9 +318,7 @@ class MedicineController extends Controller
 
     public function update(Request $request, $id)
     {
-        if ($redirect = $this->checkAccess()) {
-            return $redirect;
-        }
+        $this->ensurePhoCatalogEditor();
 
         $request->validate([
             'medicine_name'         => 'required|string|max:150',
@@ -384,13 +339,24 @@ class MedicineController extends Controller
         }
 
         $medicine = Medicine::findOrFail($id);
+        $unit = $request->input('unit') ?: $medicine->unit;
+        if ($medicine->unit && strcasecmp($medicine->unit, $unit) === 0) {
+            $unit = $medicine->unit;
+        }
+        if ($medicine->unit && $unit !== $medicine->unit
+            && ($medicine->inventories()->withTrashed()->exists() || $medicine->stockLogs()->exists()
+                || $medicine->allocations()->withTrashed()->exists() || $medicine->dispensingRecords()->withTrashed()->exists()
+                || TransferRequest::where('medicine_id', $medicine->id)->exists())) {
+            return back()->withInput()->withErrors(['unit' => 'This item has stock history in its current unit. Use a separate catalog item for the new unit.']);
+        }
+
         $medicine->update([
             'medicine_name'         => $request->medicine_name,
             'description'           => $request->description,
             'dosage'                => $request->dosage,
             'category'              => $request->category,
             'dosage_form'           => $request->dosage_form,
-            'unit'                  => $request->unit,
+            'unit'                  => $unit,
             'pack_type'             => $request->pack_type,
             'pieces_per_pack'       => $request->pieces_per_pack,
             'requires_prescription' => $request->boolean('requires_prescription'),
@@ -408,14 +374,7 @@ class MedicineController extends Controller
 
     public function destroy($id)
     {
-        if ($redirect = $this->checkAccess()) {
-            return $redirect;
-        }
-
-        if (session('health_unit_id') !== null) {
-            return redirect()->route('medicine.index')
-                ->with('error', 'Only the Provincial Health Office administrator can delete items.');
-        }
+        $this->ensurePhoCatalogEditor();
 
         $medicine = Medicine::findOrFail($id);
 
@@ -473,7 +432,7 @@ class MedicineController extends Controller
         return response()->streamDownload(function () use ($medicines) {
             $handle = fopen('php://output', 'w');
 
-            fputcsv($handle, [
+            SpreadsheetCsv::writeRow($handle, [
                 'ID',
                 'Item Name',
                 'Dosage',
@@ -487,7 +446,7 @@ class MedicineController extends Controller
             ]);
 
             foreach ($medicines as $medicine) {
-                fputcsv($handle, [
+                SpreadsheetCsv::writeRow($handle, [
                     $medicine->id,
                     $medicine->medicine_name,
                     $medicine->dosage ?? '',

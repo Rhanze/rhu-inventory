@@ -384,15 +384,22 @@
                                 }
                             }
 
-                            $isPhoRow = is_null(session('health_unit_id'))
-                                && optional($inventory->healthUnit)->facility_type === 'Provincial Health Office';
+                            $isPhoRow = $inventory->healthUnit?->facility_type === 'Provincial Health Office';
                         @endphp
 
                         <tr id="inventory-{{ $inventory->id }}" style="background: {{ $rowBg }}; border-bottom: 1px solid #f1f5f9; transition: background 0.2s; scroll-margin-top: 80px;"
                             onmouseover="if('{{ $rowBg }}'=='transparent') this.style.background='#f8fafc';" 
                             onmouseout="if('{{ $rowBg }}'=='transparent') this.style.background='transparent';">
                             <td class="no-print" style="padding: 14px 16px; color: #334155; text-align: center;">{{ $loop->iteration + ($inventories->currentPage() - 1) * $inventories->perPage() }}</td>
-                            <td style="padding: 14px 16px; color: #334155; font-weight: 600;">{{ $inventory->batch_no ?? 'N/A' }}</td>
+                            <td style="padding: 14px 16px; color: #334155; font-weight: 600;">
+                                <a href="{{ route('stock_logs.index', [
+                                    'inventory_id' => $inventory->id,
+                                    'rhu_filter' => session('health_unit_id') === null ? ($isPhoRow ? 'pho' : $inventory->health_unit_id) : null,
+                                    'status' => 'all',
+                                ]) }}" title="Movement history" style="color:#0f5c4b;text-decoration:underline;">
+                                    {{ $inventory->batch_no ?? 'Unnumbered batch' }}
+                                </a>
+                            </td>
                             <td style="padding: 14px 16px; font-weight: 600; color: #0f172a;">{{ $med?->medicine_name ?? 'N/A' }}</td>
 
                             @if(is_null(session('health_unit_id')))

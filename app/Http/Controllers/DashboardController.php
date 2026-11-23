@@ -86,7 +86,7 @@ class DashboardController extends Controller
 
             'stock_logs_count' => (clone $stockLogs)->where('health_unit_id', $transactionScopeId)->count(),
 
-            'allocations_count' => $allocations->where('health_unit_id', $transactionScopeId)->count(),
+            'allocations_count' => $allocations->involvingHealthUnit($transactionScopeId)->count(),
 
             'dispensing_count' => $dispensing->where('health_unit_id', $transactionScopeId)->count(),
 
@@ -99,11 +99,12 @@ class DashboardController extends Controller
 
             'inventory_count' => (clone $scopedInventory())->count(),
             'usable_batches_count' => $scopedInventory()->stockLevel('available')->count(),
-            'total_available_units' => (clone $scopedInventory())->sum('available_stock'),
+            'usable_item_facility_count' => $isPHOAdmin
+                ? DB::query()->fromSub($scopedInventory()->stockLevel('available')->whereHas('healthUnit')
+                    ->select('inventory.medicine_id', 'inventory.health_unit_id')->distinct(), 'usable_items')->count()
+                : null,
 
-            'rhus_count' => HealthUnit::where('facility_type', 'Rural Health Unit')
-                ->orWhere('facility_type', 'RHU')
-                ->count(),
+            'rhus_count' => HealthUnit::rhuOnly()->count(),
         ];
 
         $transactionRecords = [];

@@ -27,7 +27,7 @@ class PortalDomainSplitTest extends TestCase
     public function test_public_search_and_management_login_are_on_distinct_hosts(): void
     {
         $this->get('http://rhu.test/')->assertOk()->assertSee('Search')
-            ->assertSee('http://management.rhu.test/login', false)->assertDontSee('Management portal');
+            ->assertDontSee('>Staff login</a>', false)->assertDontSee('Management portal');
         $this->get('http://management.rhu.test/')->assertRedirect('http://management.rhu.test/login');
         $this->get('http://management.rhu.test/login')->assertOk();
         foreach (['/login', '/dashboard', '/inventory', '/public-users/search-suggestions'] as $path) {

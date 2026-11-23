@@ -4,96 +4,72 @@ namespace App\Console\Commands;
 
 use App\Models\Notification;
 use App\Models\TransferRequest;
-use App\Services\TransferService;
+use Carbon\CarbonInterface;
 use Illuminate\Console\Command;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Facades\DB;
 
 class ProcessTransfers extends Command
 {
     protected $signature = 'transfers:process';
 
-    protected $description = 'Send reminders and auto-complete accepted transfers';
+    protected $description = 'Remind destination facilities to confirm accepted transfers';
 
     public function handle(): int
     {
-        $this->info('▶ Processing transfers...');
+        $now = now();
+        $firstCutoff = $now->copy()->subDays(2);
+        $count = 0;
 
-        // Day 2: first warning reminder
-        $this->sendReminders(2, 'warning', 'First reminder: confirm transfer receipt');
+        TransferRequest::query()
+            ->awaitingReceipt()
+            ->where('approved_at', '<=', $firstCutoff)
+            ->select(['id', 'approved_at', 'reminder_sent_at'])
+            ->eachById(function (TransferRequest $candidate) use ($now, $firstCutoff, &$count) {
+                if (! $this->reminderDue($candidate, $now)) {
+                    return;
+                }
 
-        // Day 5: final reminder
-        $this->sendReminders(5, 'danger', 'Final reminder: confirm transfer receipt');
+                $count += DB::transaction(function () use ($candidate, $now, $firstCutoff) {
+                    $transfer = TransferRequest::whereKey($candidate->id)
+                        ->awaitingReceipt()
+                        ->where('approved_at', '<=', $firstCutoff)
+                        ->lockForUpdate()->first();
 
-        // Day 7: auto-complete
-        $this->autoComplete(7);
+                    if (! $transfer || ! $this->reminderDue($transfer, $now)) {
+                        return 0;
+                    }
 
-        $this->info('✔ Done.');
+                    $overdue = $now->gte($transfer->receiptOverdueAt());
+                    Notification::create([
+                        'health_unit_id' => $transfer->to_health_unit_id,
+                        'transfer_id' => $transfer->id,
+                        'type' => 'transfer_reminder',
+                        'link' => route('transfers.index', $overdue ? ['overdue' => 1] : []),
+                        'title' => $overdue ? 'Transfer receipt overdue' : 'Confirm transfer receipt',
+                        'message' => 'Confirm receipt of '.$transfer->formatQuantity($transfer->quantity)
+                            .' of '.($transfer->medicine?->medicine_name ?? 'medicine')
+                            .' from '.($transfer->fromHealthUnit?->name ?? 'the supplying facility')
+                            .' once the supplies arrive. Contact the supplying facility if they are missing.',
+                        'severity' => $overdue ? 'danger' : 'warning',
+                        'is_read' => false,
+                        'created_at' => $now,
+                    ]);
+                    $transfer->update(['reminder_sent_at' => $now]);
+
+                    return 1;
+                }, 3);
+            });
+
+        $this->info("Sent {$count} transfer receipt reminder(s).");
 
         return self::SUCCESS;
     }
 
-    // ================================================================
-    // Reminders
-    // ================================================================
-    private function sendReminders(int $daysAgo, string $severity, string $title): void
+    private function reminderDue(TransferRequest $transfer, CarbonInterface $now): bool
     {
-        $cutoff = now()->subDays($daysAgo);
+        $overdueAt = $transfer->receiptOverdueAt();
 
-        $transfers = TransferRequest::with(['fromHealthUnit', 'toHealthUnit', 'medicine'])
-            ->where('status', 'accepted')
-            ->whereNull('received_at')
-            ->where('approved_at', '<=', $cutoff)
-            // Avoid duplicate reminders at the same tier:
-            // only remind if reminder_sent_at is null OR older than (daysAgo - 3)
-            ->where(function ($q) use ($daysAgo) {
-                $q->whereNull('reminder_sent_at')
-                    ->orWhere('reminder_sent_at', '<=', now()->subDays($daysAgo - 3));
-            })
-            ->get();
-
-        foreach ($transfers as $t) {
-            Notification::create([
-                'health_unit_id' => $t->to_health_unit_id,
-                'transfer_id' => $t->id,
-                'type' => 'transfer_reminder',
-                'link' => route('transfers.index'),
-                'title' => $title,
-                'message' => 'You have not yet confirmed receipt of '
-                                    .$t->formatQuantity($t->quantity)
-                                    .' of '.($t->medicine->medicine_name ?? 'medicine')
-                                    .' from '.$t->fromHealthUnit->name.'. '
-                                    .'Confirm in the notifications page or it will be auto-completed on Day 7.',
-                'severity' => $severity,
-                'is_read' => false,
-                'created_at' => now(),
-            ]);
-
-            $t->update(['reminder_sent_at' => now()]);
-        }
-
-        $this->info("  · Sent {$transfers->count()} reminder(s) for tier {$daysAgo}d.");
-    }
-
-    // ================================================================
-    // Auto-complete
-    // ================================================================
-    private function autoComplete(int $daysAgo): void
-    {
-        $cutoff = now()->subDays($daysAgo);
-
-        $transfers = TransferRequest::with(['fromHealthUnit', 'toHealthUnit', 'medicine'])
-            ->where('status', 'accepted')
-            ->whereNull('received_at')
-            ->where('approved_at', '<=', $cutoff)
-            ->get();
-
-        foreach ($transfers as $transfer) {
-            try {
-                app(TransferService::class)->complete($transfer->id, null, null, true);
-                $this->info('Completed transfer #'.$transfer->id);
-            } catch (ValidationException $e) {
-                $this->warn('Skipped transfer #'.$transfer->id.': '.$e->getMessage());
-            }
-        }
+        return ! $transfer->reminder_sent_at
+            || ($now->gte($overdueAt) && $transfer->reminder_sent_at->lt($overdueAt));
     }
 }

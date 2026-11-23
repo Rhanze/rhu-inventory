@@ -165,10 +165,13 @@
                             }
                             $unitLabel = $pluralUnit ? ' (' . $pluralUnit . ')' : ' (units)';
 
-                            $batchNo = $allocation->inventory->batch_no ?? null;
+                            $batchNo = $allocation->source_batch_labels;
 
-                            $isSupplyRequest = !$allocation->destination_health_unit_id && in_array($allocation->status ?? null, ['pending', 'approved', 'rejected', 'received'], true);
-                            $isPending       = $isSupplyRequest && ($allocation->status === 'pending');
+                            $isSupplyRequest = $allocation->destination_health_unit_id === null && in_array($allocation->status, ['pending', 'approved', 'rejected', 'received'], true);
+                            $isPending = $isSupplyRequest && $allocation->status === 'pending';
+                            $viewerUnitId = session('health_unit_id');
+                            $canManage = $viewerUnitId === null ? session('role') === 'admin' : (int) $viewerUnitId === (int) $allocation->health_unit_id;
+                            $canDecideRequest = $viewerUnitId !== null && $canManage && $isPending && $allocation->inventory_id === null;
 
                             $statusStyle = match($allocation->status ?? null) {
                                 'pending'          => ['bg'=>'#FEF3C7','text'=>'#92400E','border'=>'#FAC775','label'=>'⏳ Pending'],
@@ -293,7 +296,7 @@
                             </td>
 
                             <td class="no-print" style="padding: 14px 20px;">
-                                @if($isPending)
+                                @if($canDecideRequest)
                                     <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
                                         <form action="{{ route('allocation.approve_supply_request', $allocation->id) }}" method="POST"
                                               onsubmit="return confirmDialog(event, 'Approve this supply request? Stock will be reserved.');"
@@ -315,27 +318,48 @@
                                             </button>
                                         </form>
 
-                                        <button type="button" title="Reject"
-                                                onclick="rejectFromAllocation({{ $allocation->id }})"
-                                                style="
-                                                    display: inline-flex; align-items: center; gap: 4px;
-                                                    padding: 7px 12px; border-radius: 8px;
-                                                    background: #fee2e2; color: #991b1b;
-                                                    border: 1px solid #fca5a5; font-size:1.0625rem; font-weight: 700;
-                                                    cursor: pointer; transition: all 0.2s;
-                                                "
-                                                onmouseover="this.style.background='#fecaca'" onmouseout="this.style.background='#fee2e2'">
-                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                                                <line x1="18" y1="6" x2="6" y2="18"/>
-                                                <line x1="6" y1="6" x2="18" y2="18"/>
-                                            </svg>
-                                            Reject
-                                        </button>
+                                        <form action="{{ route('allocation.reject_supply_request', $allocation->id) }}" method="POST"
+                                              onsubmit="return rejectFromAllocation(this);" style="margin:0;">
+                                            @csrf
+                                            <input type="hidden" name="rejection_reason">
+                                            <button type="submit" title="Reject"
+                                                    style="
+                                                        display: inline-flex; align-items: center; gap: 4px;
+                                                        padding: 7px 12px; border-radius: 8px;
+                                                        background: #fee2e2; color: #991b1b;
+                                                        border: 1px solid #fca5a5; font-size:1.0625rem; font-weight: 700;
+                                                        cursor: pointer; transition: all 0.2s;
+                                                    "
+                                                    onmouseover="this.style.background='#fecaca'" onmouseout="this.style.background='#fee2e2'">
+                                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                                    <line x1="18" y1="6" x2="6" y2="18"/>
+                                                    <line x1="6" y1="6" x2="18" y2="18"/>
+                                                </svg>
+                                                Reject
+                                            </button>
+                                        </form>
                                     </div>
-                                @elseif($isSupplyRequest)
+                                @elseif($canManage && !$isPending)
                                     <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
+                                        @if(!$isSupplyRequest && $allocation->canEditStock())
+                                            <a href="{{ route('allocation.edit', $allocation->id) }}" title="Edit"
+                                               style="
+                                                   width: 34px; height: 34px;
+                                                   display: inline-flex; align-items: center; justify-content: center;
+                                                   border-radius: 8px;
+                                                   background: #E8F7F4; color: #0f5c4b; border: 1px solid #42AD8A;
+                                                   text-decoration: none; transition: all 0.2s;
+                                               "
+                                               onmouseover="this.style.background='#d2efe6'" onmouseout="this.style.background='#E8F7F4'">
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                                </svg>
+                                            </a>
+                                        @endif
+
                                         <form action="{{ route('allocation.destroy', $allocation->id) }}" method="POST"
-                                              onsubmit="return confirmDialog(event, 'Delete this supply request? This cannot be undone.');"
+                                              onsubmit="return confirmDialog(event, '{{ $isSupplyRequest ? 'Delete this supply request?' : 'Delete this allocation?' }}');"
                                               style="margin:0;">
                                             @csrf
                                             @method('DELETE')
@@ -358,45 +382,7 @@
                                         </form>
                                     </div>
                                 @else
-                                    <div style="display: flex; align-items: center; justify-content: center; gap: 6px;">
-                                        <a href="{{ route('allocation.edit', $allocation->id) }}" title="Edit"
-                                           style="
-                                               width: 34px; height: 34px;
-                                               display: inline-flex; align-items: center; justify-content: center;
-                                               border-radius: 8px;
-                                               background: #E8F7F4; color: #0f5c4b; border: 1px solid #42AD8A;
-                                               text-decoration: none; transition: all 0.2s;
-                                           "
-                                           onmouseover="this.style.background='#d2efe6'" onmouseout="this.style.background='#E8F7F4'">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                                                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                                            </svg>
-                                        </a>
-
-                                        <form action="{{ route('allocation.destroy', $allocation->id) }}" method="POST"
-                                              onsubmit="return confirmDialog(event, 'Are you sure you want to delete this allocation?');"
-                                              style="margin:0;">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" title="Delete"
-                                                    style="
-                                                        width: 34px; height: 34px;
-                                                        display: inline-flex; align-items: center; justify-content: center;
-                                                        border-radius: 8px;
-                                                        background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5;
-                                                        cursor: pointer; transition: all 0.2s;
-                                                    "
-                                                    onmouseover="this.style.background='#fecaca'" onmouseout="this.style.background='#fee2e2'">
-                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                    <polyline points="3 6 5 6 21 6"/>
-                                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                                                    <line x1="10" y1="11" x2="10" y2="17"/>
-                                                    <line x1="14" y1="11" x2="14" y2="17"/>
-                                                </svg>
-                                            </button>
-                                        </form>
-                                    </div>
+                                    <span style="color:#94a3b8;">—</span>
                                 @endif
                             </td>
                         </tr>
@@ -679,18 +665,11 @@
 </div>
 
 <script>
-function rejectFromAllocation(id) {
+function rejectFromAllocation(form) {
     const reason = prompt('Reason for rejecting this request (optional):');
-    if (reason === null) return;
-
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = '{{ url("/allocation") }}/' + id + '/reject-supply-request';
-    form.innerHTML = '@csrf<input type="hidden" name="rejection_reason" value="' +
-                     reason.replace(/"/g, '&quot;') + '">';
-    document.body.appendChild(form);
-    window.RhuNavigation?.remember(document.getElementById('main-content'));
-    form.submit();
+    if (reason === null) return false;
+    form.elements.rejection_reason.value = reason;
+    return true;
 }
 
 function openAllocExportModal() {

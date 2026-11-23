@@ -113,7 +113,8 @@ class RepairRegressionTest extends TestCase
 
     public function test_login_accepts_existing_usernames_with_digits_and_migrates_session(): void
     {
-        User::factory()->create(['username' => 'nurse1', 'password' => Hash::make('existing-password')]);
+        User::factory()->create(['username' => 'nurse1', 'password' => Hash::make('existing-password'),
+            'health_unit_id' => $this->unit()->id]);
         $this->withSession(['anonymous' => true]);
         $oldId = session()->getId();
         $this->post(route('login.submit'), ['username' => 'nurse1', 'password' => 'existing-password'])->assertRedirect(route('dashboard'));
@@ -186,17 +187,32 @@ class RepairRegressionTest extends TestCase
         $this->assertNotNull($record->fresh());
     }
 
-    public function test_prescription_download_and_failed_update_preserve_the_attachment(): void
+    public function test_prescription_upload_limits_and_failed_updates_preserve_stock_and_attachment(): void
     {
         Storage::fake('local');
         $unit = $this->unit();
         $this->signIn($unit);
         $medicine = $this->medicine();
         $batch = $this->batch($unit, $medicine, 'A', 10);
-        $this->dispense($batch, 5, ['prescription_image' => UploadedFile::fake()->create('rx.pdf', 1, 'application/pdf')])->assertSessionHas('success');
+        $this->get(route('dispensing.create'))->assertOk()->assertSee('Max 4 MB');
+        $this->dispense($batch, 5, ['prescription_image' => UploadedFile::fake()->create('oversized.pdf', 4097, 'application/pdf')])
+            ->assertSessionHasErrors('prescription_image');
+        $this->assertDatabaseCount('dispensing_records', 0);
+        $this->assertSame(10, $batch->fresh()->available_stock);
+        $this->assertSame([], Storage::disk('local')->allFiles());
+
+        $this->dispense($batch, 5, ['prescription_image' => UploadedFile::fake()->create('rx.pdf', 4096, 'application/pdf')])->assertSessionHas('success');
         $record = DispensingRecord::firstOrFail();
         $path = $record->prescription_image;
+        $this->get(route('dispensing.edit', $record->id))->assertOk()->assertSee('Max 4 MB');
         $this->get(route('dispensing.prescription', $record->id))->assertOk();
+        $this->put(route('dispensing.update', $record->id), ['inventory_id' => $batch->id, 'patient_name' => 'Fixture',
+            'quantity_dispensed' => 1, 'date_dispensed' => today()->toDateString(),
+            'prescription_image' => UploadedFile::fake()->create('oversized.pdf', 4097, 'application/pdf')])
+            ->assertSessionHasErrors('prescription_image');
+        $this->assertSame($path, $record->fresh()->prescription_image);
+        $this->assertSame(5, $batch->fresh()->available_stock);
+        $this->assertCount(1, Storage::disk('local')->allFiles());
         $this->put(route('dispensing.update', $record->id), ['inventory_id' => $batch->id, 'patient_name' => 'Fixture',
             'quantity_dispensed' => 99, 'date_dispensed' => today()->toDateString(), 'remove_prescription' => true])->assertSessionHas('error');
         Storage::disk('local')->assertExists($path);
@@ -227,7 +243,7 @@ class RepairRegressionTest extends TestCase
         $this->assertSame([10, 0], [$batch->fresh()->available_stock, $batch->fresh()->allocated_stock]);
     }
 
-    public function test_manual_and_automatic_receipt_apply_only_once_and_copy_packaging(): void
+    public function test_repeated_manual_receipt_applies_only_once_and_copies_packaging(): void
     {
         $from = $this->unit();
         $to = $this->unit('Destination');
@@ -238,11 +254,40 @@ class RepairRegressionTest extends TestCase
         $transfer = $this->transfer($from, $to, $medicine);
         app(TransferService::class)->reserve($transfer->id);
         $this->signIn($to);
-        $this->post(route('transfers.receive', $transfer->id))->assertSessionHas('success');
-        app(TransferService::class)->complete($transfer->id, null, null, true);
+        $this->post(route('transfers.receive', $transfer->id), ['received_quantity' => 7])->assertSessionHas('success');
+        $this->post(route('transfers.receive', $transfer->id), ['received_quantity' => 7])->assertSessionHas('success');
         $destination = Inventory::where('health_unit_id', $to->id)->firstOrFail();
         $this->assertSame([3, 0, 7, 'Box', 10], [$batch->fresh()->available_stock, $batch->fresh()->allocated_stock, $destination->available_stock, $destination->pack_type, $destination->pieces_per_pack]);
         $this->assertSame(2, StockLog::where('transfer_id', $transfer->id)->count());
+    }
+
+    public function test_transfer_reminders_escalate_without_crediting_unconfirmed_stock(): void
+    {
+        $this->freezeSecond();
+        $from = $this->unit();
+        $to = $this->unit('Destination');
+        $this->signIn($from);
+        $medicine = $this->medicine();
+        $batch = $this->batch($from, $medicine, 'A', 10);
+        $transfer = $this->transfer($from, $to, $medicine);
+        app(TransferService::class)->reserve($transfer->id);
+
+        $this->post(route('transfers.receive', $transfer->id))->assertForbidden();
+        $this->travel(2)->days();
+        $this->artisan('transfers:process')->assertSuccessful();
+        $this->artisan('transfers:process')->assertSuccessful();
+        $reminders = \App\Models\Notification::where('transfer_id', $transfer->id)->where('type', 'transfer_reminder');
+        $this->assertSame(['warning'], $reminders->orderBy('id')->pluck('severity')->all());
+
+        $this->travel(3)->days();
+        $this->artisan('transfers:process')->assertSuccessful();
+        $this->travel(4)->days();
+        $this->artisan('transfers:process')->assertSuccessful();
+        $this->assertSame(['warning', 'danger'], $reminders->orderBy('id')->pluck('severity')->all());
+        $this->assertSame('accepted', $transfer->fresh()->status);
+        $this->assertNull($transfer->fresh()->received_at);
+        $this->assertSame([3, 7], [$batch->fresh()->available_stock, $batch->fresh()->allocated_stock]);
+        $this->assertFalse(Inventory::where('health_unit_id', $to->id)->exists());
     }
 
     public function test_transfer_never_reserves_an_expired_batch(): void
@@ -270,7 +315,7 @@ class RepairRegressionTest extends TestCase
         $this->assertDatabaseHas('inventory', ['batch_no' => 'B', 'available_stock' => 5]);
     }
 
-    public function test_forecasts_aggregate_batches_include_stockouts_and_use_real_disease_columns(): void
+    public function test_forecasts_aggregate_batches_include_stockouts_and_ignore_manual_disease_reports(): void
     {
         $unit = $this->unit();
         $medicine = $this->medicine();
@@ -288,8 +333,8 @@ class RepairRegressionTest extends TestCase
         $this->assertSame('critical', $service->getForecast($unit->id)['items'][0]['status']);
         $disease = Disease::create(['code' => 'FIX', 'name' => 'Fixture disease']);
         DiseaseReport::create(['disease_id' => $disease->id, 'health_unit_id' => $unit->id, 'case_count' => 12, 'report_date' => today()->startOfWeek()->subDay()->toDateString(), 'period_type' => 'weekly', 'period_start' => today()->startOfWeek()->subWeek()->toDateString(), 'period_end' => today()->startOfWeek()->subDay()->toDateString(), 'is_complete' => true]);
-        $this->assertEquals(12, $service->getUnplannedForecast($unit->id)['items'][0]->total_cases);
-        $this->assertSame('Fixture disease', $service->getTrendingDiseases($unit->id)['datasets'][0]['label']);
+        $this->assertSame([], $service->getUnplannedForecast($unit->id)['items']);
+        $this->assertSame([], $service->getTrendingDiseases($unit->id)['datasets']);
     }
 
     public function test_every_controller_route_and_literal_view_exists_and_schedules_are_registered(): void
@@ -300,10 +345,17 @@ class RepairRegressionTest extends TestCase
                 $this->assertTrue(method_exists($class, $method), $route->uri().' has a missing action');
             }
         }
-        $this->assertTrue(view()->exists('public.landing'));
+        $this->assertTrue(view()->exists('auth.login'));
+        $this->assertTrue(view()->exists('public.home'));
         $this->assertTrue(view()->exists('redistribution.index'));
-        $this->assertCount(4, app(Schedule::class)->events());
-        $this->get(route('public.home'))->assertOk();
+        $events = collect(app(Schedule::class)->events());
+        foreach (['logs:prune', 'notifications:scan', 'transfers:process', 'vaccinations:maintain-schedule'] as $command) {
+            $this->assertTrue($events->contains(fn ($event) => str_contains((string) ($event->command ?? ''), $command)),
+                'Missing scheduled command: '.$command);
+        }
+        $this->assertTrue($events->contains(fn ($event) => $event->description === 'inventory-notifications'));
+        $this->get(route('public.home'))->assertOk()->assertViewIs('public.home');
+        $this->get(route('public.home.citizen'))->assertOk()->assertViewIs('public.home');
     }
 
     public function test_provincial_reversal_restores_both_sides_and_rejects_used_destination_stock(): void

@@ -24,30 +24,17 @@
             @csrf
             @method('PUT')
 
-            {{-- Inventory Item --}}
+            {{-- Medicine --}}
             <div>
-                <label style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">Inventory Item</label>
-                <select name="inventory_id"
+                <label for="inventory_id" style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">Medicine</label>
+                <select name="inventory_id" id="inventory_id" required aria-describedby="allocation-rotation-help"
                         style="width:100%; padding:12px 16px; font-size:14px; border:2px solid #bec6cf; border-radius:14px; outline:none; background:white; color:#0f172a; box-sizing:border-box; appearance:auto;"
                         onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                         onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
-                    <option value="">Select inventory</option>
-                    @foreach($inventories as $inventory)
-                        @php
-                            // Preselect logic:
-                            // 1. If validation re-populated old(inventory_id) → match by inventory row id
-                            // 2. Else → match by medicine_id (first batch of the allocated medicine)
-                            $isOldMatch       = (string) old('inventory_id') === (string) $inventory->id;
-                            $isFallbackMatch  = old('inventory_id') === null
-                                                && $inventory->medicine_id == $allocation->medicine_id
-                                                && $inventory->health_unit_id == $allocation->health_unit_id;
-                        @endphp
-                        <option value="{{ $inventory->id }}" {{ ($isOldMatch || $isFallbackMatch) ? 'selected' : '' }}>
-                            {{ $inventory->medicine->medicine_name ?? 'N/A' }}{{ $inventory->medicine->dosage ? ' - ' . $inventory->medicine->dosage : '' }}
-                            (Available: {{ $inventory->available_stock }})
-                        </option>
-                    @endforeach
+                    <option value="">Select medicine</option>
+                    @include('allocation._medicine_options')
                 </select>
+                <p id="allocation-rotation-help" style="margin:6px 0;font-size:13px;color:#475569;">Saving restores the original quantities and allocates from the earliest-expiring eligible batches.</p>
                 @error('inventory_id')
                     <p style="margin-top:4px; font-size:13px; color:#dc2626;">{{ $message }}</p>
                 @enderror

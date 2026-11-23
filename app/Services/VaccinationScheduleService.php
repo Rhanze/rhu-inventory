@@ -2,13 +2,18 @@
 
 namespace App\Services;
 
+use App\Models\ActivityLog;
 use App\Models\HealthUnit;
 use App\Models\ImmunizationRecord;
 use App\Models\ImmunizationSchedule;
 use App\Models\PublicUser;
 use App\Models\RhuImmunizationSchedule;
 use App\Models\VaccinationSchedule;
+use App\Support\ClinicalAudit;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class VaccinationScheduleService
 {
@@ -41,6 +46,23 @@ class VaccinationScheduleService
 
     public function generateFor(PublicUser $child): int
     {
+        return DB::transaction(function () use ($child) {
+            $current = PublicUser::whereKey($child->getKey())->lockForUpdate()->first();
+
+            return $current ? $this->generateForLockedPatient($current) : 0;
+        }, 3);
+    }
+
+    /** Called inside the patient update transaction after locking the patient. */
+    public function regenerateForCorrectedBirthDate(PublicUser $child): void
+    {
+        $child->vaccinationSchedules()->current()->where('health_unit_id', $child->health_unit_id)
+            ->whereIn('status', ['pending', 'missed'])->update(['superseded_at' => now()]);
+        $this->generateForLockedPatient($child);
+    }
+
+    private function generateForLockedPatient(PublicUser $child): int
+    {
         if (! $child->birth_date || ! $child->is_under_five) {
             return 0;
         }
@@ -54,15 +76,12 @@ class VaccinationScheduleService
         foreach (self::EPI_SCHEDULE as [$vaccine, $dose, $offsetDays]) {
             $definition = $definitions->get($vaccine.':'.$dose);
             $record = $definition ? $records->get($definition->antigen.':'.$dose) : null;
-            $existing = VaccinationSchedule::where('public_user_id', $child->id)
-                ->where('vaccine_name', $vaccine)
-                ->where('dose_number', $dose);
-
-            if ($existing->exists()) {
-                if ($record) {
-                    $existing->update(['status' => 'given', 'given_date' => $record->date_given->toDateString(),
-                        'immunization_record_id' => $record->id]);
-                }
+            $dueDate = $birth->copy()->addDays($offsetDays)->toDateString();
+            if ($record) {
+                $created += (int) $this->fulfillAdministration($child, $definition, $record, $dueDate);
+                continue;
+            }
+            if ($this->appointmentsForDose($child, $vaccine, $dose, $definition?->antigen)->exists()) {
                 continue;
             }
 
@@ -71,10 +90,8 @@ class VaccinationScheduleService
                 'public_user_id' => $child->id,
                 'vaccine_name' => $vaccine,
                 'dose_number' => $dose,
-                'due_date' => $birth->copy()->addDays($offsetDays)->toDateString(),
-                'status' => $record ? 'given' : 'pending',
-                'given_date' => $record?->date_given?->toDateString(),
-                'immunization_record_id' => $record?->id,
+                'due_date' => $dueDate,
+                'status' => 'pending',
             ]);
             $created++;
         }
@@ -86,43 +103,88 @@ class VaccinationScheduleService
     //  MARKING AS GIVEN / MISSED
     // ═══════════════════════════════════════════════════════════
 
-    public function markAsGiven(int $scheduleId, int $immunizationRecordId, ?string $givenDate = null): bool
+    /** Link one current appointment while the patient lock serializes schedule writes. */
+    public function fulfillAdministration(PublicUser $child, ImmunizationSchedule $dose, ImmunizationRecord $record, string $dueDate): bool
     {
-        $schedule = VaccinationSchedule::find($scheduleId);
-        if (! $schedule) {
-            return false;
+        $appointments = $this->appointmentsForDose($child, $dose->antigen_label, $dose->dose_number, $dose->antigen);
+        $pending = (clone $appointments)->pending()->whereNull('immunization_record_id')->whereNull('given_date');
+        $given = (clone $appointments)->given()->where(function ($query) use ($record) {
+            $query->where('immunization_record_id', $record->id)
+                ->orWhere(fn ($legacy) => $legacy->whereNull('immunization_record_id')
+                    ->whereDate('given_date', $record->date_given->toDateString()));
+        })->orderByDesc('due_date')->orderByDesc('id')->first();
+        $appointment = $given ?? (clone $pending)->orderByDesc('due_date')->orderByDesc('id')->first();
+        $details = [
+            'status' => 'given',
+            'given_date' => $record->date_given->toDateString(),
+            'immunization_record_id' => $record->id,
+        ];
+
+        if ($appointment) {
+            $appointment->update($details);
+        } else {
+            $child->vaccinationSchedules()->create($details + [
+                'health_unit_id' => $child->health_unit_id,
+                'vaccine_name' => $dose->antigen_label,
+                'dose_number' => $dose->dose_number,
+                'due_date' => $dueDate,
+            ]);
         }
 
-        $schedule->update([
-            'status' => 'given',
-            'given_date' => $givenDate ?? now()->toDateString(),
-            'immunization_record_id' => $immunizationRecordId,
-        ]);
+        // Keep old outcomes for the record and remove obsolete reminders from follow-up lists.
+        $appointments->whereIn('status', ['pending', 'missed'])->update(['superseded_at' => now()]);
 
-        return true;
+        return $appointment === null;
     }
 
-    public function markOverdueAsMissed(int $graceDays = 30): int
+    private function appointmentsForDose(PublicUser $child, string $label, int $dose, ?string $antigen): HasMany
     {
-        return VaccinationSchedule::whereHas('patient', fn ($q) => $q->forViewer())->where('status', 'pending')
-            ->whereDate('due_date', '<', now()->subDays($graceDays)->toDateString())
-            ->update(['status' => 'missed']);
+        $aliases = array_map(fn ($name) => mb_strtolower(trim($name)), array_filter([$label, $antigen]));
+
+        return $child->vaccinationSchedules()->current()->where('health_unit_id', $child->health_unit_id)
+            ->whereIn(DB::raw('LOWER(TRIM(vaccine_name))'), $aliases)->where('dose_number', $dose);
     }
 
     // ═══════════════════════════════════════════════════════════
     //  SUMMARY HELPERS
     // ═══════════════════════════════════════════════════════════
 
-    public function summaryFor(PublicUser $child): array
+    public function summarizeAppointments(Collection $appointments): array
     {
-        $q = VaccinationSchedule::where('public_user_id', $child->id);
+        $doseKey = $this->doseKey();
+        $key = fn (VaccinationSchedule $row) => $row->public_user_id.':'.$doseKey($row->vaccine_name, $row->dose_number);
+        $current = $appointments->whereNull('superseded_at');
+        $given = $current->where('status', 'given')->keyBy($key);
 
         return [
-            'total' => (clone $q)->count(),
-            'given' => (clone $q)->where('status', 'given')->count(),
-            'pending' => (clone $q)->where('status', 'pending')->count(),
-            'missed' => (clone $q)->where('status', 'missed')->count(),
+            'total' => $current->unique($key)->count(),
+            'given' => $given->count(),
+            'pending' => $current->where('status', 'pending')->keyBy($key)->diffKeys($given)->count(),
+            'missed' => $appointments->where('status', 'missed')->count(),
         ];
+    }
+
+    public function countAdministrations(int $healthUnitId, Carbon $from, Carbon $through): int
+    {
+        $records = ImmunizationRecord::whereHas('patient', fn ($q) => $q->forViewer())
+            ->where('health_unit_id', $healthUnitId);
+        $count = (clone $records)->whereBetween('date_given', [$from->toDateString(), $through->toDateString()])->count();
+        $legacy = VaccinationSchedule::current()->given()->whereHas('patient', fn ($q) => $q->forViewer())
+            ->where('health_unit_id', $healthUnitId)->whereNull('immunization_record_id')
+            ->whereDate('given_date', '<=', $through)->orderBy('given_date')->orderBy('id')->get();
+        if ($legacy->isEmpty()) {
+            return $count;
+        }
+
+        $doseKey = $this->doseKey();
+        $known = $records->whereIn('public_user_id', $legacy->pluck('public_user_id')->unique()->values())
+            ->get(['public_user_id', 'antigen', 'dose_number'])
+            ->keyBy(fn ($record) => $record->public_user_id.':'.$doseKey($record->antigen, $record->dose_number));
+
+        // An explicitly dated legacy record is evidence only when there is no administration record for that dose.
+        return $count + $legacy->unique(fn ($row) => $row->public_user_id.':'.$doseKey($row->vaccine_name, $row->dose_number))
+            ->filter(fn ($row) => $row->given_date->gte($from)
+                && ! $known->has($row->public_user_id.':'.$doseKey($row->vaccine_name, $row->dose_number)))->count();
     }
 
     public function monthlySummary(int $healthUnitId, string $yearMonth): array
@@ -130,7 +192,7 @@ class VaccinationScheduleService
         $start = Carbon::parse($yearMonth.'-01')->startOfMonth();
         $end = $start->copy()->endOfMonth();
 
-        $rows = VaccinationSchedule::whereHas('patient', fn ($q) => $q->forViewer())->with('patient')
+        $rows = VaccinationSchedule::current()->whereHas('patient', fn ($q) => $q->forViewer())->with('patient')
             ->where('health_unit_id', $healthUnitId)
             ->whereDate('due_date', '>=', $start->toDateString())
             ->whereDate('due_date', '<=', $end->toDateString())
@@ -208,6 +270,12 @@ class VaccinationScheduleService
         return $dueDate->copy();
     }
 
+    public function appointmentSessionDate(VaccinationSchedule $appointment, ?string $barangay): Carbon
+    {
+        return $this->sessionDateFor($appointment->due_date, $appointment->health_unit_id,
+            in_array($appointment->status, ['pending', 'missed'], true) ? $barangay : null);
+    }
+
     /**
      * Find the session date within a given month based on the RHU pattern.
      */
@@ -268,41 +336,109 @@ class VaccinationScheduleService
 
     public function rescheduleMissedDoses(int $graceDays = 30): int
     {
-        $missed = VaccinationSchedule::whereHas('patient', fn ($q) => $q->forViewer())->with(['healthUnit', 'patient'])
-            ->where('status', 'missed')
-            ->whereDate('due_date', '<', now()->subDays($graceDays)->toDateString())
-            ->get();
+        return $this->processAppointments($graceDays, false, true)['rescheduled'];
+    }
 
-        $count = 0;
+    public function maintainSchedule(int $graceDays = 30): array
+    {
+        return $this->processAppointments($graceDays, true, false);
+    }
 
-        foreach ($missed as $dose) {
-            $alreadyRescheduled = VaccinationSchedule::where('public_user_id', $dose->public_user_id)
-                ->where('vaccine_name', $dose->vaccine_name)
-                ->where('dose_number', $dose->dose_number)
-                ->whereIn('status', ['pending', 'given', 'skipped'])
-                ->exists();
+    private function processAppointments(int $graceDays, bool $markMissed, bool $forViewer): array
+    {
+        $cutoff = today()->subDays($graceDays)->toDateString();
+        $sessionBase = today();
+        $doseKey = $this->doseKey();
+        $totals = ['missed' => 0, 'rescheduled' => 0];
 
-            if ($alreadyRescheduled) {
-                continue;
-            }
+        PublicUser::query()->when($forViewer, fn ($query) => $query->forViewer())
+            ->whereHas('vaccinationSchedules', fn ($query) => $query->current()
+                ->whereColumn('vaccination_schedules.health_unit_id', 'public_users.health_unit_id')
+                ->where('due_date', '<', $cutoff)
+                ->whereIn('status', $markMissed ? ['pending', 'missed'] : ['missed']))
+            ->select('id')->eachById(function (PublicUser $candidate) use ($forViewer, $markMissed, $cutoff, $sessionBase, $doseKey, &$totals) {
+                [$missed, $rescheduled] = DB::transaction(function () use ($candidate, $forViewer, $markMissed, $cutoff, $sessionBase, $doseKey) {
+                    // All schedule writers lock the patient before reading or changing appointments.
+                    $patient = PublicUser::query()->when($forViewer, fn ($query) => $query->forViewer())
+                        ->whereKey($candidate->id)->lockForUpdate()->first();
+                    if (! $patient) {
+                        return [0, 0];
+                    }
+                    $appointments = $patient->vaccinationSchedules()->current()->where('health_unit_id', $patient->health_unit_id)
+                        ->orderByDesc('due_date')->orderByDesc('id')->lockForUpdate()->get();
+                    $completed = $patient->immunizationRecords()->get(['antigen', 'dose_number'])
+                        ->keyBy(fn ($record) => $doseKey($record->antigen, $record->dose_number));
+                    $missed = 0;
+                    if ($markMissed) {
+                        foreach ($appointments as $appointment) {
+                            if ($appointment->status === 'pending'
+                                && ! $completed->has($doseKey($appointment->vaccine_name, $appointment->dose_number))
+                                && $appointment->due_date->toDateString() < $cutoff
+                                && $this->appointmentSessionDate($appointment, $patient->barangay)->toDateString() < $cutoff) {
+                                $appointment->update(['status' => 'missed']);
+                                $this->auditMaintenance('Mark missed', $appointment);
+                                $missed++;
+                            }
+                        }
+                    }
 
-            $originalDue = Carbon::parse($dose->due_date);
-            $newDate = $this->sessionDateFor(today(), $dose->health_unit_id, $dose->patient?->barangay);
+                    $replaced = $appointments->pluck('rescheduled_from_id')->filter()->flip();
+                    $rescheduled = 0;
+                    foreach ($appointments->groupBy(fn ($row) => $doseKey($row->vaccine_name, $row->dose_number)) as $key => $rows) {
+                        $latest = $rows->first();
+                        if ($completed->has($key) || $replaced->has($latest->id) || $latest->status !== 'missed'
+                            || $latest->due_date->toDateString() >= $cutoff
+                            || $this->appointmentSessionDate($latest, $patient->barangay)->gte($sessionBase)
+                            || $rows->contains(fn ($row) => in_array($row->status, ['pending', 'given', 'skipped'], true))) {
+                            continue;
+                        }
+                        $replacement = $patient->vaccinationSchedules()->create([
+                            'health_unit_id' => $patient->health_unit_id,
+                            'vaccine_name' => $latest->vaccine_name,
+                            'dose_number' => $latest->dose_number,
+                            'due_date' => $this->sessionDateFor($sessionBase, $patient->health_unit_id, $patient->barangay)->toDateString(),
+                            'status' => 'pending',
+                            'rescheduled_from_id' => $latest->id,
+                            'notes' => 'Rescheduled from '.$latest->due_date->toDateString(),
+                        ]);
+                        $this->auditMaintenance('Reschedule', $replacement);
+                        $rescheduled++;
+                    }
 
-            VaccinationSchedule::create([
-                'health_unit_id' => $dose->health_unit_id,
-                'public_user_id' => $dose->public_user_id,
-                'vaccine_name' => $dose->vaccine_name,
-                'dose_number' => $dose->dose_number,
-                'due_date' => $newDate->toDateString(),
-                'status' => 'pending',
-                'notes' => 'Rescheduled from '.$originalDue->toDateString(),
-            ]);
+                    return [$missed, $rescheduled];
+                }, 3);
+                $totals['missed'] += $missed;
+                $totals['rescheduled'] += $rescheduled;
+            });
 
-            $count++;
+        return $totals;
+    }
+
+    private function doseKey(): \Closure
+    {
+        $aliases = [];
+        foreach (ImmunizationSchedule::get(['antigen', 'antigen_label', 'dose_number']) as $definition) {
+            $label = mb_strtolower(trim($definition->antigen_label)).':'.$definition->dose_number;
+            $aliases[$label] = mb_strtolower(trim($definition->antigen)).':'.$definition->dose_number;
         }
 
-        return $count;
+        return static function (string $name, int $dose) use ($aliases): string {
+            $key = mb_strtolower(trim($name)).':'.$dose;
+
+            return $aliases[$key] ?? $key;
+        };
+    }
+
+    private function auditMaintenance(string $action, VaccinationSchedule $appointment): void
+    {
+        ActivityLog::create([
+            'health_unit_id' => $appointment->health_unit_id,
+            'user_id' => null,
+            'module' => ClinicalAudit::MODULE,
+            'action' => $action,
+            'description' => 'vaccination_schedule #'.$appointment->id.' (schedule maintenance)',
+            'created_at' => now(),
+        ]);
     }
 
     // ═══════════════════════════════════════════════════════════

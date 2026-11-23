@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ActivityLog;
 use App\Support\HistoricalDateRange;
+use App\Support\SpreadsheetCsv;
 use Illuminate\Http\Request;
 
 class ActivityLogController extends Controller
@@ -120,7 +121,7 @@ class ActivityLogController extends Controller
         return response()->streamDownload(function () use ($logs) {
             $handle = fopen('php://output', 'w');
 
-            fputcsv($handle, [
+            SpreadsheetCsv::writeRow($handle, [
                 '#',
                 'User',
                 'Module',
@@ -131,7 +132,7 @@ class ActivityLogController extends Controller
             ]);
 
             foreach ($logs as $index => $log) {
-                fputcsv($handle, [
+                SpreadsheetCsv::writeRow($handle, [
                     $index + 1,
                     $log->user->name ?? 'Unknown User',
                     $log->module,

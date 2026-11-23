@@ -3,6 +3,7 @@
 namespace App\Http\Middleware;
 
 use App\Models\User;
+use App\Support\AdminMfa;
 use Closure;
 use Illuminate\Http\Request;
 
@@ -15,8 +16,11 @@ class CheckSessionRole
         }
 
         $user = User::find(session('user_id'));
-        if (! $user || ! $user->is_active || ! in_array($user->role, ['admin', 'staff', 'midwife'])
-            || ($user->role === 'midwife' && ! $user->health_unit_id)) {
+        // Sessions created before auth versions were introduced belong to version zero.
+        if (! $user || ! $user->is_active || ! in_array($user->role, ['admin', 'staff', 'midwife'], true)
+            || ($user->role !== 'admin' && ! $user->health_unit_id)
+            || (int) $user->auth_version !== (int) $request->session()->get('auth_version', 0)
+            || (AdminMfa::required($user) && $request->session()->get('mfa_verified') !== true)) {
             $request->session()->invalidate();
             $request->session()->regenerateToken();
 

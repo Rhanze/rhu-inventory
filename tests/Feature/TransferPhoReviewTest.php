@@ -60,10 +60,14 @@ class TransferPhoReviewTest extends TestCase
         $this->post($accept)->assertForbidden();
         $this->post(route('transfers.reject', $transfer->id))->assertForbidden();
 
-        $unassignedStaff = User::factory()->create(['role' => 'staff', 'health_unit_id' => null]);
-        foreach ([$supplier, $requester, $unassignedStaff] as $unauthorized) {
+        foreach ([$supplier, $requester] as $unauthorized) {
             $this->withSession(['user_id' => $unauthorized->id])->post($approve)->assertForbidden();
             $this->post($phoReject)->assertForbidden();
+        }
+        $unassignedStaff = User::factory()->create(['role' => 'staff', 'health_unit_id' => null]);
+        foreach ([$approve, $phoReject] as $reviewAction) {
+            $this->withSession(['user_id' => $unassignedStaff->id])->post($reviewAction)
+                ->assertRedirect(route('login'))->assertSessionMissing('user_id');
         }
 
         $this->withSession(['user_id' => $pho->id]);
@@ -98,7 +102,7 @@ class TransferPhoReviewTest extends TestCase
         $this->assertSame(13, $batch->fresh()->available_stock);
         $this->assertSame(7, $batch->fresh()->allocated_stock);
 
-        $this->withSession(['user_id' => $requester->id])->post(route('transfers.receive', $transfer->id))
+        $this->withSession(['user_id' => $requester->id])->post(route('transfers.receive', $transfer->id), ['received_quantity' => 7])
             ->assertSessionHas('success');
         $this->assertSame('received', $transfer->fresh()->status);
         $this->assertSame(13, $batch->fresh()->available_stock);
@@ -153,5 +157,53 @@ class TransferPhoReviewTest extends TestCase
         $this->withSession(['user_id' => $supplier->id])->get(route('transfers.index'))
             ->assertOk()->assertDontSee('id="transfer-'.$transfer->id.'"', false);
         $this->assertDatabaseMissing('notifications', ['transfer_id' => $transfer->id, 'health_unit_id' => $supplier->health_unit_id]);
+    }
+
+    public function test_overdue_receipts_can_be_found_and_confirmed_by_the_receiving_facility(): void
+    {
+        $this->freezeSecond();
+        [$transfer, $supplier, $requester, $pho, $batch] = $this->requestTransfer();
+        $index = route('transfers.index');
+        $overdue = route('transfers.index', ['overdue' => 1]);
+        $receive = route('transfers.receive', $transfer->id);
+        $row = 'id="transfer-'.$transfer->id.'"';
+
+        $this->withSession(['user_id' => $pho->id])->post(route('transfers.pho_approve', $transfer->id))->assertSessionHas('success');
+        $this->withSession(['user_id' => $supplier->id])->post(route('transfers.accept', $transfer->id))->assertSessionHas('success');
+        $this->withSession(['user_id' => $requester->id])->get($overdue)->assertOk()->assertDontSee($row, false);
+
+        $this->travel(8)->days();
+        $this->artisan('transfers:process')->assertSuccessful();
+        $this->get($index)->assertOk()->assertSee($overdue)->assertSee('Receipt overdue');
+        $this->get($overdue)->assertOk()->assertSee($row, false)->assertSee($receive);
+        $this->assertDatabaseHas('notifications', ['transfer_id' => $transfer->id, 'type' => 'transfer_reminder',
+            'health_unit_id' => $requester->health_unit_id, 'link' => $overdue, 'is_read' => false]);
+        $this->assertSame('accepted', $transfer->fresh()->status);
+        $this->assertNull($transfer->fresh()->received_by);
+        $this->assertSame([13, 7], [$batch->fresh()->available_stock, $batch->fresh()->allocated_stock]);
+        $this->assertDatabaseMissing('inventory', ['health_unit_id' => $requester->health_unit_id, 'medicine_id' => $transfer->medicine_id]);
+
+        foreach ([$supplier, $pho] as $viewer) {
+            $this->withSession(['user_id' => $viewer->id])->get($overdue)->assertOk()->assertSee($row, false)->assertDontSee($receive);
+            $this->post($receive, ['received_quantity' => 7])->assertForbidden();
+        }
+
+        $notifications = route('notifications.index');
+        $this->withSession(['user_id' => $requester->id])->from($notifications)->post($receive)->assertSessionHasErrors('received_quantity');
+        $this->get($notifications)->assertOk()->assertSee('action="'.$receive.'"', false)
+            ->assertSee('name="received_quantity"', false)->assertSee('name="evidence_reference"', false);
+        $this->from($notifications)->post($receive, ['receipt_for' => $transfer->id, 'received_quantity' => 6])
+            ->assertSessionHasErrors('evidence_reference');
+        $this->get($notifications)->assertOk()->assertSee('Enter a receiving document or evidence reference');
+        $this->post($receive, ['receipt_for' => $transfer->id, 'received_quantity' => 7])->assertSessionHas('success');
+        $this->post($receive, ['received_quantity' => 7])->assertSessionHas('success');
+        $this->assertSame('received', $transfer->fresh()->status);
+        $this->assertSame($requester->id, $transfer->fresh()->received_by);
+        $this->assertSame([13, 0], [$batch->fresh()->available_stock, $batch->fresh()->allocated_stock]);
+        $this->assertDatabaseHas('inventory', ['health_unit_id' => $requester->health_unit_id,
+            'medicine_id' => $transfer->medicine_id, 'batch_no' => $batch->batch_no, 'available_stock' => 7]);
+        $this->assertDatabaseCount('stock_movements', 3);
+        $this->assertDatabaseHas('notifications', ['transfer_id' => $transfer->id, 'type' => 'transfer_reminder', 'is_read' => true]);
+        $this->get($overdue)->assertOk()->assertDontSee($row, false);
     }
 }

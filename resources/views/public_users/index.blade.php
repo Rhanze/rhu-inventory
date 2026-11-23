@@ -26,14 +26,19 @@
         background: rgba(255,255,255,0.9); backdrop-filter: blur(8px);
         border-radius:16px; padding:22px 26px; border:1px solid rgba(255,255,255,0.4);
         box-shadow:0 4px 12px rgba(0,0,0,0.04);">
-        <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;">
+        <form id="patient-directory-filter" action="{{ route('public_users.filter') }}" method="post" style="display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;">
+            @csrf
+            @if(request()->filled('assigned_midwife_id'))
+                <input type="hidden" name="assigned_midwife_id" value="{{ request('assigned_midwife_id') }}">
+            @endif
 
             <div style="flex:2 1 240px; min-width:180px; position:relative;">
-                <label style="display:block; margin-bottom:6px; font-size:1.0625rem; font-weight:600; color:#0f172a;">Search</label>
-                <input type="text" id="pf-search" value="{{ request('search') }}"
+                <label for="pf-search" style="display:block; margin-bottom:6px; font-size:1.0625rem; font-weight:600; color:#0f172a;">Search</label>
+                <input type="text" id="pf-search" name="search" value="{{ $search }}" maxlength="120"
+                       role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="pf-suggestions"
                        placeholder="Name or PhilHealth ID" autocomplete="off"
-                       style="min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; outline:none; width:100%; box-sizing:border-box;">
-                <div id="pf-suggestions"
+                       style="min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; width:100%; box-sizing:border-box;">
+                <div id="pf-suggestions" role="listbox" aria-label="Patient suggestions"
                      style="display:none; position:absolute; top:calc(100% + 4px); left:0; right:0;
                             background:white; border:1px solid #e2e8f0; border-radius:10px;
                             box-shadow:0 8px 20px rgba(0,0,0,0.12); max-height:280px; overflow-y:auto;
@@ -42,8 +47,8 @@
             </div>
 
             <div style="flex:1 1 180px; min-width:150px;">
-                <label style="display:block; margin-bottom:6px; font-size:1.0625rem; font-weight:600; color:#0f172a;">Barangay</label>
-                <select id="pf-barangay" @disabled(session('role') === 'midwife' && $barangays->isEmpty()) style="min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; outline:none; width:100%; box-sizing:border-box; background:white;">
+                <label for="pf-barangay" style="display:block; margin-bottom:6px; font-size:1.0625rem; font-weight:600; color:#0f172a;">Barangay</label>
+                <select id="pf-barangay" name="barangay" @disabled(session('role') === 'midwife' && $barangays->isEmpty()) style="min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; width:100%; box-sizing:border-box; background:white;">
                     <option value="">{{ session('role') === 'midwife' ? ($barangays->isEmpty() ? 'No assigned barangays' : 'All my patients') : 'All Barangays' }}</option>
                     @foreach($barangays as $b)
                         <option value="{{ $b }}" {{ request('barangay') === $b ? 'selected' : '' }}>{{ $b }}</option>
@@ -52,8 +57,8 @@
             </div>
 
             <div style="flex:1 1 200px; min-width:170px;">
-                <label style="display:block; margin-bottom:6px; font-size:1.0625rem; font-weight:600; color:#0f172a;">Age Group</label>
-                <select id="pf-age-group" style="min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; outline:none; width:100%; box-sizing:border-box; background:white;">
+                <label for="pf-age-group" style="display:block; margin-bottom:6px; font-size:1.0625rem; font-weight:600; color:#0f172a;">Age Group</label>
+                <select id="pf-age-group" name="age_group" style="min-height:2.75rem;height:auto; padding:0 14px; font-size:1.0625rem; border:2px solid #bec6cf; border-radius:10px; width:100%; box-sizing:border-box; background:white;">
                     <option value="">All Ages</option>
                     <option value="infant"     {{ request('age_group') === 'infant'     ? 'selected' : '' }}>Infants (0–11 mo)</option>
                     <option value="child"      {{ request('age_group') === 'child'      ? 'selected' : '' }}>Children (1–4 y)</option>
@@ -63,7 +68,8 @@
                     <option value="senior"     {{ request('age_group') === 'senior'     ? 'selected' : '' }}>Seniors (60+)</option>
                 </select>
             </div>
-        </div>
+            <button type="submit" style="min-height:2.75rem;padding:.5rem 1rem;border-radius:10px;background:#0f5c4b;color:#fff;">Search</button>
+        </form>
     </div>
 
     <div style="
@@ -159,127 +165,92 @@
 </div>
 
 <script>
-(function () {
-    var SUGGEST_URL = "{{ route('public_users.search.suggestions') }}";
+(() => {
+    const form = document.getElementById('patient-directory-filter');
+    const input = document.getElementById('pf-search');
+    const list = document.getElementById('pf-suggestions');
+    const url = {{ Illuminate\Support\Js::from(route('public_users.search.suggestions')) }};
+    let timer;
+    let pending;
+    let items = [];
+    let active = -1;
 
-    function buildUrl() {
-        var params = new URLSearchParams();
-        var s = document.getElementById('pf-search').value.trim();
-        var b = document.getElementById('pf-barangay').value;
-        var a = document.getElementById('pf-age-group').value;
-
-        if (s) params.set('search', s);
-        if (b) params.set('barangay', b);
-        if (a) params.set('age_group', a);
-
-        params.set('_', Date.now());
-        return window.location.pathname + '?' + params.toString();
+    function closeSuggestions() {
+        clearTimeout(timer);
+        pending?.abort();
+        list.replaceChildren();
+        list.style.display = 'none';
+        input.setAttribute('aria-expanded', 'false');
+        input.removeAttribute('aria-activedescendant');
+        items = [];
+        active = -1;
     }
 
-    function applyFilter() {
-        window.location.href = buildUrl();
+    function select(index) {
+        if (!items[index]) return;
+        input.value = items[index].name;
+        closeSuggestions();
+        form.requestSubmit();
     }
 
-    var suggestBox    = document.getElementById('pf-suggestions');
-    var searchInput   = document.getElementById('pf-search');
-    var currentRequest = null;
-    var suggestTimer   = null;
-    var activeIndex    = -1;
-    var currentItems   = [];
+    input.addEventListener('input', () => {
+        closeSuggestions();
+        const query = input.value.trim();
+        if (query.length < 2) return;
+        timer = setTimeout(async () => {
+            const request = new AbortController();
+            pending = request;
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {'Accept': 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': form.elements._token.value},
+                    body: JSON.stringify({q: query}),
+                    signal: request.signal
+                });
+                if (!response.ok || request.signal.aborted) return;
+                const results = await response.json();
+                if (!Array.isArray(results) || !results.length || request.signal.aborted) return;
+                items = results;
+                items.forEach((item, index) => {
+                    const option = document.createElement('div');
+                    option.id = 'pf-suggestion-' + index;
+                    option.setAttribute('role', 'option');
+                    option.setAttribute('aria-selected', 'false');
+                    option.style.cssText = 'padding:10px 14px;cursor:pointer;border-bottom:1px solid #e2e8f0;';
+                    option.textContent = item.text;
+                    option.addEventListener('click', () => select(index));
+                    list.append(option);
+                });
+                list.style.display = 'block';
+                input.setAttribute('aria-expanded', 'true');
+            } catch (error) {
+                if (error.name !== 'AbortError' && pending === request) closeSuggestions();
+            }
+        }, 220);
+    });
 
-    function hideSuggestions() {
-        if (suggestBox) {
-            suggestBox.style.display = 'none';
-            suggestBox.innerHTML = '';
+    input.addEventListener('keydown', event => {
+        if (event.key === 'Escape') {
+            closeSuggestions();
+        } else if (items.length && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+            event.preventDefault();
+            const direction = event.key === 'ArrowDown' ? 1 : -1;
+            active = active === -1 && direction === -1 ? items.length - 1 : (active + direction + items.length) % items.length;
+            Array.from(list.children).forEach((option, index) => {
+                option.setAttribute('aria-selected', String(index === active));
+                option.style.background = index === active ? '#e8f7f4' : '';
+            });
+            const option = list.children[active];
+            input.setAttribute('aria-activedescendant', option.id);
+            option.scrollIntoView({block: 'nearest'});
+        } else if (event.key === 'Enter' && active >= 0) {
+            event.preventDefault();
+            select(active);
         }
-        activeIndex = -1;
-        currentItems = [];
-    }
+    });
 
-    function renderSuggestions(items) {
-        currentItems = items;
-        activeIndex = -1;
-        if (!items.length) { hideSuggestions(); return; }
-        suggestBox.innerHTML = '';
-        items.forEach(function (item, i) {
-            var row = document.createElement('div');
-            row.style.cssText = 'padding:10px 14px; cursor:pointer; font-size:1.0625rem; color:#0f172a; border-bottom:1px solid #f1f5f9;';
-            row.textContent = item.text;
-            row.addEventListener('mouseenter', function () { activeIndex = i; highlightRows(); });
-            row.addEventListener('mousedown', function (e) { e.preventDefault(); pickSuggestion(i); });
-            suggestBox.appendChild(row);
-        });
-        suggestBox.style.display = 'block';
-    }
-
-    function highlightRows() {
-        Array.prototype.forEach.call(suggestBox.children, function (row, i) {
-            row.style.background = (i === activeIndex) ? '#E8F7F4' : '';
-            row.style.fontWeight  = (i === activeIndex) ? '600' : '';
-        });
-    }
-
-    function pickSuggestion(index) {
-        var item = currentItems[index];
-        if (!item) return;
-        searchInput.value = item.name;
-        hideSuggestions();
-        applyFilter();
-    }
-
-    function fetchSuggestions(query) {
-        if (currentRequest) currentRequest.abort();
-        currentRequest = new AbortController();
-        fetch(SUGGEST_URL + '?q=' + encodeURIComponent(query), {
-            signal: currentRequest.signal,
-            headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        })
-        .then(function (r) { return r.ok ? r.json() : Promise.reject('HTTP ' + r.status); })
-        .then(function (data) {
-            if (Array.isArray(data)) renderSuggestions(data);
-            else hideSuggestions();
-        })
-        .catch(function (err) { if (err.name !== 'AbortError') console.error(err); });
-    }
-
-    document.addEventListener('DOMContentLoaded', function () {
-        var barangaySel = document.getElementById('pf-barangay');
-        var ageGroupSel = document.getElementById('pf-age-group');
-
-        if (barangaySel) barangaySel.addEventListener('change', applyFilter);
-        if (ageGroupSel) ageGroupSel.addEventListener('change', applyFilter);
-        if (!searchInput) return;
-
-        var applyTimer = null;
-
-        searchInput.addEventListener('input', function () {
-            var q = this.value.trim();
-            clearTimeout(suggestTimer);
-            if (q.length >= 2) {
-                suggestTimer = setTimeout(function () { fetchSuggestions(q); }, 250);
-            } else {
-                hideSuggestions();
-            }
-            clearTimeout(applyTimer);
-            applyTimer = setTimeout(applyFilter, 800);
-        });
-
-        searchInput.addEventListener('keydown', function (e) {
-            var visible = suggestBox.style.display === 'block';
-            if (visible) {
-                if (e.key === 'ArrowDown') { e.preventDefault(); activeIndex = Math.min(activeIndex + 1, currentItems.length - 1); highlightRows(); return; }
-                if (e.key === 'ArrowUp')   { e.preventDefault(); activeIndex = Math.max(activeIndex - 1, 0); highlightRows(); return; }
-                if (e.key === 'Enter')     { e.preventDefault(); clearTimeout(applyTimer); if (activeIndex >= 0) pickSuggestion(activeIndex); else { hideSuggestions(); applyFilter(); } return; }
-                if (e.key === 'Escape')    { hideSuggestions(); return; }
-            } else if (e.key === 'Enter') {
-                e.preventDefault(); clearTimeout(applyTimer); applyFilter();
-            }
-        });
-
-        searchInput.addEventListener('blur', function () { setTimeout(hideSuggestions, 200); });
-        document.addEventListener('click', function (e) {
-            if (!searchInput.contains(e.target) && !suggestBox.contains(e.target)) hideSuggestions();
-        });
+    document.addEventListener('click', event => {
+        if (event.target !== input && !list.contains(event.target)) closeSuggestions();
     });
 })();
 </script>

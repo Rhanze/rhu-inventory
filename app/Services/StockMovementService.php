@@ -2,23 +2,25 @@
 
 namespace App\Services;
 
+use App\Models\DispensingRecord;
 use App\Models\Inventory;
 use App\Models\StockLog;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /** Exact, append-only batch movements. Call within the owner's transaction. */
 class StockMovementService
 {
-    public function record(Model $owner, Inventory $batch, int $availableDelta, int $allocatedDelta = 0, ?string $method = null): int
+    public function record(Model $owner, Inventory $batch, int $availableDelta, int $allocatedDelta = 0, ?string $method = null, ?string $reason = null): int
     {
         return DB::table('stock_movements')->insertGetId([
             'owner_type' => $owner->getTable(), 'owner_id' => $owner->getKey(),
             'inventory_id' => $batch->id, 'available_delta' => $availableDelta,
             'allocated_delta' => $allocatedDelta, 'created_at' => now(),
-            'performed_by' => session('user_id'),
+            'performed_by' => session('user_id'), 'reason' => $reason,
             'method' => $method ?? ($availableDelta < 0 || ($owner->getTable() === 'dispensing_records' && $allocatedDelta < 0)
                 ? 'FEFO with FIFO receipt-date ties' : 'Exact batch movement'),
         ]);
@@ -36,12 +38,12 @@ class StockMovementService
                 ->whereNull('reversed_at')->pluck('allocation_id')->unique()->sort()->values();
             DB::table('allocations')->whereIn('id', $allocationIds)->orderBy('id')->lockForUpdate()->get();
         }
-        $query = DB::table('stock_movements')->where('owner_type', $owner->getTable())->where('owner_id', $owner->id);
-        $movements = (clone $query)->whereNull('reversed_at')->whereNull('reverses_id')->orderBy('inventory_id')->lockForUpdate()->get();
+        $query = $this->activeMovements($owner)->orderBy('inventory_id')->lockForUpdate();
+        $movements = $query->get();
         if ($movements->isEmpty()) {
             // Old records may be reversed only when their per-batch logs resolve uniquely.
             $this->importLegacy($owner);
-            $movements = (clone $query)->whereNull('reversed_at')->whereNull('reverses_id')->orderBy('inventory_id')->lockForUpdate()->get();
+            $movements = $query->get();
         }
         foreach ($movements as $movement) {
             $batch = Inventory::whereKey($movement->inventory_id)->lockForUpdate()->first();
@@ -70,16 +72,48 @@ class StockMovementService
         StockLog::where($foreignKey, $owner->id)->whereNull('voided_at')->update(['voided_at' => now()]);
     }
 
+    private function activeMovements(Model $owner)
+    {
+        return DB::table('stock_movements')->where('owner_type', $owner->getTable())->where('owner_id', $owner->id)
+            ->whereNull('reversed_at')->whereNull('reverses_id');
+    }
+
+    /** Available units that a correction would restore, keyed by inventory ID. */
+    public function dispensingRestoration(DispensingRecord $record): Collection
+    {
+        $movements = $this->activeMovements($record)->get();
+        if ($movements->isNotEmpty()) {
+            return $movements->groupBy('inventory_id')->map(fn ($rows) => -(int) $rows->sum('available_delta'));
+        }
+
+        return $this->legacyMovements($record, lock: false)->groupBy('batch.id')
+            ->map(fn ($rows) => $rows->sum(fn ($row) => ($row['is_source'] ? 1 : -1) * $row['log']->quantity_added));
+    }
+
     private function importLegacy(Model $owner): void
+    {
+        foreach ($this->legacyMovements($owner, lock: true) as $row) {
+            ['batch' => $batch, 'is_source' => $isSource, 'log' => $log] = $row;
+            $quantity = (int) $log->quantity_added;
+            $movementId = $this->record($owner, $batch, $isSource ? -$quantity : $quantity,
+                $owner->getTable() === 'allocations' && ! $owner->destination_health_unit_id ? $quantity : 0);
+            DB::table('stock_movements')->where('id', $movementId)->update([
+                'performed_by' => $log->added_by, 'reason' => $log->remarks, 'method' => null,
+            ]);
+        }
+    }
+
+    private function legacyMovements(Model $owner, bool $lock): Collection
     {
         $allocation = $owner->getTable() === 'allocations';
         if ($allocation && ! $owner->inventory_id && in_array($owner->status, ['pending', 'rejected'])) {
-            return;
+            return collect();
         }
         $key = $allocation ? 'allocation_id' : 'dispensing_record_id';
         $logs = StockLog::where($key, $owner->id)->whereNull('voided_at')->orderBy('id')->get();
         $expected = (int) ($allocation ? $owner->quantity_allocated : $owner->quantity_dispensed);
         $sourceQuantity = 0;
+        $resolved = collect();
         foreach ($logs as $log) {
             $isSource = (int) $log->health_unit_id === (int) $owner->health_unit_id;
             $matches = Inventory::where('medicine_id', $owner->medicine_id)->where('health_unit_id', $log->health_unit_id)->where('batch_no', $log->batch_no);
@@ -88,21 +122,19 @@ class StockMovementService
             } elseif (preg_match('/Exp: ([A-Za-z]+ \d{1,2}, \d{4})/', $log->remarks ?? '', $match)) {
                 $matches->whereDate('expiration_date', Carbon::parse($match[1])->toDateString());
             }
-            $batches = $matches->lockForUpdate()->get();
+            $batches = ($lock ? $matches->lockForUpdate() : $matches)->get();
             if ($batches->count() !== 1) {
                 throw ValidationException::withMessages(['stock' => 'Historical batch details are ambiguous. Reconcile the original movement before reversing this record.']);
             }
-            $quantity = (int) $log->quantity_added;
-            $movementId = $this->record($owner, $batches->first(), $isSource ? -$quantity : $quantity, $allocation && ! $owner->destination_health_unit_id ? $quantity : 0);
-            DB::table('stock_movements')->where('id', $movementId)->update([
-                'performed_by' => $log->added_by, 'reason' => $log->remarks, 'method' => null,
-            ]);
+            $resolved->push(['batch' => $batches->first(), 'is_source' => $isSource, 'log' => $log]);
             if ($isSource) {
-                $sourceQuantity += $quantity;
+                $sourceQuantity += (int) $log->quantity_added;
             }
         }
         if ($sourceQuantity !== $expected || ($allocation && $owner->destination_health_unit_id && $logs->where('health_unit_id', $owner->destination_health_unit_id)->sum('quantity_added') !== $expected)) {
             throw ValidationException::withMessages(['stock' => 'The historical stock movements are incomplete. Reconcile them before reversing this record.']);
         }
+
+        return $resolved;
     }
 }

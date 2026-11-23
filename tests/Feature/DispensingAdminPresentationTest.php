@@ -79,7 +79,8 @@ class DispensingAdminPresentationTest extends TestCase
 
         foreach (['dispensing.index', 'reports.dispensing'] as $route) {
             $page = $this->get(route($route))->assertOk()
-                ->assertSeeInOrder(['Dispensing record filters', 'Dispensing by barangay', 'No barangay recorded']);
+                ->assertSeeInOrder(['Filter by barangay', 'Dispensing by barangay', 'No barangay recorded'])
+                ->assertDontSee('Apply barangay filter')->assertDontSee('Show records without a barangay');
             $document = new \DOMDocument;
             $document->loadHTML($page->getContent(), LIBXML_NOERROR | LIBXML_NOWARNING);
             $xpath = new \DOMXPath($document);
@@ -90,10 +91,33 @@ class DispensingAdminPresentationTest extends TestCase
             $this->assertStringContainsString('2 records', $xpath->evaluate('string('.$group.'/summary)'));
             $this->assertCount(1, $xpath->query('//section[@aria-labelledby="dispensing-area-heading"]//details[summary[contains(., "Not recorded")]]'));
 
-            $filtered = $this->get(route($route, ['barangay_missing' => 1]))->assertOk()
-                ->assertSee('Showing records without a barangay.');
+            $filtered = $this->get(route($route, ['barangay_missing' => 1]))->assertOk();
             $document->loadHTML($filtered->getContent(), LIBXML_NOERROR | LIBXML_NOWARNING);
             $this->assertCount(1, (new \DOMXPath($document))->query($group.'[@open]'));
+        }
+    }
+
+    public function test_barangay_dropdown_is_native_beside_import_and_preserves_other_filters(): void
+    {
+        [$unit, $user, $medicine] = $this->fixture();
+        DispensingRecord::create(['health_unit_id' => $unit->id, 'dispensed_by' => $user->id, 'date_dispensed' => today(),
+            'medicine_id' => $medicine->id, 'quantity_dispensed' => 4, 'barangay' => 'Not recorded']);
+        $filters = ['date_from' => today()->toDateString(), 'date_to' => today()->toDateString(), 'medicine_id' => $medicine->id];
+
+        foreach (['dispensing.index', 'reports.dispensing'] as $route) {
+            $page = $this->get(route($route, $filters + ['barangay_missing' => 1, 'page' => 2]))->assertOk();
+            $document = new \DOMDocument;
+            $document->loadHTML($page->getContent(), LIBXML_NOERROR | LIBXML_NOWARNING);
+            $xpath = new \DOMXPath($document);
+            $select = '//*[@id="dispensing-barangay-filter"]';
+
+            $this->assertCount(1, $xpath->query($select));
+            $this->assertCount(1, $xpath->query($select.'[@data-native-select][@onchange="window.location.assign(this.value)"]/preceding-sibling::*[1][self::a[@class="csv-import-link"]]'));
+            $this->assertSame(route($route, $filters), $xpath->evaluate('string('.$select.'/option[normalize-space(.)="All barangays"]/@value)'));
+            $this->assertSame(route($route, $filters + ['barangay' => 'Not recorded']), $xpath->evaluate('string('.$select.'/option[normalize-space(.)="Not recorded"]/@value)'));
+            $this->assertSame(route($route, $filters + ['barangay_missing' => 1]), $xpath->evaluate('string('.$select.'/option[@selected and normalize-space(.)="No barangay recorded"]/@value)'));
+            $this->assertSame(route($route, array_diff_key($filters, ['medicine_id' => true]) + ['barangay_missing' => 1]),
+                $xpath->evaluate('string(//a[normalize-space(.)="Clear medicine filter"]/@href)'));
         }
     }
 

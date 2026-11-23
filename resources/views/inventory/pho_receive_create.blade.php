@@ -93,6 +93,7 @@
 
     <form method="POST" action="{{ route('inventory.pho_receive.store') }}" id="shipment-form">
         @csrf
+        <input type="hidden" name="submission_token" value="{{ old('submission_token', $submissionToken) }}">
 
         {{-- Header section --}}
         <div class="form-card" style="
@@ -105,18 +106,19 @@
 
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
                 <div>
-                    <label>Shipment No.</label>
-                    <input type="text" name="shipment_no"
-                           value="{{ old('shipment_no', $nextShipmentNo) }}"
+                    <label for="shipment_no">Shipment No.</label>
+                    <input type="text" id="shipment_no" name="shipment_no"
+                           aria-describedby="shipment-identifiers" value="{{ old('shipment_no') }}"
                            placeholder="e.g. DOH-2026-0001">
                 </div>
                 <div>
-                    <label>DOH Reference No.</label>
-                    <input type="text" name="reference_no"
-                           value="{{ old('reference_no') }}"
+                    <label for="reference_no">DOH Reference No.</label>
+                    <input type="text" id="reference_no" name="reference_no"
+                           aria-describedby="shipment-identifiers" value="{{ old('reference_no') }}"
                            placeholder="e.g. DR-2026-0123">
                 </div>
             </div>
+            <p id="shipment-identifiers" style="margin:8px 0 0; color:#475569; font-size:0.9375rem;">Enter the numbers from the delivery paperwork when available.</p>
 
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
                 <div>
@@ -127,7 +129,7 @@
                 </div>
                 <div>
                     <label>Received Date <span style="color:#dc2626;">*</span></label>
-                    <input type="date" name="received_date" required
+                    <input type="date" name="received_date" max="{{ $today }}" required
                            value="{{ old('received_date', $today) }}">
                 </div>
             </div>

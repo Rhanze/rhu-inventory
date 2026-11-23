@@ -2,18 +2,22 @@
 
 namespace Tests\Feature;
 
-// use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 class ExampleTest extends TestCase
 {
-    /**
-     * A basic test example.
-     */
-    public function test_the_application_returns_a_successful_response(): void
+    use RefreshDatabase;
+
+    public function test_the_application_root_renders_public_medicine_search(): void
     {
         $response = $this->get('/');
 
-        $response->assertOk()->assertSee('FOR THE PUBLIC')->assertSee('Management portal');
+        $response->assertOk()
+            ->assertViewIs('public.home')
+            ->assertSee('action="'.route('public.home.citizen').'"', false)
+            ->assertSee('name="q"', false)
+            ->assertSee('name="health_unit_id"', false)
+            ->assertDontSee('name="password"', false);
     }
 }

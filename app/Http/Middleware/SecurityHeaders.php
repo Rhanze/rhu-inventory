@@ -16,7 +16,7 @@ class SecurityHeaders
         $response->headers->set('Referrer-Policy', 'same-origin');
         $response->headers->set('Content-Security-Policy', "base-uri 'self'; frame-ancestors 'self'; object-src 'none'");
 
-        if ($request->routeIs('login', 'login.submit')
+        if ($request->routeIs('login', 'login.*')
             || ($request->hasSession() && $request->session()->has('user_id'))) {
             $response->headers->set('Cache-Control', 'no-store, private');
         }

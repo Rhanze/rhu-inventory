@@ -5,21 +5,20 @@ namespace App\Http\Controllers;
 use App\Models\ImmunizationRecord;
 use App\Models\ImmunizationSchedule;
 use App\Models\PublicUser;
-use App\Models\VaccinationSchedule;
 use App\Services\ImmunizationService;
+use App\Services\VaccinationScheduleService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class ImmunizationController extends Controller
 {
-    protected ImmunizationService $immunizationService;
-
-    public function __construct(ImmunizationService $immunizationService)
-    {
-        $this->immunizationService = $immunizationService;
-    }
+    public function __construct(
+        protected ImmunizationService $immunizationService,
+        private VaccinationScheduleService $schedules,
+    ) {}
 
     private function guardRhuUser()
     {
@@ -47,13 +46,14 @@ class ImmunizationController extends Controller
         $healthUnitId = session('health_unit_id');
         $search = $request->input('search');
         $filter = $request->input('filter', 'all');
+        $patientId = $request->validate(['patient' => 'nullable|integer|min:1'])['patient'] ?? null;
 
         // ── Children under 5 in this RHU (youngest first) ──
         $query = PublicUser::forViewer()->where('health_unit_id', $healthUnitId)
+            ->when($patientId, fn ($children) => $children->whereKey($patientId))
             ->whereNotNull('birth_date')
             ->whereDate('birth_date', '>=', now()->subYears(5)->toDateString())
-            ->orderByDesc('birth_date')
-            ->limit(300);
+            ->orderByDesc('birth_date')->orderBy('id');
 
         if ($search) {
             $query->where(function ($q) use ($search) {
@@ -63,31 +63,47 @@ class ImmunizationController extends Controller
             });
         }
 
-        $children = $query->get();
-
-        // ── Bulk-compute each child's dose statuses ──
-        $bulk = $this->immunizationService->getBulkSchedulesForChildren($children);
-
-        // ── Apply filter AFTER computing statuses ──
-        if ($filter === 'due') {
-            $children = $children->filter(
-                fn ($c) => ($bulk[$c->id]['overall'] ?? '') === 'has_due'
-            )->values();
-        } elseif ($filter === 'overdue') {
-            $children = $children->filter(
-                fn ($c) => ($bulk[$c->id]['overall'] ?? '') === 'has_overdue'
-            )->values();
-        }
-
-        // ── Master schedule template (groups + column headers) ──
         $schedule = ImmunizationSchedule::active()->ordered()->get();
+        $perPage = 50;
+        $status = match ($filter) {
+            'due' => 'has_due',
+            'overdue' => 'has_overdue',
+            default => null,
+        };
+        if ($status === null) {
+            $children = $query->paginate($perPage)->withQueryString();
+            $bulk = $this->immunizationService->getBulkSchedulesForChildren($children->getCollection(), $schedule);
+        } else {
+            // Compute candidate status before paging so an older child cannot disappear from follow-up.
+            $page = LengthAwarePaginator::resolveCurrentPage();
+            $skip = ($page - 1) * $perPage;
+            $matches = 0;
+            $selected = collect();
+            $bulk = [];
+            $query->chunk(200, function ($candidates) use ($status, $schedule, $skip, $perPage, $selected, &$matches, &$bulk) {
+                $statuses = $this->immunizationService->getBulkSchedulesForChildren($candidates, $schedule);
+                foreach ($candidates as $child) {
+                    if (($statuses[$child->id]['overall'] ?? null) !== $status) {
+                        continue;
+                    }
+                    if ($matches >= $skip && $selected->count() < $perPage) {
+                        $selected->push($child);
+                        $bulk[$child->id] = $statuses[$child->id];
+                    }
+                    $matches++;
+                }
+            });
+            $children = (new LengthAwarePaginator($selected, $matches, $perPage, $page, ['path' => $request->url()]))
+                ->withQueryString();
+        }
 
         return view('immunization.tcl', compact(
             'children',
             'bulk',
             'schedule',
             'filter',
-            'search'
+            'search',
+            'patientId'
         ));
     }
 
@@ -118,26 +134,15 @@ class ImmunizationController extends Controller
         }
         $validated['vaccine'] = $scheduleDose->antigen;
 
-        // Verify child belongs to this RHU
-        $child = PublicUser::forViewer()->where('id', $validated['public_user_id'])
-            ->where('health_unit_id', $healthUnitId)
-            ->firstOrFail();
-        if ($child->birth_date && Carbon::parse($validated['date_given'])->startOfDay()->lessThan($child->birth_date)) {
-            throw ValidationException::withMessages(['date_given' => 'The vaccination date cannot be before the patient birth date.']);
-        }
-
-        // Prevent duplicate dose
-        $exists = ImmunizationRecord::whereHas('patient', fn ($q) => $q->forViewer())->where('public_user_id', $child->id)
-            ->where('antigen', $validated['vaccine'])
-            ->where('dose_number', $validated['dose_number'])
-            ->exists();
-
-        if ($exists) {
-            return back()->with('error',
-                'This dose has already been recorded for '.$child->full_name.'.');
-        }
-
-        DB::transaction(function () use ($validated, $child, $healthUnitId, $scheduleDose) {
+        [$child, $recorded] = DB::transaction(function () use ($validated, $healthUnitId, $scheduleDose) {
+            $child = PublicUser::forViewer()->where('health_unit_id', $healthUnitId)
+                ->lockForUpdate()->findOrFail($validated['public_user_id']);
+            if ($child->birth_date && Carbon::parse($validated['date_given'])->startOfDay()->lessThan($child->birth_date)) {
+                throw ValidationException::withMessages(['date_given' => 'Choose a vaccination date on or after the patient birth date.']);
+            }
+            if ($child->immunizationRecords()->where('antigen', $validated['vaccine'])->where('dose_number', $validated['dose_number'])->exists()) {
+                return [$child, false];
+            }
             $record = ImmunizationRecord::create([
                 'public_user_id' => $child->id,
                 'health_unit_id' => $healthUnitId,
@@ -149,31 +154,15 @@ class ImmunizationController extends Controller
                 'remarks' => $validated['remarks'] ?? null,
             ]);
 
-            // Keep all existing reminders in sync, including rescheduled doses.
-            $updated = VaccinationSchedule::whereHas('patient', fn ($q) => $q->forViewer())->where('health_unit_id', $healthUnitId)
-                ->where('public_user_id', $child->id)
-                ->where('vaccine_name', $scheduleDose->antigen_label)
-                ->where('dose_number', $validated['dose_number'])
-                ->update([
-                    'status' => 'given',
-                    'given_date' => $validated['date_given'],
-                    'immunization_record_id' => $record->id,
-                ]);
-            if (! $updated) {
-                VaccinationSchedule::create([
-                    'public_user_id' => $child->id,
-                    'health_unit_id' => $healthUnitId,
-                    'vaccine_name' => $scheduleDose->antigen_label,
-                    'dose_number' => $validated['dose_number'],
-                    'due_date' => $child->birth_date
-                        ? $child->birth_date->copy()->addDays($scheduleDose->min_age_days)->toDateString()
-                        : $validated['date_given'],
-                    'status' => 'given',
-                    'given_date' => $validated['date_given'],
-                    'immunization_record_id' => $record->id,
-                ]);
-            }
-        });
+            $dueDate = $child->birth_date?->copy()->addDays($scheduleDose->min_age_days)->toDateString()
+                ?? $record->date_given->toDateString();
+            $this->schedules->fulfillAdministration($child, $scheduleDose, $record, $dueDate);
+            return [$child, true];
+        }, 3);
+
+        if (! $recorded) {
+            return back()->with('error', 'This dose has already been recorded for '.$child->full_name.'.');
+        }
 
         return back()->with('success',
             'Recorded: '.$validated['vaccine'].

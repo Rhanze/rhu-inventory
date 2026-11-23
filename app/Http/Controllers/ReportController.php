@@ -10,7 +10,9 @@ use App\Models\Medicine;
 use App\Models\StockLog;
 use App\Support\HistoricalDateRange;
 use Carbon\CarbonInterface;
+use App\Support\SpreadsheetCsv;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ReportController extends Controller
 {
@@ -309,11 +311,12 @@ class ReportController extends Controller
         }
 
         $historyRange = HistoricalDateRange::fromRequest($request);
-        $allocations = $this->buildAllocationQuery($request, $historyRange)->get();
-
+        [$facilityId, $status] = $this->allocationFilters($request);
+        $allocations = $this->buildAllocationQuery($historyRange, $facilityId, $status)->get();
         $healthUnits = HealthUnit::orderBy('name')->get();
+        $facilityScope = $this->allocationFacilityLabel($facilityId);
 
-        return view('reports.allocation', compact('allocations', 'healthUnits', 'historyRange'));
+        return view('reports.allocation', compact('allocations', 'healthUnits', 'historyRange', 'facilityId', 'facilityScope', 'status'));
     }
 
     public function allocationCsv(Request $request)
@@ -322,28 +325,21 @@ class ReportController extends Controller
             return $redirect;
         }
 
-        $allocations = $this->buildAllocationQuery($request, HistoricalDateRange::fromRequest($request))->get();
-
-        $headers = ['ID', 'Medicine', 'Destination', 'Quantity', 'Date Allocated', 'Allocated By'];
-        if (is_null(session('health_unit_id'))) {
-            $headers[] = 'RHU';
-        }
-
-        $rows = $allocations->map(function ($alloc) {
-            $row = [
-                $alloc->id,
-                $alloc->medicine->medicine_name ?? '',
-                $alloc->destination_display,
-                $alloc->quantity_allocated,
-                $alloc->date_allocated,
-                $alloc->allocatedBy->name ?? '',
-            ];
-            if (is_null(session('health_unit_id'))) {
-                $row[] = $alloc->healthUnit->name ?? '';
-            }
-
-            return $row;
-        });
+        [$facilityId, $status] = $this->allocationFilters($request);
+        $allocations = $this->buildAllocationQuery(HistoricalDateRange::fromRequest($request), $facilityId, $status)->get();
+        $facilityScope = $this->allocationFacilityLabel($facilityId);
+        $headers = ['ID', 'Medicine', 'Destination', 'Quantity', 'Date Allocated', 'Allocated By', 'Source Facility', 'Status', 'Facility Scope'];
+        $rows = $allocations->map(fn (Allocation $allocation) => [
+            $allocation->id,
+            $allocation->medicine->medicine_name ?? '',
+            $allocation->destination_display,
+            $allocation->quantity_allocated,
+            $allocation->date_allocated,
+            $allocation->allocatedBy->name ?? '',
+            $allocation->healthUnit->name ?? '',
+            $allocation->status_label,
+            $facilityScope,
+        ]);
 
         return $this->streamCsv(
             'allocation_report_'.now()->format('Ymd_His').'.csv',
@@ -352,14 +348,24 @@ class ReportController extends Controller
         );
     }
 
-    private function buildAllocationQuery(Request $request, HistoricalDateRange $historyRange)
+    private function allocationFilters(Request $request): array
     {
-        $rhuFilter = $request->rhu_filter;
-        $healthUnitId = session('health_unit_id');
+        $facilityId = session('health_unit_id') ?? ($request->validate(['rhu_filter' => 'nullable|integer'])['rhu_filter'] ?? null);
+        $status = $request->validate(['status' => ['nullable', Rule::in(array_keys(Allocation::STATUS_LABELS))]])['status'] ?? null;
 
-        return Allocation::with(['medicine', 'allocatedBy', 'healthUnit', 'destinationHealthUnit'])
-            ->when($healthUnitId, fn ($q) => $q->where('health_unit_id', $healthUnitId))
-            ->when(is_null($healthUnitId) && $rhuFilter, fn ($q) => $q->where('health_unit_id', $rhuFilter))
+        return [$facilityId === null ? null : (int) $facilityId, $status];
+    }
+
+    private function allocationFacilityLabel(?int $facilityId): string
+    {
+        return $facilityId === null ? 'All facilities' : (HealthUnit::find($facilityId)?->name ?? 'Selected facility');
+    }
+
+    private function buildAllocationQuery(HistoricalDateRange $historyRange, ?int $facilityId, ?string $status)
+    {
+        return Allocation::with(['medicine', 'allocatedBy', 'recipient', 'healthUnit', 'destinationHealthUnit'])
+            ->when($facilityId !== null, fn ($q) => $q->involvingHealthUnit($facilityId))
+            ->when($status !== null, fn ($q) => $q->where('status', $status))
             ->when($historyRange->isFiltered(), fn ($q) => $historyRange->apply($q, 'date_allocated'))
             ->orderByDesc('date_allocated')
             ->orderByDesc('id');
@@ -403,7 +409,7 @@ class ReportController extends Controller
 
         $records = $this->buildDispensingQuery($request)->get();
 
-        $headers = ['ID', 'Medicine', 'Quantity', 'Doctor', 'Date Dispensed', 'Dispensed By', 'Barangay served', 'Stock source'];
+        $headers = ['ID', 'Medicine', 'Quantity', 'Doctor', 'Date Dispensed', 'Dispensed By', 'Barangay served', 'Stock source', 'Lot quantities'];
         if (is_null(session('health_unit_id'))) {
             $headers[] = 'RHU';
         }
@@ -418,6 +424,7 @@ class ReportController extends Controller
                 $rec->dispensedByUser->name ?? '',
                 $rec->barangay,
                 $rec->stock_source ?: 'rhu',
+                $rec->lotBreakdown(),
             ];
             if (is_null(session('health_unit_id'))) {
                 $row[] = $rec->healthUnit->name ?? '';
@@ -439,18 +446,19 @@ class ReportController extends Controller
         $rhuFilter = $request->rhu_filter;
         $healthUnitId = session('health_unit_id');
         $request->validate(['barangay' => 'nullable|string|max:100', 'barangay_missing' => 'nullable|boolean',
-            'medicine_id' => 'nullable|integer|exists:medicines,id']);
+            'medicine_id' => 'nullable|integer|exists:medicines,id', 'batch_no' => 'nullable|string|max:100']);
         $barangay = trim((string) $request->barangay);
         if ($barangay !== '' && $request->boolean('barangay_missing')) {
             throw \Illuminate\Validation\ValidationException::withMessages(['barangay' => 'Choose a barangay or records without a saved barangay.']);
         }
 
-        return DispensingRecord::qualifying()->with(['medicine', 'dispensedByUser', 'healthUnit'])
+        return DispensingRecord::qualifying()->with(['medicine', 'dispensedByUser', 'healthUnit', 'issuedLots'])
             ->when($healthUnitId, fn ($q) => $q->where('health_unit_id', $healthUnitId))
             ->when(is_null($healthUnitId) && $rhuFilter, fn ($q) => $q->where('health_unit_id', $rhuFilter))
             ->when($barangay !== '', fn ($q) => $q->forBarangays([$barangay]))
             ->when($request->boolean('barangay_missing'), fn ($q) => $q->withoutRecordedBarangay())
             ->when($request->filled('medicine_id'), fn ($q) => $q->where('medicine_id', $request->medicine_id))
+            ->when($request->filled('batch_no'), fn ($q) => $q->forIssuedLot(trim($request->batch_no)))
             ->when($historyRange->isFiltered(), fn ($q) => $historyRange->apply($q, 'date_dispensed'))
             ->orderByDesc('date_dispensed')
             ->orderByDesc('id');
@@ -530,9 +538,9 @@ class ReportController extends Controller
     {
         return response()->streamDownload(function () use ($headers, $rows) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, $headers);
+            SpreadsheetCsv::writeRow($handle, $headers);
             foreach ($rows as $row) {
-                fputcsv($handle, $row);
+                SpreadsheetCsv::writeRow($handle, $row);
             }
             fclose($handle);
         }, $filename, [

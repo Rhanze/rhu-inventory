@@ -142,7 +142,7 @@
             {{-- Date Added --}}
             <div>
                 <label style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">Date Added</label>
-                <input type="date" name="date_added" value="{{ old('date_added', now()->format('Y-m-d')) }}" required
+                <input type="date" name="date_added" value="{{ old('date_added', today()->toDateString()) }}" max="{{ today()->toDateString() }}" required
                        style="width:100%; padding:12px 16px; font-size:14px; border:2px solid #bec6cf; border-radius:14px; outline:none; background:white; color:#0f172a; box-sizing:border-box;"
                        onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                        onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
@@ -212,7 +212,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
         if (abortController) abortController.abort();
         abortController = new AbortController();
-        fetch(`/stock-logs/autocomplete?q=${encodeURIComponent(query)}`, {
+        fetch({{ Illuminate\Support\Js::from(route('stock_logs.autocomplete')) }} + '?q=' + encodeURIComponent(query), {
             signal: abortController.signal
         })
         .then(response => response.json())

@@ -89,6 +89,9 @@
 
         <form method="POST" action="{{ route('transfers.store') }}" style="display:flex; flex-direction:column; gap:24px;">
             @csrf
+            @if($errors->any())
+                <p role="alert" style="margin:0; color:#a32d2d;">{{ $errors->first() }}</p>
+            @endif
 
             {{-- SECTION 1 — MEDICINE --}}
             <div>
@@ -150,7 +153,7 @@
                         <label for="quantity">
                             Quantity <span id="qty-unit-label" style="font-weight:400; color:#64748b;"></span>
                         </label>
-                        <input type="number" name="quantity" id="quantity" min="1" required value="10"
+                        <input type="number" name="quantity" id="quantity" min="1" required value="{{ old('quantity', 10) }}"
                                style="text-align:right;">
                         <p id="qty-help" class="tr-helper"></p>
                     </div>
@@ -162,7 +165,7 @@
                 <div class="tr-field">
                     <label for="notes">Notes (optional)</label>
                     <textarea name="notes" id="notes" rows="3" maxlength="500"
-                              placeholder="Why do you need this stock? Any specific use or urgency?"></textarea>
+                              placeholder="Why do you need this stock? Any specific use or urgency?">{{ old('notes') }}</textarea>
                 </div>
             </div>
 
@@ -208,6 +211,15 @@ document.addEventListener('DOMContentLoaded', function () {
     const formSel  = document.getElementById('snap-form');
     let controller = null;
     let debounce   = null;
+
+    const previousMedicine = @js($previousMedicine);
+    if (previousMedicine) {
+        input.value = previousMedicine.medicine_name;
+        hidden.value = previousMedicine.id;
+        pickedMedicine = previousMedicine;
+        applyMedicine(previousMedicine);
+        fetchSources(previousMedicine.id, @js($selectedFacilityId));
+    }
 
     input.addEventListener('input', function () {
         const q = this.value.trim();
@@ -339,6 +351,7 @@ function resetMedicineFields() {
     const sourceSelect = document.getElementById('source-rhu');
     sourceSelect.innerHTML = '<option value="">— Select medicine first —</option>';
     document.getElementById('source-info').textContent = '';
+    document.getElementById('quantity').removeAttribute('max');
 }
 
 function applyMedicine(m) {
@@ -395,21 +408,24 @@ function renderQtyHelp() {
     help.style.fontWeight = '700';
 }
 
-function fetchSources(medicineId) {
+function fetchSources(medicineId, selectedFacilityId = null) {
     fetch(`{{ route('stock_lookup.search') }}?medicine_id=${medicineId}`, {
         headers: { 'Accept': 'application/json' }
     })
     .then(r => r.json())
     .then(data => {
+        if (pickedMedicine?.id != medicineId) return;
         const select = document.getElementById('source-rhu');
         select.innerHTML = '<option value="">— Select source RHU —</option>';
         sourceOptions = data.results || [];
         sourceOptions.forEach(r => {
             const opt = document.createElement('option');
             opt.value = r.rhu_id;
-            opt.textContent = `${r.rhu_name} (${r.available_stock} units · ${r.distance_km ?? '?'} km)`;
+            opt.textContent = `${r.rhu_name} (${r.largest_batch_stock} units in largest batch · ${r.distance_km ?? '?'} km)`;
+            opt.selected = String(r.rhu_id) === String(selectedFacilityId);
             select.appendChild(opt);
         });
+        loadStockInfo();
     });
 }
 
@@ -417,12 +433,12 @@ function loadStockInfo() {
     const val  = document.getElementById('source-rhu').value;
     const info = document.getElementById('source-info');
     const qty  = document.getElementById('quantity');
-    if (!val) { info.textContent = ''; return; }
+    if (!val) { info.textContent = ''; qty.removeAttribute('max'); return; }
 
     const r = sourceOptions.find(s => s.rhu_id == val);
     if (r) {
-        info.textContent = `Available: ${r.available_stock} units · ${r.distance_km ?? '?'} km away · ${r.municipality ?? ''}`;
-        qty.max = r.available_stock;
+        info.textContent = `Available in one batch: ${r.largest_batch_stock} units (${r.available_stock} total) · ${r.distance_km ?? '?'} km away · ${r.municipality ?? ''}`;
+        qty.max = r.largest_batch_stock;
     }
 }
 </script>

@@ -23,8 +23,8 @@
     @if($query !== '')
 
         {{-- Medicines --}}
-        @if($scope === 'medicine' || ($scope === 'all' && $medicineResults->isNotEmpty()))
-            <div style="
+        @if($scope === 'medicine' || ($scope === 'all' && ($medicineResults->isNotEmpty() || $medicineResults->hasPages())))
+            <div id="search-medicine" style="
                 background: rgba(255,255,255,0.9); backdrop-filter: blur(8px);
                 border-radius:20px; padding:24px; border:1px solid rgba(255,255,255,0.4);
                 box-shadow:0 4px 12px rgba(0,0,0,0.04);
@@ -46,12 +46,13 @@
                         <p style="font-size:.9375rem; color:#64748b;">No medicine results found.</p>
                     @endforelse
                 </div>
+                {{ $medicineResults->links() }}
             </div>
         @endif
 
         {{-- Users --}}
-        @if(session('role') === 'admin' && ($scope === 'users' || ($scope === 'all' && $userResults->isNotEmpty())))
-            <div style="
+        @if(session('role') === 'admin' && ($scope === 'users' || ($scope === 'all' && ($userResults->isNotEmpty() || $userResults->hasPages()))))
+            <div id="search-users" style="
                 background: rgba(255,255,255,0.9); backdrop-filter: blur(8px);
                 border-radius:20px; padding:24px; border:1px solid rgba(255,255,255,0.4);
                 box-shadow:0 4px 12px rgba(0,0,0,0.04);
@@ -74,12 +75,13 @@
                         <p style="font-size:.9375rem; color:#64748b;">No user results found.</p>
                     @endforelse
                 </div>
+                {{ $userResults->links() }}
             </div>
         @endif
 
         {{-- RHU --}}
-        @if(session('role') === 'admin' && ($scope === 'rhu' || ($scope === 'all' && $rhuResults->isNotEmpty())))
-            <div style="
+        @if(session('role') === 'admin' && ($scope === 'rhu' || ($scope === 'all' && ($rhuResults->isNotEmpty() || $rhuResults->hasPages()))))
+            <div id="search-rhu" style="
                 background: rgba(255,255,255,0.9); backdrop-filter: blur(8px);
                 border-radius:20px; padding:24px; border:1px solid rgba(255,255,255,0.4);
                 box-shadow:0 4px 12px rgba(0,0,0,0.04);
@@ -101,12 +103,13 @@
                         <p style="font-size:.9375rem; color:#64748b;">No RHU results found.</p>
                     @endforelse
                 </div>
+                {{ $rhuResults->links() }}
             </div>
         @endif
 
         {{-- Inventory --}}
-        @if($scope === 'inventory' || ($scope === 'all' && $inventoryResults->isNotEmpty()))
-            <div style="
+        @if($scope === 'inventory' || ($scope === 'all' && ($inventoryResults->isNotEmpty() || $inventoryResults->hasPages())))
+            <div id="search-inventory" style="
                 background: rgba(255,255,255,0.9); backdrop-filter: blur(8px);
                 border-radius:20px; padding:24px; border:1px solid rgba(255,255,255,0.4);
                 box-shadow:0 4px 12px rgba(0,0,0,0.04);
@@ -136,12 +139,13 @@
                         <p style="font-size:.9375rem; color:#64748b;">No inventory results found.</p>
                     @endforelse
                 </div>
+                {{ $inventoryResults->links() }}
             </div>
         @endif
 
         {{-- Stock Logs --}}
-        @if($scope === 'stock_logs' || ($scope === 'all' && $stockLogResults->isNotEmpty()))
-            <div style="
+        @if($scope === 'stock_logs' || ($scope === 'all' && ($stockLogResults->isNotEmpty() || $stockLogResults->hasPages())))
+            <div id="search-stock_logs" style="
                 background: rgba(255,255,255,0.9); backdrop-filter: blur(8px);
                 border-radius:20px; padding:24px; border:1px solid rgba(255,255,255,0.4);
                 box-shadow:0 4px 12px rgba(0,0,0,0.04);
@@ -171,12 +175,13 @@
                         <p style="font-size:.9375rem; color:#64748b;">No stock log results found.</p>
                     @endforelse
                 </div>
+                {{ $stockLogResults->links() }}
             </div>
         @endif
 
         {{-- Allocation --}}
-        @if($scope === 'allocation' || ($scope === 'all' && $allocationResults->isNotEmpty()))
-            <div style="
+        @if($scope === 'allocation' || ($scope === 'all' && ($allocationResults->isNotEmpty() || $allocationResults->hasPages())))
+            <div id="search-allocation" style="
                 background: rgba(255,255,255,0.9); backdrop-filter: blur(8px);
                 border-radius:20px; padding:24px; border:1px solid rgba(255,255,255,0.4);
                 box-shadow:0 4px 12px rgba(0,0,0,0.04);
@@ -206,12 +211,13 @@
                         <p style="font-size:.9375rem; color:#64748b;">No allocation results found.</p>
                     @endforelse
                 </div>
+                {{ $allocationResults->links() }}
             </div>
         @endif
 
         {{-- Dispensing --}}
-        @if($scope === 'dispensing' || ($scope === 'all' && $dispensingResults->isNotEmpty()))
-            <div style="
+        @if($scope === 'dispensing' || ($scope === 'all' && ($dispensingResults->isNotEmpty() || $dispensingResults->hasPages())))
+            <div id="search-dispensing" style="
                 background: rgba(255,255,255,0.9); backdrop-filter: blur(8px);
                 border-radius:20px; padding:24px; border:1px solid rgba(255,255,255,0.4);
                 box-shadow:0 4px 12px rgba(0,0,0,0.04);
@@ -241,12 +247,13 @@
                         <p style="font-size:.9375rem; color:#64748b;">No dispensing results found.</p>
                     @endforelse
                 </div>
+                {{ $dispensingResults->links() }}
             </div>
         @endif
 
 
-        @if($scope === 'transfers' || ($scope === 'all' && $transferResults->isNotEmpty()))
-            <div style="background:rgba(255,255,255,.9); border-radius:20px; padding:24px; border:1px solid #e2e8f0; box-shadow:0 4px 12px rgba(0,0,0,.04);">
+        @if($scope === 'transfers' || ($scope === 'all' && ($transferResults->isNotEmpty() || $transferResults->hasPages())))
+            <div id="search-transfers" style="background:rgba(255,255,255,.9); border-radius:20px; padding:24px; border:1px solid #e2e8f0; box-shadow:0 4px 12px rgba(0,0,0,.04);">
                 <h3 style="font-size:1.125rem; font-weight:700; color:#0f172a; margin:0 0 16px;">Transfers</h3>
                 <div style="display:flex; flex-direction:column; gap:10px;">
                     @forelse($transferResults as $transfer)
@@ -262,11 +269,12 @@
                         <p style="font-size:1rem; color:#64748b;">No transfer results found.</p>
                     @endforelse
                 </div>
+                {{ $transferResults->links() }}
             </div>
         @endif
 
-        @if($scope === 'forecast' || ($scope === 'all' && $forecastResults->isNotEmpty()))
-            <div style="background:rgba(255,255,255,.9); border-radius:20px; padding:24px; border:1px solid #e2e8f0; box-shadow:0 4px 12px rgba(0,0,0,.04);">
+        @if($scope === 'forecast' || ($scope === 'all' && ($forecastResults->isNotEmpty() || $forecastResults->hasPages())))
+            <div id="search-forecast" style="background:rgba(255,255,255,.9); border-radius:20px; padding:24px; border:1px solid #e2e8f0; box-shadow:0 4px 12px rgba(0,0,0,.04);">
                 <h3 style="font-size:1.125rem; font-weight:700; color:#0f172a; margin:0 0 16px;">Forecast</h3>
                 <div style="display:flex; flex-direction:column; gap:10px;">
                     @forelse($forecastResults as $item)
@@ -280,10 +288,11 @@
                         <p style="font-size:1rem; color:#64748b;">No forecast results found.</p>
                     @endforelse
                 </div>
+                {{ $forecastResults->links() }}
             </div>
         @endif
 
-        @if($scope === 'all' && collect([$medicineResults, $userResults, $rhuResults, $inventoryResults, $stockLogResults, $allocationResults, $dispensingResults, $transferResults, $forecastResults])->every(fn ($results) => $results->isEmpty()))
+        @if($scope === 'all' && collect([$medicineResults, $userResults, $rhuResults, $inventoryResults, $stockLogResults, $allocationResults, $dispensingResults, $transferResults, $forecastResults])->every(fn ($results) => $results->isEmpty() && ! $results->hasPages()))
             <div style="background:rgba(255,255,255,.9); border-radius:20px; padding:24px; border:1px solid #e2e8f0;">
                 <p style="font-size:1rem; color:#64748b; margin:0;">No matching records found in the sections you can access.</p>
             </div>

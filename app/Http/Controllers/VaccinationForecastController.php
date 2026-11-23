@@ -16,6 +16,7 @@ use App\Services\VaccinationScheduleService;
 use App\Services\DohEventPlanningService;
 use App\Support\BarangayDemandScope;
 use Carbon\Carbon;
+use App\Support\SpreadsheetCsv;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -60,39 +61,27 @@ class VaccinationForecastController extends Controller
         }
 
         $healthUnitId = session('health_unit_id');
-        $this->scheduleService->markOverdueAsMissed(30);
 
-        $upcoming = VaccinationSchedule::whereHas('patient', fn ($q) => $q->forViewer())->with('patient')
-            ->where('health_unit_id', $healthUnitId)
-            ->where('status', 'pending')
-            ->whereBetween('due_date', [now()->toDateString(), now()->addDays(30)->toDateString()])
-            ->orderBy('due_date')
-            ->get();
-
-        $overdue = VaccinationSchedule::whereHas('patient', fn ($q) => $q->forViewer())->with('patient')
-            ->where('health_unit_id', $healthUnitId)
-            ->where(function ($q) {
-                $q->where('status', 'missed')
-                    ->orWhere(function ($s) {
-                        $s->where('status', 'pending')->whereDate('due_date', '<', now());
-                    });
-            })
-            ->orderBy('due_date')
-            ->limit(50)
-            ->get();
-
-        $monthStart = now()->startOfMonth()->toDateString();
-        $monthEnd = now()->endOfMonth()->toDateString();
+        $today = today();
+        $through = $today->copy()->addDays(30);
+        $monthStart = $today->copy()->startOfMonth();
+        $monthEnd = $today->copy()->endOfMonth();
+        $appointments = VaccinationSchedule::current()->whereHas('patient', fn ($q) => $q->forViewer())->with('patient')
+            ->where('health_unit_id', $healthUnitId)->whereDate('due_date', '<=', $through)
+            ->where(fn ($query) => $query->where('status', 'pending')
+                ->orWhere(fn ($missed) => $missed->where('status', 'missed')->whereDoesntHave('replacement')))
+            ->get()->each(function ($appointment) {
+                $appointment->session_date = $this->scheduleService->appointmentSessionDate($appointment, $appointment->patient?->barangay);
+            })->sortBy('session_date')->values();
+        $pending = $appointments->where('status', 'pending');
+        $upcoming = $pending->filter(fn ($appointment) => $appointment->session_date->betweenIncluded($today, $through));
+        $pastSessions = $appointments->filter(fn ($appointment) => $appointment->session_date->lt($today));
+        $overdue = $pastSessions->take(50);
 
         $monthStats = [
-            'due_this_month' => VaccinationSchedule::whereHas('patient', fn ($q) => $q->forViewer())->where('health_unit_id', $healthUnitId)
-                ->whereBetween('due_date', [$monthStart, $monthEnd])
-                ->where('status', 'pending')->count(),
-            'overdue' => VaccinationSchedule::whereHas('patient', fn ($q) => $q->forViewer())->where('health_unit_id', $healthUnitId)
-                ->where('status', 'missed')->count(),
-            'given_month' => VaccinationSchedule::whereHas('patient', fn ($q) => $q->forViewer())->where('health_unit_id', $healthUnitId)
-                ->where('status', 'given')
-                ->whereBetween('given_date', [$monthStart, $monthEnd])->count(),
+            'due_this_month' => $pending->filter(fn ($appointment) => $appointment->session_date->betweenIncluded($monthStart, $monthEnd))->count(),
+            'overdue' => $pastSessions->count(),
+            'given_month' => $this->scheduleService->countAdministrations($healthUnitId, $monthStart, $today),
         ];
 
         return view('vaccination.forecast', compact('upcoming', 'overdue', 'monthStats'));
@@ -110,7 +99,6 @@ class VaccinationForecastController extends Controller
         $calendarAreaFilter = session('role') === 'midwife'
             ? BarangayDemandScope::validateForViewer((int) $healthUnitId, $filters['area_label'] ?? null, 'area_label')
             : null;
-        $this->scheduleService->markOverdueAsMissed(30);
 
         $rhu = HealthUnit::find($healthUnitId);
 
@@ -122,7 +110,7 @@ class VaccinationForecastController extends Controller
         $gridEnd = $end->copy()->endOfWeek(Carbon::SATURDAY);
 
         // ── Vaccination doses ──
-        $rawSchedules = VaccinationSchedule::whereHas('patient', fn ($q) => $q->forViewer())->with('patient')
+        $rawSchedules = VaccinationSchedule::current()->whereHas('patient', fn ($q) => $q->forViewer())->with('patient')
             ->where('health_unit_id', $healthUnitId)
             ->when($calendarAreaFilter, fn ($query) => $query->whereHas('patient', fn ($patient) => $patient
                 ->whereRaw('LOWER(TRIM(barangay)) = ?', [mb_strtolower($calendarAreaFilter)])))
@@ -134,12 +122,8 @@ class VaccinationForecastController extends Controller
             ->get();
 
         $schedules = $rawSchedules
-            ->map(function ($s) use ($rhu) {
-                $s->session_date = $this->scheduleService->sessionDateFor(
-                    Carbon::parse($s->due_date),
-                    $rhu?->id,
-                    in_array($s->status, ['pending', 'missed'], true) ? $s->patient?->barangay : null
-                );
+            ->map(function ($s) {
+                $s->session_date = $this->scheduleService->appointmentSessionDate($s, $s->patient?->barangay);
 
                 return $s;
             })
@@ -303,6 +287,7 @@ class VaccinationForecastController extends Controller
 
         $selectedSchedules = $sd->map(fn ($s) => [
             'id' => $s->id,
+            'patient_id' => $s->public_user_id,
             'vaccine' => $s->vaccine_name,
             'dose' => $s->dose_number,
             'child_name' => $s->patient?->full_name ?? 'Unknown',
@@ -348,11 +333,9 @@ class VaccinationForecastController extends Controller
         ])->values()->all();
 
         $flat = collect($schedules)->flatten();
-        $monthStats = [
-            'total_pending' => $flat->where('status', 'pending')->count(),
-            'total_overdue' => $flat->where('status', 'missed')->count(),
-            'total_given' => $flat->where('status', 'given')->count(),
-        ];
+        $appointments = $this->scheduleService->summarizeAppointments($flat);
+        $monthStats = ['total_pending' => $appointments['pending'], 'total_overdue' => $appointments['missed'],
+            'total_given' => $appointments['given']];
 
         // ═══ Vitamin A eligibility (April / October only) ═══
         $vitaminAEligibility = null;
@@ -432,12 +415,13 @@ class VaccinationForecastController extends Controller
             if ($dateCol) {
                 $fourWeeksAgo = $today->copy()->subWeeks(4)->toDateString();
 
-                $postpartum = PostpartumVisit::whereHas('patient', fn ($q) => $q->forViewer())
+                $deliveries = PostpartumVisit::whereHas('patient', fn ($q) => $q->forViewer())
                     ->where('health_unit_id', $healthUnitId)
                     ->whereNotNull($dateCol)
-                    ->where($dateCol, '>=', $fourWeeksAgo)
-                    ->where($dateCol, '<=', $today->toDateString())
-                    ->count();
+                    ->whereDate($dateCol, '>=', $fourWeeksAgo)
+                    ->whereDate($dateCol, '<=', $today->toDateString())
+                    ->select('patient_id')->selectRaw('DATE('.$dateCol.') as delivery_day')->distinct();
+                $postpartum = DB::query()->fromSub($deliveries, 'eligible_deliveries')->count();
             }
         }
 
@@ -459,8 +443,6 @@ class VaccinationForecastController extends Controller
 
         $request->validate(['month' => 'nullable|date_format:Y-m']);
         $healthUnitId = session('health_unit_id');
-        $this->scheduleService->markOverdueAsMissed(30);
-        $this->scheduleService->rescheduleMissedDoses(30);
 
         $month = $request->input('month') ?: now()->format('Y-m');
         $summary = $this->scheduleService->monthlySummary($healthUnitId, $month);
@@ -484,18 +466,18 @@ class VaccinationForecastController extends Controller
 
         return response()->streamDownload(function () use ($summary) {
             $handle = fopen('php://output', 'w');
-            fputcsv($handle, ['Month', $summary['month']]);
-            fputcsv($handle, []);
-            fputcsv($handle, ['Vaccine', 'Children', 'Doses']);
+            SpreadsheetCsv::writeRow($handle, ['Month', $summary['month']]);
+            SpreadsheetCsv::writeRow($handle, []);
+            SpreadsheetCsv::writeRow($handle, ['Vaccine', 'Children', 'Doses']);
             foreach ($summary['by_vaccine'] as $row) {
-                fputcsv($handle, [$row['vaccine'], $row['children'], $row['doses']]);
+                SpreadsheetCsv::writeRow($handle, [$row['vaccine'], $row['children'], $row['doses']]);
             }
-            fputcsv($handle, []);
-            fputcsv($handle, ['TOTAL', $summary['total_children'], $summary['total_doses']]);
-            fputcsv($handle, []);
-            fputcsv($handle, ['Child Name', 'Barangay', 'Vaccine', 'Dose', 'Due Date', 'Status']);
+            SpreadsheetCsv::writeRow($handle, []);
+            SpreadsheetCsv::writeRow($handle, ['TOTAL', $summary['total_children'], $summary['total_doses']]);
+            SpreadsheetCsv::writeRow($handle, []);
+            SpreadsheetCsv::writeRow($handle, ['Child Name', 'Barangay', 'Vaccine', 'Dose', 'Due Date', 'Status']);
             foreach ($summary['children'] as $s) {
-                fputcsv($handle, [
+                SpreadsheetCsv::writeRow($handle, [
                     $s->patient?->full_name ?? 'Unknown',
                     $s->patient?->barangay ?? '—',
                     $s->vaccine_name,
@@ -524,7 +506,10 @@ class VaccinationForecastController extends Controller
             ->orderBy('due_date')
             ->get();
 
-        $stats = $this->scheduleService->summaryFor($child);
+        foreach ($schedules->where('status', 'pending')->whereNull('superseded_at') as $appointment) {
+            $appointment->session_date = $this->scheduleService->appointmentSessionDate($appointment, $child->barangay);
+        }
+        $stats = $this->scheduleService->summarizeAppointments($schedules);
 
         return view('vaccination.child', compact('child', 'schedules', 'stats'));
     }

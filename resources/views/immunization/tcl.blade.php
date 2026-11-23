@@ -174,7 +174,7 @@
             <button type="submit" style="min-height:2.75rem;height:auto; padding:0 20px; background:#42ad8a; color:white; border:none; border-radius:10px; font-weight:600; font-size:1.0625rem; cursor:pointer;">
                 Apply
             </button>
-            @if(request('search') || $filter !== 'all')
+            @if($patientId || request('search') || $filter !== 'all')
                 <a href="{{ route('immunization.tcl') }}" style="font-size:1.0625rem; font-weight:600; color:#64748b; text-decoration:none; padding:0 8px;">Reset</a>
             @endif
         </form>
@@ -385,6 +385,10 @@
         @endif
     </div>
 
+    @if($children->hasPages())
+        <div class="no-print">{{ $children->links() }}</div>
+    @endif
+
     @if($children->count() > 0)
         <p class="no-print" style="text-align:center; font-size:1.0625rem; color:#64748b; margin:0;">
             <strong>{{ $children->count() }}</strong> child{{ $children->count() === 1 ? '' : 'ren' }} shown
@@ -428,6 +432,8 @@
             <p id="dm-child-name" style="font-size:1.0625rem; font-weight:600; color:#0f172a; margin:0;">—</p>
             <p id="dm-age-label" style="font-size:1.0625rem; color:#64748b; margin:4px 0 0 0;">—</p>
         </div>
+
+        <p style="margin:0 0 16px; color:#475569;">Record the administered dose and the lot printed on the vial or package. Log the vial or other stock units used in Dispensing if they have yet to be issued.</p>
 
         <form id="dose-form" method="POST" action="{{ route('immunization.store') }}">
             @csrf

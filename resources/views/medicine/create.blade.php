@@ -119,14 +119,7 @@
                             style="width:100%; padding:12px 16px; font-size:16px; border:2px solid #bec6cf; border-radius:14px; outline:none; background:white; color:#0f172a; box-sizing:border-box; appearance:auto;"
                             onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                             onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
-                        <option value="">— Select —</option>
-                        <option value="piece"  data-cats="medicine,family_planning,family_health_nutrition,emerging_reemerging,non_communicable" {{ old('unit') == 'piece'  ? 'selected' : '' }}>piece</option>
-                        <option value="stub"   data-cats="medicine,emerging_reemerging,non_communicable"   {{ old('unit') == 'stub'   ? 'selected' : '' }}>stub</option>
-                        <option value="sachet" data-cats="medicine,family_health_nutrition"              {{ old('unit') == 'sachet' ? 'selected' : '' }}>sachet</option>
-                        <option value="box"    data-cats="medicine,vaccine,family_planning,family_health_nutrition,emerging_reemerging,non_communicable" {{ old('unit') == 'box' ? 'selected' : '' }}>box</option>
-                        <option value="vial"   data-cats="vaccine,emerging_reemerging,non_communicable"    {{ old('unit') == 'vial'   ? 'selected' : '' }}>vial</option>
-                        <option value="ampule" data-cats="vaccine,emerging_reemerging"                  {{ old('unit') == 'ampule' ? 'selected' : '' }}>ampule</option>
-                        <option value="bottle" data-cats="family_health_nutrition"                      {{ old('unit') == 'bottle' ? 'selected' : '' }}>bottle</option>
+                        @include('medicine._unit_options', ['currentUnit' => null])
                     </select>
                     <small style="color:#64748b; font-size:14px;">💡 How stock is counted.</small>
                     @error('unit')
@@ -185,15 +178,13 @@
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const categorySelect   = document.getElementById('category-select');
-    const dosageFormSelect = document.getElementById('dosage-form-select');
-    const unitSelect       = document.getElementById('unit-select');
-    const dosageHint       = document.getElementById('dosage-form-hint');
+    const dosageFormSelect = document.getElementById('dosage-form-select');    const dosageHint       = document.getElementById('dosage-form-hint');
     const dosageInput      = document.getElementById('dosage-input');
     const dosageWrapper    = document.getElementById('dosage-strength-wrapper');
     const dosageOptional   = document.getElementById('dosage-strength-optional');
     const dosageStrengthHint = document.getElementById('dosage-strength-hint');
 
-    if (!categorySelect || !dosageFormSelect || !unitSelect) return;
+    if (!categorySelect || !dosageFormSelect) return;
 
     function snapshot(select) {
         return Array.from(select.options)
@@ -205,9 +196,7 @@ document.addEventListener('DOMContentLoaded', function () {
             }));
     }
 
-    const dosageFormOptions = snapshot(dosageFormSelect);
-    const unitOptions       = snapshot(unitSelect);
-
+    const dosageFormOptions = snapshot(dosageFormSelect);
     function rebuildSelect(select, options, category, currentValue) {
         select.innerHTML = '';
         const placeholder = document.createElement('option');
@@ -274,8 +263,6 @@ document.addEventListener('DOMContentLoaded', function () {
             if (dosageHint) dosageHint.style.display = 'none';
         }
 
-        // ─── Base Unit ───
-        rebuildSelect(unitSelect, unitOptions, category, unitSelect.value);
 
         // ─── Dosage Strength visibility (based on form) ───
         updateDosageStrengthVisibility();

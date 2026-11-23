@@ -35,10 +35,23 @@
                 @enderror
             </div>
 
+            {{-- Current Password --}}
+            <div>
+                <label for="current-password" style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">Current Password</label>
+                <input id="current-password" type="password" name="current_password" autocomplete="current-password"
+                       placeholder="Required to change your password"
+                       style="width:100%; padding:12px 16px; font-size:14px; border:2px solid #bec6cf; border-radius:14px; outline:none; background:white; color:#0f172a; box-sizing:border-box;"
+                       onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
+                       onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
+                @error('current_password')
+                    <p style="margin-top:4px; font-size:13px; color:#dc2626;">{{ $message }}</p>
+                @enderror
+            </div>
+
             {{-- New Password --}}
             <div>
-                <label style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">New Password</label>
-                <input type="password" name="password"
+                <label for="new-password" style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">New Password</label>
+                <input id="new-password" type="password" name="password" autocomplete="new-password"
                        placeholder="Leave blank to keep current password"
                        style="width:100%; padding:12px 16px; font-size:14px; border:2px solid #bec6cf; border-radius:14px; outline:none; background:white; color:#0f172a; box-sizing:border-box;"
                        onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
@@ -50,8 +63,8 @@
 
             {{-- Confirm New Password --}}
             <div>
-                <label style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">Confirm New Password</label>
-                <input type="password" name="password_confirmation"
+                <label for="confirm-new-password" style="display:block; margin-bottom:6px; font-size:14px; font-weight:600; color:#0f172a;">Confirm New Password</label>
+                <input id="confirm-new-password" type="password" name="password_confirmation" autocomplete="new-password"
                        placeholder="Confirm new password"
                        style="width:100%; padding:12px 16px; font-size:14px; border:2px solid #bec6cf; border-radius:14px; outline:none; background:white; color:#0f172a; box-sizing:border-box;"
                        onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"

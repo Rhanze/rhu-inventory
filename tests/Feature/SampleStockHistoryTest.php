@@ -23,7 +23,8 @@ class SampleStockHistoryTest extends TestCase
         $unit = HealthUnit::create(['name' => 'Sample RHU', 'facility_type' => 'Rural Health Unit']);
         User::factory()->create(['health_unit_id' => $unit->id, 'role' => 'staff', 'is_active' => true]);
         foreach (range(1, 12) as $index) {
-            Medicine::create(['medicine_name' => 'Sample medicine '.str_pad($index, 2, '0', STR_PAD_LEFT), 'category' => 'medicine', 'is_dispensable' => true]);
+            Medicine::create(['medicine_name' => 'Sample medicine '.str_pad($index, 2, '0', STR_PAD_LEFT), 'category' => 'medicine',
+                'is_dispensable' => true, 'requires_prescription' => $index % 2 === 0]);
         }
         $this->seed(SampleStockHistorySeeder::class);
         $this->assertSame(12, Inventory::count());
@@ -41,6 +42,11 @@ class SampleStockHistoryTest extends TestCase
                 $this->assertSame($batch->health_unit_id, $log->health_unit_id);
                 if ($log->movement_type === 'dispensing') {
                     $this->assertSame($log->quantity_added, $log->dispensingRecord->quantity_dispensed);
+                    if ($batch->medicine->requires_prescription) {
+                        $this->assertStringStartsWith('[DEMO] Clinician ', $log->dispensingRecord->doctor_name);
+                    } else {
+                        $this->assertNull($log->dispensingRecord->doctor_name);
+                    }
                 }
             }
             $this->assertSame($balance, $batch->available_stock);

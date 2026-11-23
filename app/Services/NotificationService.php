@@ -8,11 +8,15 @@ use App\Models\HealthUnit;
 use App\Models\Notification;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class NotificationService
 {
+    private const INBOX_ARCHIVED_AT = 'CASE WHEN viewer_state.notification_id IS NULL THEN notifications.archived_at ELSE viewer_state.viewer_archived_at END';
+
     /** The unique ledger survives reading, archiving and deleting a notification. */
     public function scanDohPreparationReminders(): int
     {
@@ -92,7 +96,7 @@ class NotificationService
         }
 
         if ($role === 'midwife') {
-            $query->where('user_id', $userId);
+            $query->where('user_id', $userId)->where('health_unit_id', $healthUnitId);
         } else {
             $query->where(fn ($q) => $q->whereNull('user_id')->orWhere('user_id', $userId));
             if ($healthUnitId === null) {
@@ -255,6 +259,9 @@ class NotificationService
     {
         // immunization_schedule contains dose definitions; patient appointments
         // live in vaccination_schedules. Each recipient sees only assigned children.
+        $today = today();
+        $from = $today->copy()->subDays(max(0, $lookbackDays));
+        $schedules = app(VaccinationScheduleService::class);
         $rows = DB::table('vaccination_schedules as s')
             ->join('public_users as p', function ($join) {
                 $join->on('p.id', '=', 's.public_user_id')
@@ -266,9 +273,11 @@ class NotificationService
             })
             ->where('u.role', 'midwife')->where('u.is_active', true)
             ->whereIn('s.status', ['pending', 'missed'])
-            ->whereNull('s.immunization_record_id')
-            ->whereDate('s.due_date', '<', today())
-            ->whereDate('s.due_date', '>=', today()->subDays(max(0, $lookbackDays)))
+            ->whereNull('s.immunization_record_id')->whereNull('s.superseded_at')
+            ->whereDate('s.due_date', '<', $today)
+            ->whereDate('s.due_date', '>=', $from->copy()->subDays(35))
+            ->whereNotExists(fn ($replacement) => $replacement->selectRaw('1')->from('vaccination_schedules as replacement')
+                ->whereColumn('replacement.rescheduled_from_id', 's.id'))
             ->whereNotExists(function ($query) {
                 $query->selectRaw('1')->from('immunization_records as r')
                     ->join('immunization_schedule as d', function ($join) {
@@ -287,19 +296,24 @@ class NotificationService
                     ->whereColumn('completed.dose_number', 's.dose_number')
                     ->where('completed.status', 'given');
             })
-            ->groupBy('s.health_unit_id', 'u.id')
-            ->select('s.health_unit_id', 'u.id as user_id', DB::raw('COUNT(DISTINCT s.public_user_id) as overdue_count'))
-            ->get();
+            ->get(['s.health_unit_id', 'u.id as user_id', 's.public_user_id', 's.due_date', 'p.barangay'])
+            ->filter(function ($row) use ($schedules, $from, $today) {
+                $date = $schedules->sessionDateFor(Carbon::parse($row->due_date), $row->health_unit_id, $row->barangay);
+
+                return $date->gte($from) && $date->lt($today);
+            })->groupBy(fn ($row) => $row->health_unit_id.':'.$row->user_id);
 
         $created = 0;
 
-        foreach ($rows as $row) {
+        foreach ($rows as $appointments) {
+            $row = $appointments->first();
+            $children = $appointments->pluck('public_user_id')->unique()->count();
             $n = $this->notifyUser(
                 (int) $row->user_id,
                 $row->health_unit_id,
                 'overdue_doses',
                 'Overdue Vaccine Doses',
-                $row->overdue_count.' assigned '.($row->overdue_count == 1 ? 'child has' : 'children have').' overdue vaccine doses. Open the vaccination calendar to follow up.',
+                $children.' assigned '.($children === 1 ? 'child has' : 'children have').' overdue vaccine doses. Open the vaccination calendar to follow up.',
                 'warning',
                 route('vaccination.calendar'),
                 [],
@@ -595,99 +609,136 @@ class NotificationService
     // READ / ARCHIVE / DELETE — viewer-aware
     // ═══════════════════════════════════════════════════════════
 
-    public function getUnreadCount(?int $healthUnitId, ?int $userId, ?string $role): int
+    private function inbox(?int $healthUnitId, ?int $userId, ?string $role): Builder
     {
-        $q = Notification::unread()->whereNull('archived_at');
+        $query = $this->scopeForViewer(Notification::query(), $healthUnitId, $userId, $role);
 
-        return $this->scopeForViewer($q, $healthUnitId, $userId, $role)->count();
+        return $query->leftJoin('notification_viewer_states as viewer_state', function ($join) use ($userId) {
+            $join->on('viewer_state.notification_id', '=', 'notifications.id')->where('viewer_state.viewer_id', $userId);
+        })->whereNull('viewer_state.viewer_hidden_at')
+            ->select('notifications.*')->selectRaw(self::INBOX_ARCHIVED_AT.' AS effective_archived_at')
+            ->selectRaw('CASE WHEN notifications.is_read = 1 OR viewer_state.viewer_read_at IS NOT NULL THEN 1 ELSE 0 END AS effective_is_read');
     }
 
-    public function getRecentNotifications(?int $healthUnitId, ?int $userId, ?string $role, int $limit = 20)
+    private function activeInbox(?int $healthUnitId, ?int $userId, ?string $role): Builder
     {
-        $q = Notification::with(['inventory.medicine', 'healthUnit'])
-            ->whereNull('archived_at')
-            ->orderByDesc('created_at');
+        return $this->inbox($healthUnitId, $userId, $role)->whereRaw('('.self::INBOX_ARCHIVED_AT.') IS NULL');
+    }
 
-        return $this->scopeForViewer($q, $healthUnitId, $userId, $role)
-            ->limit($limit)
-            ->get();
+    private function unreadInbox(?int $healthUnitId, ?int $userId, ?string $role): Builder
+    {
+        return $this->activeInbox($healthUnitId, $userId, $role)
+            ->where('notifications.is_read', false)->whereNull('viewer_state.viewer_read_at');
+    }
+
+    public function getUnreadCount(?int $healthUnitId, ?int $userId, ?string $role): int
+    {
+        return $this->unreadInbox($healthUnitId, $userId, $role)->count();
+    }
+
+    public function getRecentNotifications(?int $healthUnitId, ?int $userId, ?string $role, int $limit = 20): Collection
+    {
+        return $this->activeInbox($healthUnitId, $userId, $role)->with(['inventory.medicine', 'healthUnit'])
+            ->orderByDesc('notifications.created_at')->orderByDesc('notifications.id')->limit($limit)->get();
+    }
+
+    public function getRecentUnreadNotifications(?int $healthUnitId, ?int $userId, ?string $role, int $limit = 5): Collection
+    {
+        return $this->unreadInbox($healthUnitId, $userId, $role)
+            ->orderByDesc('notifications.created_at')->orderByDesc('notifications.id')->limit($limit)->get();
     }
 
     public function getNotifications(?int $healthUnitId, ?int $userId, ?string $role, string $view = 'active', int $limit = 50)
     {
-        $q = Notification::with(['inventory.medicine', 'healthUnit', 'transfer', 'allocation']);
-
-        $this->scopeForViewer($q, $healthUnitId, $userId, $role);
-
+        $query = $this->inbox($healthUnitId, $userId, $role)->with(['inventory.medicine', 'healthUnit', 'transfer', 'allocation']);
         if ($view === 'archived') {
-            $q->whereNotNull('archived_at');
+            $query->whereRaw('('.self::INBOX_ARCHIVED_AT.') IS NOT NULL');
         } elseif ($view === 'active') {
-            $q->whereNull('archived_at');
+            $query->whereRaw('('.self::INBOX_ARCHIVED_AT.') IS NULL');
         }
 
-        return $q->orderByDesc('created_at')->orderByDesc('id')->paginate($limit)->withQueryString();
+        return $query->orderByDesc('notifications.created_at')->orderByDesc('notifications.id')->paginate($limit)->withQueryString();
     }
 
     public function getArchivedCount(?int $healthUnitId, ?int $userId, ?string $role): int
     {
-        $q = Notification::whereNotNull('archived_at');
-
-        return $this->scopeForViewer($q, $healthUnitId, $userId, $role)->count();
+        return $this->inbox($healthUnitId, $userId, $role)
+            ->whereRaw('('.self::INBOX_ARCHIVED_AT.') IS NOT NULL')->count();
     }
 
     public function markAsRead(int $notificationId, ?int $healthUnitId, ?int $userId, ?string $role): bool
     {
-        $q = Notification::where('id', $notificationId);
-        $this->scopeForViewer($q, $healthUnitId, $userId, $role);
-
-        return (bool) $q->update(['is_read' => true]);
+        return $this->changeInbox($this->inbox($healthUnitId, $userId, $role)->whereKey($notificationId),
+            $userId, ['viewer_read_at' => now()], ['is_read' => true]) > 0;
     }
 
     public function markAllAsRead(?int $healthUnitId, ?int $userId, ?string $role): int
     {
-        $q = Notification::unread()->whereNull('archived_at');
-        $this->scopeForViewer($q, $healthUnitId, $userId, $role);
-
-        return $q->update(['is_read' => true]);
+        return $this->changeInbox($this->unreadInbox($healthUnitId, $userId, $role),
+            $userId, ['viewer_read_at' => now()], ['is_read' => true]);
     }
 
     public function archive(int $id, ?int $healthUnitId, ?int $userId, ?string $role): bool
     {
-        $q = Notification::where('id', $id);
-        $this->scopeForViewer($q, $healthUnitId, $userId, $role);
+        $now = now();
 
-        return $q->update(['archived_at' => now()]) > 0;
+        return $this->changeInbox($this->inbox($healthUnitId, $userId, $role)->whereKey($id),
+            $userId, ['viewer_archived_at' => $now], ['archived_at' => $now]) > 0;
     }
 
     public function unarchive(int $id, ?int $healthUnitId, ?int $userId, ?string $role): bool
     {
-        $q = Notification::where('id', $id);
-        $this->scopeForViewer($q, $healthUnitId, $userId, $role);
-
-        return $q->update(['archived_at' => null]) > 0;
+        return $this->changeInbox($this->inbox($healthUnitId, $userId, $role)->whereKey($id),
+            $userId, ['viewer_archived_at' => null], ['archived_at' => null]) > 0;
     }
 
     public function destroyArchived(?int $healthUnitId, ?int $userId, ?string $role): int
     {
-        $q = Notification::whereNotNull('archived_at');
-        $this->scopeForViewer($q, $healthUnitId, $userId, $role);
-
-        return $q->delete();
+        return $this->changeInbox($this->inbox($healthUnitId, $userId, $role)
+            ->whereRaw('('.self::INBOX_ARCHIVED_AT.') IS NOT NULL'), $userId, ['viewer_hidden_at' => now()]);
     }
 
     public function destroyById(int $id, ?int $healthUnitId, ?int $userId, ?string $role): bool
     {
-        $q = Notification::where('id', $id);
-        $this->scopeForViewer($q, $healthUnitId, $userId, $role);
-
-        return $q->delete() > 0;
+        return $this->changeInbox($this->inbox($healthUnitId, $userId, $role)->whereKey($id),
+            $userId, ['viewer_hidden_at' => now()]) > 0;
     }
 
     public function destroyAll(?int $healthUnitId, ?int $userId, ?string $role): int
     {
-        $q = Notification::whereNull('archived_at');
-        $this->scopeForViewer($q, $healthUnitId, $userId, $role);
+        return $this->changeInbox($this->activeInbox($healthUnitId, $userId, $role), $userId, ['viewer_hidden_at' => now()]);
+    }
 
-        return $q->delete();
+    private function changeInbox(Builder $query, ?int $userId, array $sharedChange, ?array $personalChange = null): int
+    {
+        if ($userId === null) {
+            return 0;
+        }
+
+        $changed = 0;
+        $query->chunkById(200, function (Collection $notifications) use ($userId, $sharedChange, $personalChange, &$changed) {
+            [$shared, $personal] = $notifications->partition(fn (Notification $item) => $item->user_id === null);
+
+            if ($shared->isNotEmpty()) {
+                $rows = $shared->map(fn (Notification $item) => array_merge([
+                    'notification_id' => $item->id,
+                    'viewer_id' => $userId,
+                    'viewer_archived_at' => $item->getRawOriginal('archived_at'),
+                ], $sharedChange))->values()->all();
+                DB::table('notification_viewer_states')->upsert($rows, ['notification_id', 'viewer_id'], array_keys($sharedChange));
+            }
+
+            if ($personal->isNotEmpty()) {
+                $owned = Notification::whereKey($personal->modelKeys())->where('user_id', $userId);
+                if ($personalChange === null) {
+                    $owned->delete();
+                } else {
+                    $owned->update($personalChange);
+                }
+            }
+            $changed += $notifications->count();
+        }, 'notifications.id', 'id');
+
+        return $changed;
     }
 }

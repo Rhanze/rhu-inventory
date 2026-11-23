@@ -2,11 +2,11 @@
 
 namespace App\Services;
 
-use App\Models\Allocation;
 use App\Models\HealthUnit;
 use App\Models\Inventory;
 use App\Models\Medicine;
 use App\Models\StockLog;
+use App\Models\TransferRequest;
 use Illuminate\Support\Facades\DB;
 
 class DashboardService
@@ -25,7 +25,7 @@ class DashboardService
             'utilization' => $this->getUtilizationData($usageDays, $usageRanking),
             'stockMovement' => $this->getStockMovementData(),
             'expirationRisk' => $this->getExpirationRiskData(),
-            'redistribution' => $this->getRedistributionData(),
+            'redistribution' => $this->getReceivedTransfersData(),
             'lowStockByRHU' => $this->getLowStockByRHU(),
             'forecast' => $this->getForecastSummary(),
         ];
@@ -150,25 +150,20 @@ class DashboardService
         $months = [];
         $additions = [];
         $releases = [];
+        $today = today();
+        $tomorrow = $today->copy()->addDay()->toDateString();
+        $logs = StockLog::activeForReporting()->where('quantity_added', '>', 0)
+            ->when(! $this->isPHOAdmin, fn ($query) => $query->where('health_unit_id', $this->healthUnitId));
 
         for ($i = 5; $i >= 0; $i--) {
-            $month = today()->startOfMonth()->subMonths($i);
+            $month = $today->copy()->startOfMonth()->subMonths($i);
             $months[] = $month->format('M Y');
 
-            $additionsCount = StockLog::activeForReporting()->additions()
-                ->when(! $this->isPHOAdmin, fn ($q) => $q->where('health_unit_id', $this->healthUnitId))
-                ->whereYear('date_added', $month->year)
-                ->whereMonth('date_added', $month->month)
-                ->sum('quantity_added');
-
-            $releasesCount = StockLog::activeForReporting()->releases()
-                ->when(! $this->isPHOAdmin, fn ($q) => $q->where('health_unit_id', $this->healthUnitId))
-                ->whereYear('date_added', $month->year)
-                ->whereMonth('date_added', $month->month)
-                ->sum('quantity_added');
-
-            $additions[] = (int) $additionsCount;
-            $releases[] = (int) $releasesCount;
+            $monthEnd = $month->copy()->addMonth()->toDateString();
+            $monthlyLogs = (clone $logs)->where('date_added', '>=', $month->toDateString())
+                ->where('date_added', '<', min($monthEnd, $tomorrow));
+            $additions[] = (clone $monthlyLogs)->additions()->count();
+            $releases[] = $monthlyLogs->releases()->count();
         }
 
         return [
@@ -224,27 +219,31 @@ class DashboardService
         ];
     }
 
-    private function getRedistributionData(): array
+    private function getReceivedTransfersData(): array
     {
-        $allocations = Allocation::query()
-            ->where('date_allocated', '>=', now()->subMonths(3))
-            ->when(! $this->isPHOAdmin, function ($q) {
-                $q->where(function ($sub) {
-                    $sub->where('health_unit_id', $this->healthUnitId)
-                        ->orWhere('destination_health_unit_id', $this->healthUnitId);
-                });
-            })
-            ->select('destination_health_unit_id', DB::raw('COUNT(*) as count'))
-            ->whereNotNull('destination_health_unit_id')
-            ->groupBy('destination_health_unit_id')
-            ->with('destinationHealthUnit')
-            ->orderByDesc('count')
-            ->limit(8)
-            ->get();
+        $facilityId = $this->isPHOAdmin ? HealthUnit::phoId() : $this->healthUnitId;
+        if ($facilityId === null) {
+            return ['labels' => [], 'data' => []];
+        }
+
+        $window = [today()->subMonthsNoOverflow(3), now()];
+        $ownFacility = $this->isPHOAdmin ? 'from_health_unit_id' : 'to_health_unit_id';
+        $otherFacility = $this->isPHOAdmin ? 'to_health_unit_id' : 'from_health_unit_id';
+        $relation = $this->isPHOAdmin ? 'toHealthUnit' : 'fromHealthUnit';
+        $transfers = TransferRequest::query()
+            ->where($ownFacility, $facilityId)
+            ->whereIn('status', ['received', 'completed'])
+            ->where('auto_completed', false)
+            ->where(fn ($query) => $query->whereBetween('received_at', $window)
+                ->orWhere(fn ($legacy) => $legacy->whereNull('received_at')->whereBetween('completed_at', $window)))
+            ->select($otherFacility, DB::raw('COUNT(*) as count'))
+            ->groupBy($otherFacility)
+            ->with($relation)
+            ->orderByDesc('count')->orderBy($otherFacility)->limit(8)->get();
 
         return [
-            'labels' => $allocations->map(fn ($a) => $a->destinationHealthUnit->name ?? 'Unknown')->all(),
-            'data' => $allocations->pluck('count')->map(fn ($c) => (int) $c)->all(),
+            'labels' => $transfers->map(fn ($transfer) => $transfer->{$relation}?->name ?? 'Unknown facility')->all(),
+            'data' => $transfers->pluck('count')->map(fn ($count) => (int) $count)->all(),
         ];
     }
 

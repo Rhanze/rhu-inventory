@@ -20,6 +20,7 @@
     ">
         <form action="{{ route('dispensing.store') }}" method="POST" enctype="multipart/form-data" style="display:flex; flex-direction:column; gap:20px;">
             @csrf
+            <input type="hidden" name="submission_token" value="{{ $submissionToken }}">
 
             @if(session('role') === 'midwife')
             <div>
@@ -38,51 +39,45 @@
                 @error('barangay')<p style="margin-top:4px;font-size:1rem;color:#dc2626;">{{ $message }}</p>@enderror
             </div>
             @endif
-            <div>
-                <label for="dispensing-patient" style="display:block;margin-bottom:6px;font-size:1rem;font-weight:600;color:#0f172a;">Patient or recipient name (optional)</label>
-                <input id="dispensing-patient" type="text" name="patient_name" maxlength="255" value="{{ old('patient_name') }}"
-                       style="width:100%;padding:12px 16px;font-size:1rem;border:2px solid #bec6cf;border-radius:14px;background:white;color:#0f172a;box-sizing:border-box;">
-                @error('patient_name')<p style="margin-top:4px;font-size:1rem;color:#dc2626;">{{ $message }}</p>@enderror
-            </div>
+            @include('dispensing._patient_link')
 
             @include('dispensing._stock_source')
 
             {{-- Inventory Item --}}
             <div>
-                <label style="display:block; margin-bottom:6px; font-size:1rem; font-weight:600; color:#0f172a;">Inventory Item</label>
-                <select name="inventory_id" id="inventory_id"
+                <label for="inventory_id" style="display:block; margin-bottom:6px; font-size:1rem; font-weight:600; color:#0f172a;">Medicine</label>
+                <select name="medicine_id" id="inventory_id" required aria-describedby="dispensing-rotation-help"
                         style="width:100%; padding:12px 16px; font-size:1rem; border:2px solid #bec6cf; border-radius:14px; outline:none; background:white; color:#0f172a; box-sizing:border-box; appearance:auto;"
                         onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                         onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
-                    <option value="">Select inventory</option>
+                    <option value="">Select medicine</option>
                     @include('dispensing._inventory_options')
                 </select>
+                <p id="dispensing-rotation-help" style="margin:6px 0;color:#475569;">Batches are issued in order of earliest eligible expiry.</p>
 
                 {{-- Prescription status badge --}}
                 <div id="prescriptionStatus" style="margin-top:8px; display:none; border-radius:10px; padding:10px 14px; font-size:1rem; font-weight:500;"></div>
 
                 {{-- Batch info panel --}}
                 <div id="batchInfo" style="display:none; margin-top:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:12px; padding:12px 14px;">
-                    <p style="font-size:1rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#64748b; margin:0 0 6px 0;">This Batch</p>
+                    <p style="font-size:1rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#64748b; margin:0 0 6px 0;">Medicine details</p>
                     <div style="display:flex; flex-wrap:wrap; gap:8px 16px; font-size:1rem; color:#0f172a;">
-                        <div><span style="color:#64748b;">Batch:</span> <strong id="info-batch" style="font-family:monospace;">—</strong></div>
-                        <div><span style="color:#64748b;">Expiry:</span> <strong id="info-expiry">—</strong></div>
-                        <div><span style="color:#64748b;">Packaging:</span> <strong id="info-packaging">—</strong></div>
+                        <div><span style="color:#64748b;">Catalog packaging:</span> <strong id="info-packaging">—</strong></div>
                     </div>
                 </div>
 
-                @error('inventory_id')
+                @error('medicine_id')
                     <p style="margin-top:4px; font-size:1rem; color:#dc2626;">{{ $message }}</p>
                 @enderror
             </div>
 
             {{-- Quantity --}}
             <div>
-                <label style="display:block; margin-bottom:6px; font-size:1rem; font-weight:600; color:#0f172a;">
+                <label for="quantity_dispensed" style="display:block; margin-bottom:6px; font-size:1rem; font-weight:600; color:#0f172a;">
                     Quantity Dispensed <span id="qty-unit-label" style="font-weight:400; color:#64748b;"></span>
                 </label>
                 <input type="number" name="quantity_dispensed" id="quantity_dispensed" value="{{ old('quantity_dispensed') }}"
-                       min="1" placeholder="Enter quantity"
+                       min="1" required placeholder="Enter quantity"
                        style="width:100%; padding:12px 16px; font-size:1rem; border:2px solid #bec6cf; border-radius:14px; outline:none; background:white; color:#0f172a; box-sizing:border-box;"
                        onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                        onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
@@ -111,8 +106,9 @@
 
             {{-- Date --}}
             <div>
-                <label style="display:block; margin-bottom:6px; font-size:1rem; font-weight:600; color:#0f172a;">Date Dispensed</label>
-                <input type="date" name="date_dispensed" value="{{ old('date_dispensed', date('Y-m-d')) }}"
+                <label for="dispensing-date" style="display:block; margin-bottom:6px; font-size:1rem; font-weight:600; color:#0f172a;">Date Dispensed</label>
+                <input type="date" id="dispensing-date" name="date_dispensed" value="{{ old('date_dispensed', today()->toDateString()) }}"
+                       max="{{ today()->toDateString() }}" required
                        style="width:100%; padding:12px 16px; font-size:1rem; border:2px solid #bec6cf; border-radius:14px; outline:none; background:white; color:#0f172a; box-sizing:border-box;"
                        onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                        onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
@@ -120,6 +116,8 @@
                     <p style="margin-top:4px; font-size:1rem; color:#dc2626;">{{ $message }}</p>
                 @enderror
             </div>
+
+            @include('dispensing._batch_preview')
 
             {{-- Prescription Image --}}
             <div>
@@ -183,7 +181,7 @@
                     Cancel
                 </a>
 
-                <button type="submit" style="
+                <button type="submit" disabled style="
                     font-size:1rem; font-weight:600; padding:10px 20px; border-radius:10px;
                     background:#42ad8a; color:#ffffff; border:none; cursor:pointer;
                 " onmouseover="this.style.background='#369f7d'" onmouseout="this.style.background='#42ad8a'">
@@ -203,8 +201,6 @@ document.addEventListener('DOMContentLoaded', function () {
     const doctorHelpText       = document.getElementById('doctorHelpText');
 
     const batchInfo   = document.getElementById('batchInfo');
-    const infoBatch   = document.getElementById('info-batch');
-    const infoExpiry  = document.getElementById('info-expiry');
     const infoPackage = document.getElementById('info-packaging');
 
     const qtyInput   = document.getElementById('quantity_dispensed');
@@ -255,14 +251,9 @@ document.addEventListener('DOMContentLoaded', function () {
             prescriptionStatus.textContent = 'No Prescription Needed.';
         }
 
-        const batch    = opt.dataset.batch || '';
-        const expiry   = opt.dataset.expiry || '';
         const packType = opt.dataset.packType || '';
         const ppp      = parseInt(opt.dataset.piecesPerPack || 0, 10);
         const unit     = opt.dataset.unit || '';
-
-        infoBatch.textContent  = batch || '—';
-        infoExpiry.textContent = expiry || '—';
 
         if (packType && ppp) {
             infoPackage.textContent = ppp + ' ' + pluralUnit(unit, ppp) + ' per ' + packType;

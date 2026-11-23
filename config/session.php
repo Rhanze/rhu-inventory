@@ -1,5 +1,7 @@
 <?php
 
+$managedProduction = env('APP_ENV') === 'production' && env('PORTAL_SURFACE') === 'management';
+
 use Illuminate\Support\Str;
 
 return [
@@ -32,9 +34,9 @@ return [
     |
     */
 
-    'lifetime' => (int) env('SESSION_LIFETIME', 120),
+    'lifetime' => (int) env('SESSION_LIFETIME', $managedProduction ? 30 : 120),
 
-    'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', false),
+    'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', $managedProduction),
 
     /*
     |--------------------------------------------------------------------------
@@ -47,7 +49,7 @@ return [
     |
     */
 
-    'encrypt' => env('SESSION_ENCRYPT', false),
+    'encrypt' => env('SESSION_ENCRYPT', $managedProduction),
 
     /*
     |--------------------------------------------------------------------------

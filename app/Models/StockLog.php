@@ -79,6 +79,17 @@ class StockLog extends Model
         return $this->directionScope($query, self::ADDITION_TYPES, ['added%', 'stock%', 'received%'], true);
     }
 
+    public function isDispensingMovement(): bool
+    {
+        return $this->dispensing_record_id !== null || $this->movement_type === 'dispensing'
+            || ($this->movement_type === null && preg_match('/\A(?:dispensed|released.*dispensed)/is', trim($this->remarks ?? '')) === 1);
+    }
+
+    public function getReportRemarksAttribute(): ?string
+    {
+        return $this->isDispensingMovement() ? null : $this->remarks;
+    }
+
     /** Explicit movement types take precedence over editable legacy descriptions. */
     public function getMovementDirectionAttribute(): ?string
     {

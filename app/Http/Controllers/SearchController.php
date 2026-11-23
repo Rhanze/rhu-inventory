@@ -11,12 +11,19 @@ use App\Models\StockLog;
 use App\Models\User;
 use App\Models\TransferRequest;
 use App\Services\ForecastService;
+use App\Services\StockSummaryService;
 use App\Support\SearchSections;
-use Illuminate\Validation\Rule;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\Paginator;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class SearchController extends Controller
 {
+    private const RESULTS_PER_PAGE = 20;
+
     private function checkAccess()
     {
         if (! session()->has('user_id')) {
@@ -73,46 +80,31 @@ class SearchController extends Controller
         return route('dispensing.index', $filters).'#dispensing-'.$id;
     }
 
-    /**
-     * Calculate on which page a record appears in the given ordered query.
-     */
-    private function getPageForRecord($baseQuery, $orderColumn, $orderDirection, $recordId, $recordOrderValue, $perPage)
+    /** Rank the matched IDs in their destination listing in one query. */
+    private function setListingPages(Builder $listing, EloquentCollection $records, string $column, string $direction,
+        int $perPage, bool $byFacility = false): void
     {
-        if ($orderColumn === 'id' && $orderDirection === 'desc') {
-            $position = (clone $baseQuery)->where('id', '>', $recordId)->count();
-        } elseif ($orderColumn === 'id' && $orderDirection === 'asc') {
-            $position = (clone $baseQuery)->where('id', '<', $recordId)->count();
-        } elseif ($recordOrderValue === null) {
-            $position = (clone $baseQuery)->where(function ($q) use ($orderColumn, $orderDirection, $recordId) {
-                if ($orderDirection === 'desc') {
-                    $q->whereNotNull($orderColumn)->orWhere(fn ($ties) => $ties->whereNull($orderColumn)->where('id', '>', $recordId));
-                } else {
-                    $q->whereNull($orderColumn)->where('id', '<', $recordId);
-                }
-            })->count();
-        } else {
-            if ($orderDirection === 'asc') {
-                $position = (clone $baseQuery)
-                    ->where(function ($q) use ($orderColumn, $recordOrderValue, $recordId) {
-                        $q->where($orderColumn, '<', $recordOrderValue)
-                            ->orWhere(function ($sub) use ($orderColumn, $recordOrderValue, $recordId) {
-                                $sub->where($orderColumn, $recordOrderValue)
-                                    ->where('id', '<', $recordId);
-                            });
-                    })->count();
-            } else { // desc
-                $position = (clone $baseQuery)
-                    ->where(function ($q) use ($orderColumn, $recordOrderValue, $recordId) {
-                        $q->where($orderColumn, '>', $recordOrderValue)
-                            ->orWhere(function ($sub) use ($orderColumn, $recordOrderValue, $recordId) {
-                                $sub->where($orderColumn, $recordOrderValue)
-                                    ->where('id', '>', $recordId);
-                            });
-                    })->count();
-            }
+        if ($records->isEmpty()) {
+            return;
         }
 
-        return (int) ceil(($position + 1) / $perPage);
+        $ordering = $column === 'id' ? "id {$direction}" : "{$column} {$direction}, id {$direction}";
+        $partition = $byFacility ? 'PARTITION BY health_unit_id ' : '';
+        $ranked = (clone $listing)->reorder()->select('id')
+            ->when($byFacility, fn ($query) => $query->whereIn('health_unit_id', $records->pluck('health_unit_id')->unique()))
+            ->selectRaw("ROW_NUMBER() OVER ({$partition}ORDER BY {$ordering}) AS listing_position");
+        $positions = DB::query()->fromSub($ranked->toBase(), 'ranked_listing')
+            ->whereIn('id', $records->modelKeys())->pluck('listing_position', 'id');
+
+        foreach ($records as $record) {
+            $record->search_page = (int) ceil(($positions[$record->id] ?? 1) / $perPage);
+        }
+    }
+
+    private function resultPage(Builder $query, string $section): Paginator
+    {
+        return $query->simplePaginate(self::RESULTS_PER_PAGE, ['*'], $section.'_results_page')
+            ->withQueryString()->fragment('search-'.$section);
     }
 
     public function index(Request $request)
@@ -131,18 +123,9 @@ class SearchController extends Controller
         $scope = $values['scope'] ?? 'all';
 
 
-        $medicineResults = collect();
-        $userResults = collect();
-        $rhuResults = collect();
-        $inventoryResults = collect();
-        $stockLogResults = collect();
-        $allocationResults = collect();
-        $dispensingResults = collect();
-        $transferResults = collect();
-        $forecastResults = collect();
-
-        // Per-page value used everywhere (must match pagination config)
-        $perPage = 20;
+        $empty = new Paginator([], self::RESULTS_PER_PAGE);
+        $medicineResults = $userResults = $rhuResults = $inventoryResults = $stockLogResults = $empty;
+        $allocationResults = $dispensingResults = $transferResults = $forecastResults = $empty;
 
         if ($query !== '') {
 
@@ -157,17 +140,9 @@ class SearchController extends Controller
                     })
                     ->orderBy('medicine_name', 'asc')->orderBy('id', 'asc');
 
-                $medicineResults = (clone $searchQuery)->get();
-
-                $baseNoSearch = Medicine::query()->orderBy('medicine_name', 'asc')->orderBy('id', 'asc');
-
-                foreach ($medicineResults as $med) {
-                    $med->search_page = $this->getPageForRecord(
-                        $baseNoSearch, 'medicine_name', 'asc',
-                        $med->id, $med->medicine_name,
-                        (int) config('pagination.medicines', 20)
-                    );
-                }
+                $medicineResults = $this->resultPage($searchQuery, 'medicine');
+                $this->setListingPages(Medicine::query(), $medicineResults->getCollection(), 'medicine_name', 'asc',
+                    (int) config('pagination.medicines', 20));
             }
 
             // ---------- Users ----------
@@ -180,17 +155,9 @@ class SearchController extends Controller
                     })
                     ->orderBy('name', 'asc')->orderBy('id', 'asc');
 
-                $userResults = (clone $searchQuery)->get();
-
-                $baseNoSearch = $this->searchableUsers()->with('healthUnit')->orderBy('name', 'asc')->orderBy('id', 'asc');
-
-                foreach ($userResults as $user) {
-                    $user->search_page = $this->getPageForRecord(
-                        $baseNoSearch, 'name', 'asc',
-                        $user->id, $user->name,
-                        (int) config('pagination.inventory', 20)
-                    );
-                }
+                $userResults = $this->resultPage($searchQuery, 'users');
+                $this->setListingPages($this->searchableUsers(), $userResults->getCollection(), 'name', 'asc',
+                    (int) config('pagination.inventory', 20));
             }
 
             // ---------- RHU ----------
@@ -203,17 +170,9 @@ class SearchController extends Controller
                     })
                     ->orderBy('name', 'asc')->orderBy('id', 'asc');
 
-                $rhuResults = (clone $searchQuery)->get();
-
-                $baseNoSearch = HealthUnit::query()->orderBy('name', 'asc')->orderBy('id', 'asc');
-
-                foreach ($rhuResults as $rhu) {
-                    $rhu->search_page = $this->getPageForRecord(
-                        $baseNoSearch, 'name', 'asc',
-                        $rhu->id, $rhu->name,
-                        (int) config('pagination.inventory', 20)
-                    );
-                }
+                $rhuResults = $this->resultPage($searchQuery, 'rhu');
+                $this->setListingPages(HealthUnit::query(), $rhuResults->getCollection(), 'name', 'asc',
+                    (int) config('pagination.inventory', 20));
             }
 
             // ---------- Inventory ----------  ← NOW SEARCHES BATCH
@@ -230,17 +189,11 @@ class SearchController extends Controller
                     })
                     ->orderByDesc('id');
 
-                $inventoryResults = (clone $searchQuery)->get();
-
-                $baseNoSearch = $this->inventoryForViewer()
-                    ->orderByDesc('id');
+                $inventoryResults = $this->resultPage($searchQuery, 'inventory');
+                $this->setListingPages($this->inventoryForViewer(), $inventoryResults->getCollection(), 'id', 'desc',
+                    (int) config('pagination.inventory', 20), $healthUnitId === null);
 
                 foreach ($inventoryResults as $inv) {
-                    $inv->search_page = $this->getPageForRecord(
-                        (clone $baseNoSearch)->when($healthUnitId === null, fn ($facility) => $facility->where('health_unit_id', $inv->health_unit_id)), 'id', 'desc',
-                        $inv->id, $inv->id,
-                        (int) config('pagination.inventory', 20)
-                    );
                     $inv->search_url = route('inventory.index', $this->stockListingParameters($inv, $inv->search_page)).'#inventory-'.$inv->id;
                 }
             }
@@ -262,18 +215,11 @@ class SearchController extends Controller
                     ->orderByDesc('date_added')
                     ->orderByDesc('id');
 
-                $stockLogResults = (clone $searchQuery)->get();
-
-                $baseNoSearch = $this->stockLogsForViewer()
-                    ->orderByDesc('date_added')
-                    ->orderByDesc('id');
+                $stockLogResults = $this->resultPage($searchQuery, 'stock_logs');
+                $this->setListingPages($this->stockLogsForViewer(), $stockLogResults->getCollection(), 'date_added', 'desc',
+                    20, $healthUnitId === null);
 
                 foreach ($stockLogResults as $log) {
-                    $log->search_page = $this->getPageForRecord(
-                        (clone $baseNoSearch)->when($healthUnitId === null, fn ($facility) => $facility->where('health_unit_id', $log->health_unit_id)), 'date_added', 'desc',
-                        $log->id, $log->getRawOriginal('date_added'),
-                        20
-                    );
                     $log->search_url = route('stock_logs.index', $this->stockListingParameters($log, $log->search_page)).'#stock-log-'.$log->id;
                 }
             }
@@ -298,19 +244,9 @@ class SearchController extends Controller
                     ->orderByDesc('date_allocated')
                     ->orderByDesc('id');
 
-                $allocationResults = (clone $searchQuery)->get();
-
-                $baseNoSearch = $this->allocationsForViewer()
-                    ->orderByDesc('date_allocated')
-                    ->orderByDesc('id');
-
-                foreach ($allocationResults as $alloc) {
-                    $alloc->search_page = $this->getPageForRecord(
-                        $baseNoSearch, 'date_allocated', 'desc',
-                        $alloc->id, $alloc->getRawOriginal('date_allocated'),
-                        (int) config('pagination.inventory', 20)
-                    );
-                }
+                $allocationResults = $this->resultPage($searchQuery, 'allocation');
+                $this->setListingPages($this->allocationsForViewer(), $allocationResults->getCollection(), 'date_allocated', 'desc',
+                    (int) config('pagination.inventory', 20));
             }
 
             // ---------- Dispensing ----------  ← NOW SEARCHES BATCH
@@ -333,14 +269,10 @@ class SearchController extends Controller
                     ->orderByDesc('date_dispensed')
                     ->orderByDesc('id');
 
-                $dispensingResults = (clone $searchQuery)->get();
+                $dispensingResults = $this->resultPage($searchQuery, 'dispensing');
+                $this->setListingPages($baseNoSearch, $dispensingResults->getCollection(), 'date_dispensed', 'desc', $perPage);
 
                 foreach ($dispensingResults as $rec) {
-                    $rec->search_page = $this->getPageForRecord(
-                        $baseNoSearch, 'date_dispensed', 'desc',
-                        $rec->id, $rec->date_dispensed?->toDateString(),
-                        $perPage
-                    );
                     $rec->search_url = $this->dispensingSearchUrl($rec->id, $rec->search_page);
                 }
             }
@@ -348,19 +280,22 @@ class SearchController extends Controller
 
         if ($query !== '' && $role !== 'midwife' && in_array($scope, ['all', 'transfers'], true)) {
             $baseTransfers = $this->transfersForViewer();
-            $transferResults = (clone $baseTransfers)->where(function ($matches) use ($query) {
+            $searchQuery = (clone $baseTransfers)->where(function ($matches) use ($query) {
                 $matches->where('notes', 'like', '%'.$query.'%')
                     ->orWhereHas('medicine', fn ($medicine) => $medicine->where('medicine_name', 'like', '%'.$query.'%'))
                     ->orWhereHas('fromHealthUnit', fn ($unit) => $unit->where('name', 'like', '%'.$query.'%'))
                     ->orWhereHas('toHealthUnit', fn ($unit) => $unit->where('name', 'like', '%'.$query.'%'));
-            })->get();
-            foreach ($transferResults as $transfer) {
-                $transfer->search_page = $this->getPageForRecord($baseTransfers, 'created_at', 'desc',
-                    $transfer->id, $transfer->getRawOriginal('created_at'), 20);
-            }
+            });
+            $transferResults = $this->resultPage($searchQuery, 'transfers');
+            $this->setListingPages($baseTransfers, $transferResults->getCollection(), 'created_at', 'desc', 20);
         }
         if ($query !== '' && $role !== 'midwife' && in_array($scope, ['all', 'forecast'], true)) {
-            $forecastResults = $this->forecastMatches($query, $healthUnitId);
+            $matches = $this->forecastMatches($query, $healthUnitId);
+            $pageName = 'forecast_results_page';
+            $page = Paginator::resolveCurrentPage($pageName);
+            $forecastResults = new Paginator($matches->slice(($page - 1) * self::RESULTS_PER_PAGE, self::RESULTS_PER_PAGE + 1),
+                self::RESULTS_PER_PAGE, $page, ['path' => $request->url(), 'pageName' => $pageName]);
+            $forecastResults->withQueryString()->fragment('search-forecast');
         }
 
         return view('search.results', [
@@ -385,16 +320,24 @@ class SearchController extends Controller
             ->orderByDesc('created_at')->orderByDesc('id');
     }
 
-    private function forecastMatches(string $query, ?int $healthUnitId)
+    private function forecastMatches(string $query, ?int $healthUnitId, bool $includeProjections = true)
     {
-        return collect(app(ForecastService::class)->getForecast($healthUnitId)['items'])->values()
+        // The inventory summary has the same ordered facility/medicine rows as the forecast.
+        $items = $includeProjections
+            ? app(ForecastService::class)->getForecast($healthUnitId)['items']
+            : app(StockSummaryService::class)->inventories($healthUnitId === null ? null : [$healthUnitId])
+                ->map(fn (Inventory $inventory) => ['inventory' => $inventory,
+                    'medicine_name' => $inventory->medicine->medicine_name, 'health_unit_name' => $inventory->healthUnit->name]);
+
+        return $items->values()
+            ->filter(fn ($item) => mb_stripos($item['medicine_name'].' '.$item['health_unit_name'], $query) !== false)
             ->map(function ($item, $index) {
                 $page = intdiv($index, 15) + 1;
                 $item['search_url'] = route('forecast.index', ['forecast_page' => $page]).'#forecast-item-'
                     .$item['inventory']->health_unit_id.'-'.$item['inventory']->medicine_id;
 
                 return $item;
-            })->filter(fn ($item) => mb_stripos($item['medicine_name'].' '.$item['health_unit_name'], $query) !== false)->values();
+            })->values();
     }
 
     /**
@@ -416,9 +359,6 @@ class SearchController extends Controller
         }
 
         $suggestions = [];
-        $perPage = 20;   // must match the per-page of each module
-
-
         // Medicines
         if ($scope === 'all' || $scope === 'medicine') {
             $medicines = Medicine::where('medicine_name', 'like', "%{$query}%")
@@ -427,14 +367,13 @@ class SearchController extends Controller
                 ->limit(5)
                 ->get(['id', 'medicine_name', 'dosage']);
 
-            $baseNoSearch = Medicine::orderBy('medicine_name', 'asc');
+            $this->setListingPages(Medicine::query(), $medicines, 'medicine_name', 'asc', (int) config('pagination.medicines', 20));
 
             foreach ($medicines as $m) {
-                $page = $this->getPageForRecord($baseNoSearch, 'medicine_name', 'asc', $m->id, $m->medicine_name, (int) config('pagination.medicines', 20));
                 $suggestions[] = [
                     'text' => $m->medicine_name.($m->dosage ? ' - '.$m->dosage : ''),
                     'type' => 'Medicine',
-                    'url' => route('medicine.index', ['page' => $page, 'highlight' => $m->id]).'#medicine-'.$m->id,
+                    'url' => route('medicine.index', ['page' => $m->search_page, 'highlight' => $m->id]).'#medicine-'.$m->id,
                 ];
             }
         }
@@ -447,40 +386,38 @@ class SearchController extends Controller
                 ->limit(5)
                 ->get(['id', 'name', 'username']);
 
-            $baseNoSearch = $this->searchableUsers()->orderBy('name', 'asc')->orderBy('id', 'asc');
+            $this->setListingPages($this->searchableUsers(), $users, 'name', 'asc', (int) config('pagination.inventory', 20));
 
             foreach ($users as $u) {
-                $page = $this->getPageForRecord($baseNoSearch, 'name', 'asc', $u->id, $u->name, (int) config('pagination.inventory', 20));
                 $suggestions[] = [
                     'text' => $u->name.' ('.$u->username.')',
                     'type' => 'User',
-                    'url' => route('users.index', ['page' => $page, 'highlight' => $u->id]).'#user-'.$u->id,
+                    'url' => route('users.index', ['page' => $u->search_page, 'highlight' => $u->id]).'#user-'.$u->id,
                 ];
             }
         }
 
         // RHU
-        if ($role === 'admin' && $healthUnitId === null && ($scope === 'all' || $scope === 'rhu')) {
+        if ($role === 'admin' && $healthUnitId === null && ($scope === 'all' || $scope === 'rhu') && count($suggestions) < 10) {
             $rhus = HealthUnit::where('name', 'like', "%{$query}%")
                 ->orWhere('municipality', 'like', "%{$query}%")
                 ->orderBy('name')->orderBy('id')
                 ->limit(5)
                 ->get(['id', 'name', 'municipality']);
 
-            $baseNoSearch = HealthUnit::orderBy('name', 'asc');
+            $this->setListingPages(HealthUnit::query(), $rhus, 'name', 'asc', (int) config('pagination.inventory', 20));
 
             foreach ($rhus as $r) {
-                $page = $this->getPageForRecord($baseNoSearch, 'name', 'asc', $r->id, $r->name, (int) config('pagination.inventory', 20));
                 $suggestions[] = [
                     'text' => $r->name.' ('.$r->municipality.')',
                     'type' => 'RHU',
-                    'url' => route('rhu.index', ['page' => $page, 'highlight' => $r->id]).'#rhu-'.$r->id,
+                    'url' => route('rhu.index', ['page' => $r->search_page, 'highlight' => $r->id]).'#rhu-'.$r->id,
                 ];
             }
         }
 
         // Inventory — now includes batch
-        if ($role !== 'midwife' && ($scope === 'all' || $scope === 'inventory')) {
+        if ($role !== 'midwife' && ($scope === 'all' || $scope === 'inventory') && count($suggestions) < 10) {
             $inventories = $this->inventoryForViewer()
                 ->where(function ($q) use ($query) {
                     $q->where('batch_no', 'like', "%{$query}%")
@@ -494,22 +431,21 @@ class SearchController extends Controller
                 ->limit(5)
                 ->get();
 
-            $baseNoSearch = $this->inventoryForViewer()
-                ->orderByDesc('id');
+            $this->setListingPages($this->inventoryForViewer(), $inventories, 'id', 'desc',
+                (int) config('pagination.inventory', 20), $healthUnitId === null);
 
             foreach ($inventories as $inv) {
-                $page = $this->getPageForRecord((clone $baseNoSearch)->when($healthUnitId === null, fn ($facility) => $facility->where('health_unit_id', $inv->health_unit_id)), 'id', 'desc', $inv->id, $inv->id, (int) config('pagination.inventory', 20));
                 $batchPart = $inv->batch_no ? ' · Batch '.$inv->batch_no : '';
                 $suggestions[] = [
                     'text' => ($inv->medicine->medicine_name ?? 'N/A').$batchPart.' (Stock: '.$inv->available_stock.')',
                     'type' => 'Inventory',
-                    'url' => route('inventory.index', $this->stockListingParameters($inv, $page)).'#inventory-'.$inv->id,
+                    'url' => route('inventory.index', $this->stockListingParameters($inv, $inv->search_page)).'#inventory-'.$inv->id,
                 ];
             }
         }
 
         // Stock Logs — now includes batch
-        if ($role !== 'midwife' && ($scope === 'all' || $scope === 'stock_logs')) {
+        if ($role !== 'midwife' && ($scope === 'all' || $scope === 'stock_logs') && count($suggestions) < 10) {
             $stockLogs = $this->stockLogsForViewer()
                 ->where(function ($q) use ($query) {
                     $q->where('batch_no', 'like', "%{$query}%")
@@ -523,23 +459,20 @@ class SearchController extends Controller
                 ->limit(5)
                 ->get();
 
-            $baseNoSearch = $this->stockLogsForViewer()
-                ->orderByDesc('date_added')
-                ->orderByDesc('id');
+            $this->setListingPages($this->stockLogsForViewer(), $stockLogs, 'date_added', 'desc', 20, $healthUnitId === null);
 
             foreach ($stockLogs as $log) {
-                $page = $this->getPageForRecord((clone $baseNoSearch)->when($healthUnitId === null, fn ($facility) => $facility->where('health_unit_id', $log->health_unit_id)), 'date_added', 'desc', $log->id, $log->getRawOriginal('date_added'), 20);
                 $batchPart = $log->batch_no ? ' · Batch '.$log->batch_no : '';
                 $suggestions[] = [
                     'text' => ($log->medicine->medicine_name ?? 'N/A').$batchPart.' (+'.$log->quantity_added.' on '.$log->date_added.')',
                     'type' => 'Stock Log',
-                    'url' => route('stock_logs.index', $this->stockListingParameters($log, $page)).'#stock-log-'.$log->id,
+                    'url' => route('stock_logs.index', $this->stockListingParameters($log, $log->search_page)).'#stock-log-'.$log->id,
                 ];
             }
         }
 
         // Allocation — now includes batch
-        if ($role !== 'midwife' && ($scope === 'all' || $scope === 'allocation')) {
+        if ($role !== 'midwife' && ($scope === 'all' || $scope === 'allocation') && count($suggestions) < 10) {
             $allocations = $this->allocationsForViewer()
                 ->where(function ($q) use ($query) {
                     $q->where('destination', 'like', "%{$query}%")
@@ -555,24 +488,22 @@ class SearchController extends Controller
                 ->limit(5)
                 ->get();
 
-            $baseNoSearch = $this->allocationsForViewer()
-                ->orderByDesc('date_allocated')
-                ->orderByDesc('id');
+            $this->setListingPages($this->allocationsForViewer(), $allocations, 'date_allocated', 'desc',
+                (int) config('pagination.inventory', 20));
 
             foreach ($allocations as $a) {
-                $page = $this->getPageForRecord($baseNoSearch, 'date_allocated', 'desc', $a->id, $a->getRawOriginal('date_allocated'), (int) config('pagination.inventory', 20));
                 $destination = $a->destination ?: 'N/A';
                 $batchPart = ($a->inventory && $a->inventory->batch_no) ? ' · Batch '.$a->inventory->batch_no : '';
                 $suggestions[] = [
                     'text' => ($a->medicine->medicine_name ?? 'N/A').$batchPart.' → '.$destination.' ('.$a->quantity_allocated.')',
                     'type' => 'Allocation',
-                    'url' => route('allocation.index', ['page' => $page, 'highlight' => $a->id]).'#allocation-'.$a->id,
+                    'url' => route('allocation.index', ['page' => $a->search_page, 'highlight' => $a->id]).'#allocation-'.$a->id,
                 ];
             }
         }
 
         // Dispensing — now includes batch
-        if ($healthUnitId !== null && ($scope === 'all' || $scope === 'dispensing')) {
+        if ($healthUnitId !== null && ($scope === 'all' || $scope === 'dispensing') && count($suggestions) < 10) {
             $perPage = (int) config('pagination.dispensing', 15);
             $baseNoSearch = $this->dispensingForViewer($healthUnitId);
             $records = (clone $baseNoSearch)->with('medicine')
@@ -588,13 +519,13 @@ class SearchController extends Controller
                 ->limit(5)
                 ->get();
 
+            $this->setListingPages($baseNoSearch, $records, 'date_dispensed', 'desc', $perPage);
             foreach ($records as $rec) {
-                $page = $this->getPageForRecord($baseNoSearch, 'date_dispensed', 'desc', $rec->id, $rec->date_dispensed?->toDateString(), $perPage);
                 $batchPart = $rec->batch_no ? ' · Batch '.$rec->batch_no : '';
                 $suggestions[] = [
                     'text' => ($rec->medicine->medicine_name ?? 'N/A').$batchPart.' (Qty: '.$rec->quantity_dispensed.' on '.$rec->date_dispensed.')',
                     'type' => 'Dispensing',
-                    'url' => $this->dispensingSearchUrl($rec->id, $page),
+                    'url' => $this->dispensingSearchUrl($rec->id, $rec->search_page),
                 ];
             }
         }
@@ -607,15 +538,14 @@ class SearchController extends Controller
                     ->orWhereHas('fromHealthUnit', fn ($unit) => $unit->where('name', 'like', '%'.$query.'%'))
                     ->orWhereHas('toHealthUnit', fn ($unit) => $unit->where('name', 'like', '%'.$query.'%'));
             })->limit(5)->get();
+            $this->setListingPages($baseTransfers, $transfers, 'created_at', 'desc', 20);
             foreach ($transfers as $transfer) {
-                $page = $this->getPageForRecord($baseTransfers, 'created_at', 'desc',
-                    $transfer->id, $transfer->getRawOriginal('created_at'), 20);
                 $suggestions[] = ['text' => ($transfer->medicine->medicine_name ?? 'Transfer').' - '.$transfer->status,
-                    'type' => 'Transfer', 'url' => route('transfers.index', ['page' => $page]).'#transfer-'.$transfer->id];
+                    'type' => 'Transfer', 'url' => route('transfers.index', ['page' => $transfer->search_page]).'#transfer-'.$transfer->id];
             }
         }
         if ($role !== 'midwife' && in_array($scope, ['all', 'forecast'], true) && count($suggestions) < 10) {
-            foreach ($this->forecastMatches($query, $healthUnitId)->take(5) as $item) {
+            foreach ($this->forecastMatches($query, $healthUnitId, includeProjections: false)->take(5) as $item) {
                 $suggestions[] = ['text' => $item['medicine_name'].' - '.$item['health_unit_name'],
                     'type' => 'Forecast', 'url' => $item['search_url']];
             }

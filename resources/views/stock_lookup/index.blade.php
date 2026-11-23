@@ -429,7 +429,9 @@
                         <th>Municipality</th>
                         <th class="text-right">Available</th>
                         <th class="text-right">Distance</th>
-                        <th class="text-center">Action</th>
+                        @if($canRequestTransfer)
+                            <th class="text-center">Action</th>
+                        @endif
                     </tr>
                 </thead>
                 <tbody id="result-body"></tbody>
@@ -726,12 +728,7 @@ function renderResults(data) {
                     </span>
                 </td>
                 <td class="text-right">${escapeHtml(dist)}</td>
-                <td class="text-center">
-                    <a class="request-link"
-                       href="{{ route('transfers.create') }}?to_rhu=${r.rhu_id}&medicine_id=${med.id}">
-                        Request stock
-                    </a>
-                </td>
+                ${r.request_url ? `<td class="text-center"><a class="request-link" href="${escapeHtml(r.request_url)}">Request stock</a></td>` : ''}
             </tr>
         `;
     }).join('');

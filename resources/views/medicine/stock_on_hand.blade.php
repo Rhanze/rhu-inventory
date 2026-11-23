@@ -99,13 +99,16 @@
                     @if(request('availability'))
                         <input type="hidden" name="availability" value="{{ request('availability') }}">
                     @endif
+                    @if(request('dosage_form'))
+                        <input type="hidden" name="dosage_form" value="{{ request('dosage_form') }}">
+                    @endif
                     <select name="rhu_filter" data-native-select aria-label="RHU" style="
                         min-height:2.75rem;height:auto; padding: 0 12px; font-size:1.0625rem;
                         border: 2px solid #bec6cf; border-radius: 10px;
                         background: white; color: #0f172a; appearance: auto;
                         max-width: 160px;
                     " onchange="this.form.requestSubmit()">
-                        <option value="">All RHUs</option>
+                        <option value="">All Facilities</option>
                         @foreach($healthUnits as $rhu)
                             <option value="{{ $rhu->id }}" {{ request('rhu_filter') == $rhu->id ? 'selected' : '' }}>
                                 {{ $rhu->name }}
@@ -125,6 +128,9 @@
                 @endif
                 @if(request('availability'))
                     <input type="hidden" name="availability" value="{{ request('availability') }}">
+                @endif
+                @if(request('dosage_form'))
+                    <input type="hidden" name="dosage_form" value="{{ request('dosage_form') }}">
                 @endif
                 <select name="category" id="stock-category-filter" data-native-select aria-label="Category" style="
                     min-height:2.75rem;height:auto; padding: 0 12px; font-size:1.0625rem;
@@ -155,6 +161,9 @@
                 @if(request('category'))
                     <input type="hidden" name="category" value="{{ request('category') }}">
                 @endif
+                @if(request('dosage_form'))
+                    <input type="hidden" name="dosage_form" value="{{ request('dosage_form') }}">
+                @endif
                 <select name="availability" data-native-select aria-label="Stock availability" style="
                     min-height:2.75rem;height:auto; padding: 0 12px; font-size:1.0625rem;
                     border: 2px solid #bec6cf; border-radius: 10px;
@@ -162,13 +171,13 @@
                     max-width: 150px;
                 " onchange="this.form.requestSubmit()">
                     <option value="">All Stock</option>
-                    <option value="available"   {{ request('availability') == 'available'   ? 'selected' : '' }}>✅ Available</option>
-                    <option value="unavailable" {{ request('availability') == 'unavailable' ? 'selected' : '' }}>❌ Not Avail.</option>
+                    <option value="available"   {{ request('availability') == 'available'   ? 'selected' : '' }}>Usable stock</option>
+                    <option value="unavailable" {{ request('availability') == 'unavailable' ? 'selected' : '' }}>No usable stock</option>
                 </select>
             </form>
 
             {{-- EXPORT BUTTON — opens inline modal --}}
-            <button type="button" onclick="openStockExportModal()" style="
+            <button type="button" aria-haspopup="dialog" aria-controls="stockExportModal" onclick="document.getElementById('stockExportModal').showModal()" style="
                 display:inline-flex; align-items:center; gap:6px;
                 font-size:1.0625rem; font-weight:600;
                 padding:9px 18px; border-radius:10px;
@@ -200,8 +209,9 @@
             @if(request('rhu_filter')) <input type="hidden" name="rhu_filter" value="{{ request('rhu_filter') }}"> @endif
             @if(request('category')) <input type="hidden" name="category" value="{{ request('category') }}"> @endif
             @if(request('availability')) <input type="hidden" name="availability" value="{{ request('availability') }}"> @endif
+            @if(request('dosage_form')) <input type="hidden" name="dosage_form" value="{{ request('dosage_form') }}"> @endif
 
-            <div style="position: relative; flex: 1; min-width: 260px;">
+            <div style="position: relative; flex: 1; min-width: min(100%, 260px);">
                 <span style="
                     position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
                     color: #94a3b8; pointer-events: none;
@@ -215,6 +225,8 @@
                 </span>
                 <input type="text" name="search"
                        id="stock-search-input"
+                       aria-label="Search stock by item name"
+                       role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="stock-search-dropdown"
                        value="{{ request('search') }}"
                        placeholder="Search item name..."
                        autocomplete="off"
@@ -225,7 +237,6 @@
                            font-size:1.0625rem;
                            border: 2px solid #bec6cf;
                            border-radius: 12px;
-                           outline: none;
                            background: white;
                            color: #0f172a;
                            box-sizing: border-box;
@@ -235,7 +246,7 @@
 
                 @if(request('search'))
                     <a href="{{ route('medicine.stock_on_hand', request()->except('search', 'page')) }}"
-                       title="Clear search"
+                       aria-label="Clear search"
                        style="
                            position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
                            width: 24px; height: 24px;
@@ -253,7 +264,7 @@
                     </a>
                 @endif
 
-                <div id="stock-search-dropdown" style="
+                <div id="stock-search-dropdown" role="listbox" aria-label="Item name suggestions" style="
                     display: none;
                     position: absolute;
                     top: calc(100% + 4px);
@@ -284,7 +295,7 @@
                 Search
             </button>
 
-            @if(request('search') || request('category') || request('availability'))
+            @if(request('search') || request('category') || request('availability') || request('dosage_form'))
                 <a href="{{ route('medicine.stock_on_hand', request()->only('rhu_filter')) }}" style="
                     min-height:2.75rem;height:auto;
                     padding: 0 22px;
@@ -312,7 +323,7 @@
         gap:16px;
     ">
         <div style="background:rgba(255,255,255,0.9); border-radius:16px; padding:18px 22px; border:1px solid rgba(255,255,255,0.4); box-shadow:0 4px 12px rgba(0,0,0,0.04);">
-            <p style="font-size:1.0625rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#64748b; margin:0 0 4px 0;">{{ is_null(session('health_unit_id')) ? 'Available medicine items' : 'Total Available' }}</p>
+            <p style="font-size:1.0625rem; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:#64748b; margin:0 0 4px 0;">{{ is_null(session('health_unit_id')) ? 'Items with usable stock' : 'Total usable stock' }}</p>
             <p style="font-size:1.625rem; font-weight:700; color:#0f5c4b; margin:0;">{{ number_format(is_null(session('health_unit_id')) ? $availableMedicineCount : $grandAvailable) }}</p>
         </div>
         <div style="background:rgba(255,255,255,0.9); border-radius:16px; padding:18px 22px; border:1px solid rgba(255,255,255,0.4); box-shadow:0 4px 12px rgba(0,0,0,0.04);">
@@ -338,6 +349,9 @@
             -webkit-overflow-scrolling: touch;
         ">
             <table style="width:100%; min-width: 850px; border-collapse: collapse; font-size:1.0625rem;">
+                <caption style="text-align:left; padding:12px 20px; color:#475569;">
+                    Items {{ $items->firstItem() ?? 0 }}&ndash;{{ $items->lastItem() ?? 0 }} of {{ $items->total() }}
+                </caption>
                 <thead>
                     <tr style="background: #f8fafc; border-bottom: 1px solid #e2e8f0;">
                         <th class="no-print" style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">#</th>
@@ -345,7 +359,7 @@
                         <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Category</th>
                         <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Dosage Strength</th>
                         <th style="padding: 14px 20px; text-align: left; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Dosage Form</th>
-                        <th style="padding: 14px 20px; text-align: right; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Available</th>
+                        <th scope="col" style="padding: 14px 20px; text-align: right; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Usable stock</th>
                         <th style="padding: 14px 20px; text-align: right; font-size:1.0625rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; white-space: nowrap;">Allocated</th>
                     </tr>
                 </thead>
@@ -363,8 +377,9 @@
                             ];
                             $badge = $badges[$item->category] ?? ['label' => ucfirst($item->category ?? '—'), 'bg' => '#F1F5F9', 'color' => '#475569', 'border' => '#CBD5E1'];
 
-                            $isLow  = $item->available_total > 0 && $item->available_total <= 10;
-                            $isZero = $item->available_total == 0;
+                            $available = (int) $item->available_total;
+                            $isLow = $targetUnitId !== null && $item->isLowStock($available);
+                            $isZero = $available === 0;
                         @endphp
 
                         <tr style="border-bottom: 1px solid #f1f5f9; transition: background 0.2s;"
@@ -393,19 +408,22 @@
                                 @if($isZero) color:#dc2626;
                                 @elseif($isLow) color:#b45309;
                                 @else color:#0f5c4b; @endif">
-                                {{ number_format($item->available_total) }}<span style="font-weight:500; font-size:1.0625rem; color:#64748b;"> (units)</span>
+                                {{ number_format($available) }}<span style="font-weight:500; font-size:1.0625rem; color:#64748b;"> (units)</span>
+                                @if($isLow)
+                                    <div>Low stock</div>
+                                @endif
                             </td>
                             <td style="padding: 14px 20px; text-align:right; color: #475569;">
-                                {{ number_format($item->allocated_total) }}<span style="font-weight:500; font-size:1.0625rem; color:#64748b;"> (units)</span>
+                                {{ number_format((int) $item->allocated_total) }}<span style="font-weight:500; font-size:1.0625rem; color:#64748b;"> (units)</span>
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" style="padding: 40px 20px; text-align: center; color: #64748b; border-bottom: 1px solid #f1f5f9;">
+                            <td colspan="8" style="padding: 40px 20px; text-align: center; color: #64748b; border-bottom: 1px solid #f1f5f9;">
                                 @if(request('availability') === 'available')
-                                    No items with available stock.
+                                    No matching items with usable stock.
                                 @elseif(request('availability') === 'unavailable')
-                                    🎉 All items have stock available!
+                                    No matching items without usable stock.
                                 @elseif(request('search'))
                                     No items match "<strong>{{ request('search') }}</strong>".
                                 @else
@@ -467,12 +485,17 @@
 {{-- INLINE EXPORT MODAL --}}
 {{-- Filters: Program Category · Stock Status · Dosage Form --}}
 {{-- ═══════════════════════════════════════════════════════════ --}}
-<div id="stockExportModal"
-     onclick="if(event.target === this) closeStockExportModal()"
+<style>
+    #stockExportModal::backdrop {
+        background: rgba(15, 23, 42, .55);
+        backdrop-filter: blur(4px);
+    }
+</style>
+<dialog id="stockExportModal" aria-labelledby="stock-export-title"
+     onclick="if(event.target === this) this.close()"
      style="
-        display:none; position:fixed; inset:0; z-index:99999;
-        background: rgba(15,23,42,0.55); backdrop-filter: blur(4px);
-        align-items:center; justify-content:center; padding:20px;
+        width:min(520px, calc(100% - 32px)); max-height:90vh;
+        border:0; border-radius:20px; padding:0;
      ">
     <div style="
         background:#ffffff; border-radius:20px;
@@ -483,11 +506,11 @@
     ">
         {{-- Header --}}
         <div style="padding:22px 26px 14px; border-bottom:1px solid #f1f5f9;">
-            <h3 style="font-size:1.1875rem; font-weight:700; color:#0f172a; margin:0 0 4px 0;">
+            <h3 id="stock-export-title" style="font-size:1.1875rem; font-weight:700; color:#0f172a; margin:0 0 4px 0;">
                 Export Stock on Hand
             </h3>
             <p style="font-size:1.0625rem; color:#64748b; margin:0;">
-                Choose what to include, then pick an action.
+                Print includes one page. CSV includes all matching items.
             </p>
         </div>
 
@@ -500,12 +523,12 @@
                        style="font-size:1.0625rem; font-weight:700; color:#0f172a; text-transform:uppercase; letter-spacing:.04em; display:block; margin-bottom:8px;">
                     Program Category
                 </label>
-                <select id="category-stockExportModal"
+                <select id="category-stockExportModal" autofocus
                         style="
                             width:100%; min-height:2.75rem;height:auto;
                             padding:0 14px; font-size:1.0625rem;
                             border:2px solid #bec6cf; border-radius:10px;
-                            outline:none; box-sizing:border-box;
+                            box-sizing:border-box;
                             background:#ffffff; color:#0f172a; appearance:auto; cursor:pointer;
                         "
                         onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
@@ -532,14 +555,14 @@
                             width:100%; min-height:2.75rem;height:auto;
                             padding:0 14px; font-size:1.0625rem;
                             border:2px solid #bec6cf; border-radius:10px;
-                            outline:none; box-sizing:border-box;
+                            box-sizing:border-box;
                             background:#ffffff; color:#0f172a; appearance:auto; cursor:pointer;
                         "
                         onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
                         onblur="this.style.borderColor='#bec6cf'; this.style.boxShadow='none'">
                     <option value="" {{ !request('availability') ? 'selected' : '' }}>All Stock</option>
-                    <option value="available"   {{ request('availability') === 'available'   ? 'selected' : '' }}>Available only</option>
-                    <option value="unavailable" {{ request('availability') === 'unavailable' ? 'selected' : '' }}>Not Available only</option>
+                    <option value="available"   {{ request('availability') === 'available'   ? 'selected' : '' }}>Usable stock</option>
+                    <option value="unavailable" {{ request('availability') === 'unavailable' ? 'selected' : '' }}>No usable stock</option>
                 </select>
             </div>
 
@@ -554,7 +577,7 @@
                             width:100%; min-height:2.75rem;height:auto;
                             padding:0 14px; font-size:1.0625rem;
                             border:2px solid #bec6cf; border-radius:10px;
-                            outline:none; box-sizing:border-box;
+                            box-sizing:border-box;
                             background:#ffffff; color:#0f172a; appearance:auto; cursor:pointer;
                         "
                         onfocus="this.style.borderColor='#42ad8a'; this.style.boxShadow='0 0 0 3px rgba(66,173,138,0.1)'"
@@ -578,7 +601,7 @@
             border-radius: 0 0 20px 20px;
         ">
             <button type="button"
-                    onclick="closeStockExportModal()"
+                    onclick="this.closest('dialog').close()"
                     style="
                         font-size:1.0625rem; font-weight:600;
                         padding:10px 18px; border-radius:10px;
@@ -606,7 +629,7 @@
                     <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
                     <rect x="6" y="14" width="12" height="8"/>
                 </svg>
-                Print
+                Print one page
             </button>
 
             <button type="button"
@@ -629,41 +652,35 @@
             </button>
         </div>
     </div>
-</div>
+</dialog>
 
 {{-- Search autocomplete --}}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const input    = document.getElementById('stock-search-input');
     const dropdown = document.getElementById('stock-search-dropdown');
-    const category = document.getElementById('stock-category-filter');
     if (!input || !dropdown) return;
 
     let abortController = null;
     let selectedIndex   = -1;
 
     input.addEventListener('input', function () {
+        closeDropdown();
         const query = this.value.trim();
-
-        if (query.length < 2) {
-            closeDropdown();
-            return;
-        }
-
-        if (abortController) abortController.abort();
+        if (query.length < 2) return;
         abortController = new AbortController();
 
-        const catValue = category ? category.value : '';
-        const url = `/stock-logs/autocomplete?q=${encodeURIComponent(query)}&category=${encodeURIComponent(catValue)}`;
+        const url = new URL(@js(route('medicine.stock_on_hand.autocomplete')));
+        const params = new URLSearchParams(window.location.search);
+        params.set('search', query);
+        url.search = params.toString();
 
-        fetch(url, { signal: abortController.signal })
-        .then(res => res.json())
-        .then(data => {
-            if (data.length === 0) {
-                closeDropdown();
-                return;
+        fetch(url, { signal: abortController.signal, headers: { Accept: 'application/json' } })
+        .then(response => response.ok ? response.json() : [])
+        .then(names => {
+            if (names.length > 0 && this.value.trim() === query && document.activeElement === this) {
+                renderSuggestions(names);
             }
-            renderSuggestions(data);
         })
         .catch(err => {
             if (err.name !== 'AbortError') console.error(err);
@@ -674,70 +691,80 @@ document.addEventListener('DOMContentLoaded', function () {
         dropdown.innerHTML = '';
         selectedIndex = -1;
 
-        items.forEach((item, idx) => {
+        items.forEach((name, idx) => {
             const div = document.createElement('div');
             div.className = 'stock-search-item';
-            div.dataset.text = item.text;
+            div.id = 'stock-search-option-' + idx;
+            div.setAttribute('role', 'option');
+            div.setAttribute('aria-selected', 'false');
             div.style.cssText = 'padding:10px 16px; cursor:pointer; font-size:1.0625rem; color:#0f172a; border-bottom:1px solid #f1f5f9; transition:background 0.15s;';
-            div.textContent = item.text;
+            div.textContent = name;
 
             div.addEventListener('mouseenter', () => {
-                Array.from(dropdown.children).forEach(c => c.style.background = 'white');
-                div.style.background = '#E8F7F4';
                 selectedIndex = idx;
+                highlight(dropdown.children);
             });
 
-            div.addEventListener('click', () => {
-                input.value = item.text;
-                closeDropdown();
-                input.closest('form').requestSubmit();
-            });
+            div.addEventListener('pointerdown', event => event.preventDefault());
+            div.addEventListener('click', () => selectSuggestion(name));
 
             dropdown.appendChild(div);
         });
 
         dropdown.style.display = 'block';
+        input.setAttribute('aria-expanded', 'true');
     }
 
     function closeDropdown() {
+        abortController?.abort();
         dropdown.style.display = 'none';
         dropdown.innerHTML = '';
+        input.setAttribute('aria-expanded', 'false');
+        input.removeAttribute('aria-activedescendant');
         selectedIndex = -1;
     }
 
+    function selectSuggestion(name) {
+        input.value = name;
+        closeDropdown();
+        input.form.requestSubmit();
+    }
+
+    input.addEventListener('blur', closeDropdown);
     input.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            closeDropdown();
+            return;
+        }
+
         const items = dropdown.querySelectorAll('.stock-search-item');
         if (!items.length) return;
 
         if (e.key === 'ArrowDown') {
             e.preventDefault();
             selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
-            highlight(items);
+            highlight(items, true);
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
             selectedIndex = Math.max(selectedIndex - 1, 0);
-            highlight(items);
+            highlight(items, true);
         } else if (e.key === 'Enter') {
             if (selectedIndex >= 0 && items[selectedIndex]) {
                 e.preventDefault();
-                input.value = items[selectedIndex].dataset.text;
-                closeDropdown();
-                input.closest('form').requestSubmit();
+                selectSuggestion(items[selectedIndex].textContent);
             }
-        } else if (e.key === 'Escape') {
-            closeDropdown();
         }
     });
 
-    function highlight(items) {
-        items.forEach((item, idx) => {
-            if (idx === selectedIndex) {
-                item.style.background = '#E8F7F4';
-                item.scrollIntoView({ block: 'nearest' });
-            } else {
-                item.style.background = 'white';
-            }
+    function highlight(items, scroll = false) {
+        Array.from(items).forEach((item, idx) => {
+            const selected = idx === selectedIndex;
+            item.style.background = selected ? '#E8F7F4' : 'white';
+            item.setAttribute('aria-selected', String(selected));
         });
+        const active = items[selectedIndex];
+        input.setAttribute('aria-activedescendant', active.id);
+        if (scroll) active.scrollIntoView({ block: 'nearest' });
     }
 
     document.addEventListener('click', function (e) {
@@ -748,22 +775,12 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 // ─── Export modal logic ───────────────────────────────────
-function openStockExportModal() {
-    document.getElementById('stockExportModal').style.display = 'flex';
-    document.body.style.overflow = 'hidden';
-}
-function closeStockExportModal() {
-    document.getElementById('stockExportModal').style.display = 'none';
-    document.body.style.overflow = '';
-}
 function runStockExport(mode) {
-    const categorySelect     = document.getElementById('category-stockExportModal');
-    const availabilitySelect = document.getElementById('availability-stockExportModal');
-    const dosageFormSelect   = document.getElementById('dosageForm-stockExportModal');
-
-    const categoryVal     = categorySelect     ? categorySelect.value     : '';
-    const availabilityVal = availabilitySelect ? availabilitySelect.value : '';
-    const dosageFormVal   = dosageFormSelect   ? dosageFormSelect.value   : '';
+    const filters = {
+        category: document.getElementById('category-stockExportModal').value,
+        availability: document.getElementById('availability-stockExportModal').value,
+        dosage_form: document.getElementById('dosageForm-stockExportModal').value,
+    };
 
     const baseUrl = mode === 'csv'
         ? '{{ route('medicine.stock_on_hand.csv') }}'
@@ -771,27 +788,18 @@ function runStockExport(mode) {
 
     const url = new URL(baseUrl, window.location.origin);
     const params = new URLSearchParams(window.location.search);
-    params.delete('page');
+    const filtersChanged = Object.entries(filters).some(([name, value]) => (params.get(name) || '') !== value);
+    if (mode === 'csv' || filtersChanged) params.delete('page');
     params.delete('print');
-    params.delete('category');
-    params.delete('availability');
-    params.delete('dosage_form');
 
-    if (categoryVal)     params.set('category', categoryVal);
-    if (availabilityVal) params.set('availability', availabilityVal);
-    if (dosageFormVal)   params.set('dosage_form', dosageFormVal);
+    Object.entries(filters).forEach(([name, value]) => {
+        if (value) params.set(name, value);
+        else params.delete(name);
+    });
     if (mode === 'print') params.set('print', '1');
 
     url.search = params.toString();
     window.location.href = url.toString();
 }
-document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') {
-        const modal = document.getElementById('stockExportModal');
-        if (modal && modal.style.display === 'flex') {
-            closeStockExportModal();
-        }
-    }
-});
 </script>
 @endsection

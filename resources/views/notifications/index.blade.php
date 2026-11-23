@@ -150,6 +150,7 @@
 
                 $showReceive = $canManageTransfers && !$notification->archived_at
                                && $t && $isAccepted
+                               && $t->inventory_id !== null
                                && $notification->type === 'transfer_accepted'
                                && $viewerUnitId !== null
                                && $t->to_health_unit_id == $viewerUnitId;
@@ -313,16 +314,7 @@
                                 @endif
 
                                 @if($showReceive)
-                                    <form method="POST" action="{{ route('transfers.receive', $t->id) }}" style="display:inline;"
-                                          onsubmit="return confirm('Confirm you have physically received these items? Receipt will credit the stock already reserved at the source RHU.');">
-                                        @csrf
-                                        <button type="submit" style="
-                                            padding:8px 16px; border-radius:10px; background:#0f5c4b; color:#fff;
-                                            border:none; font-size:14px; font-weight:600; cursor:pointer;
-                                        " onmouseover="this.style.background='#0b4638'" onmouseout="this.style.background='#0f5c4b'">
-                                            📦 Transfer Received
-                                        </button>
-                                    </form>
+                                    @include('transfers._receive_form', ['transfer' => $t, 'showReceiptErrors' => true])
                                 @endif
                             </div>
                         @endif

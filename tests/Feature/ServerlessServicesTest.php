@@ -6,6 +6,7 @@ use App\Models\DispensingRecord;
 use App\Models\HealthUnit;
 use App\Models\Medicine;
 use App\Models\User;
+use App\Support\ClinicalAudit;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
@@ -31,6 +32,32 @@ class ServerlessServicesTest extends TestCase
             ->get(route('dispensing.prescription', $record->id))->assertOk();
         $this->assertSame('%PDF-1.4 fixture', $response->streamedContent());
         $this->assertStringContainsString('no-store', $response->headers->get('Cache-Control'));
+    }
+
+    public function test_prescription_access_requires_the_facility_and_the_midwife_owner(): void
+    {
+        config(['prescriptions.disk' => 's3']);
+        Storage::fake('s3')->put('prescriptions/scope.pdf', '%PDF-1.4 fixture');
+        $facility = HealthUnit::create(['name' => 'Prescription facility']);
+        $otherFacility = HealthUnit::create(['name' => 'Other facility']);
+        $owner = User::factory()->create(['health_unit_id' => $facility->id, 'role' => 'midwife']);
+        $colleague = User::factory()->create(['health_unit_id' => $facility->id, 'role' => 'midwife']);
+        $outside = User::factory()->create(['health_unit_id' => $otherFacility->id, 'role' => 'staff']);
+        $pho = User::factory()->create(['health_unit_id' => null, 'role' => 'admin']);
+        $record = DispensingRecord::create([
+            'medicine_id' => Medicine::create(['medicine_name' => 'Prescription fixture'])->id,
+            'health_unit_id' => $facility->id, 'quantity_dispensed' => 1, 'date_dispensed' => today(),
+            'dispensed_by' => $owner->id, 'prescription_image' => 'prescriptions/scope.pdf',
+        ]);
+        $url = route('dispensing.prescription', $record->id);
+
+        $this->withSession(['user_id' => $pho->id])->get($url)->assertForbidden();
+        $this->withSession(['user_id' => $outside->id])->get($url)->assertNotFound();
+        $this->withSession(['user_id' => $colleague->id])->get($url)->assertNotFound();
+        $this->withSession(['user_id' => $owner->id])->get($url)->assertOk();
+        $this->assertDatabaseCount('activity_logs', 1);
+        $this->assertDatabaseHas('activity_logs', ['module' => ClinicalAudit::MODULE, 'action' => 'Download',
+            'user_id' => $owner->id, 'description' => 'prescription #'.$record->id]);
     }
 
     public function test_scheduler_requires_management_and_secret_and_deduplicates_a_minute(): void

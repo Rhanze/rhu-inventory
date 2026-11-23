@@ -6,6 +6,7 @@ use App\Helpers\ActivityLogger;
 use App\Models\HealthUnit;
 use App\Models\Inventory;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 
 class GisController extends Controller
 {
@@ -75,11 +76,17 @@ class GisController extends Controller
             : null;
 
         $rhus = HealthUnit::orderBy('municipality')->get();
+        $balancesByRhu = $this->medicineBalances()->groupBy('health_unit_id');
 
-        $data = $rhus->map(function ($rhu) use ($ownRhuId) {
-            $inventories = Inventory::where('health_unit_id', $rhu->id)
-                ->where('available_stock', '>', 0)
-                ->get();
+        $data = $rhus->map(function ($rhu) use ($ownRhuId, $balancesByRhu) {
+            $balances = $balancesByRhu->get($rhu->id, collect());
+            $stocked = $balances->filter(fn ($row) => (int) $row->usable_quantity > 0);
+            $status = match (true) {
+                $stocked->isEmpty() => 'none',
+                $balances->contains(fn ($row) => (int) $row->usable_quantity <=
+                    (int) ($row->medicine->min_stock ?? config('inventory.default_min_stock', 50))) => 'low',
+                default => 'healthy',
+            };
 
             return [
                 'id' => $rhu->id,
@@ -89,8 +96,8 @@ class GisController extends Controller
                 'facility_type' => $rhu->facility_type ?? '',
                 'latitude' => $rhu->latitude,
                 'longitude' => $rhu->longitude,
-                'total_medicines' => $inventories->count(),
-                'total_stock' => (int) $inventories->sum('available_stock'),
+                'total_medicines' => $stocked->count(),
+                'stock_status' => $status,
                 'has_coords' => ! is_null($rhu->latitude) && ! is_null($rhu->longitude),
                 'is_own_rhu' => $ownRhuId !== null && (int) $rhu->id === $ownRhuId,
             ];
@@ -103,8 +110,7 @@ class GisController extends Controller
     }
 
     /**
-     * Category count — returns how many medicine types (and total stock)
-     * a given RHU has in a given program category.
+     * Count available medicine types and report usable quantities by unit.
      */
     public function categoryCount(Request $request)
     {
@@ -112,30 +118,38 @@ class GisController extends Controller
             return response()->json(['error' => 'Unauthorized'], 403);
         }
 
-        $rhuId = (int) $request->input('rhu_id');
-        $category = trim((string) $request->input('category'));
+        $filters = $request->validate(['rhu_id' => 'nullable|integer|min:1', 'category' => 'nullable|string|max:100']);
+        $rhuId = (int) ($filters['rhu_id'] ?? 0);
+        $category = trim($filters['category'] ?? '');
 
         if (! $rhuId || $category === '') {
             return response()->json([
                 'medicine_types' => 0,
-                'total_stock' => 0,
+                'stock_by_unit' => [],
             ]);
         }
 
-        $base = Inventory::query()
-            ->where('health_unit_id', $rhuId)
-            ->where('available_stock', '>', 0)
-            ->whereHas('medicine', function ($q) use ($category) {
-                $q->where('category', $category);
-            });
-
-        $types = (clone $base)->distinct('medicine_id')->count('medicine_id');
-        $stock = (int) (clone $base)->sum('available_stock');
+        $stocked = $this->medicineBalances($rhuId, $category)->filter(fn ($row) => (int) $row->usable_quantity > 0);
+        $byUnit = $stocked->groupBy(fn ($row) => mb_strtolower(trim((string) $row->medicine->unit)) ?: 'unspecified')
+            ->map(fn ($rows) => ['unit' => trim((string) $rows->first()->medicine->unit) ?: 'unspecified',
+                'quantity' => (int) $rows->sum('usable_quantity')])->values();
 
         return response()->json([
-            'medicine_types' => $types,
-            'total_stock' => $stock,
+            'medicine_types' => $stocked->count(),
+            'stock_by_unit' => $byUnit,
         ]);
+    }
+
+    private function medicineBalances(?int $rhuId = null, ?string $category = null): Collection
+    {
+        return Inventory::query()->with('medicine:id,unit,min_stock')
+            ->whereHas('medicine', fn ($medicine) => $medicine->when($category !== null,
+                fn ($query) => $query->where('category', $category)))
+            ->when($rhuId !== null, fn ($query) => $query->where('health_unit_id', $rhuId))
+            ->select(['health_unit_id', 'medicine_id'])
+            ->selectRaw('SUM(CASE WHEN available_stock > 0 AND (expiration_date IS NULL OR expiration_date >= ?) THEN available_stock ELSE 0 END) as usable_quantity',
+                [today()->toDateString()])
+            ->groupBy('health_unit_id', 'medicine_id')->get();
     }
 
     public function updateCoordinates(Request $request, $id)

@@ -72,12 +72,10 @@
                         @if(Route::has('users.create')) <a href="{{ route('users.create') }}" class="quick-btn">+ Add User</a> @endif
                         @if(Route::has('reports.index')) <a href="{{ route('reports.index') }}" class="quick-btn">View Reports</a> @endif
                     @elseif(session('role') === 'staff')
-                        @if(Route::has('inventory.create')) <a href="{{ route('inventory.create') }}" class="quick-btn">+ Add Inventory</a> @endif
                         @if(Route::has('stock_logs.create')) <a href="{{ route('stock_logs.create') }}" class="quick-btn">+ Add Stock Log</a> @endif
                         @if(Route::has('allocation.create')) <a href="{{ route('allocation.create') }}" class="quick-btn">New Allocation</a> @endif
                         @if(Route::has('dispensing.create')) <a href="{{ route('dispensing.create') }}" class="quick-btn">New Dispensing</a> @endif
                     @else
-                        @if(Route::has('medicine.create')) <a href="{{ route('medicine.create') }}" class="quick-btn">+ Add Medicine</a> @endif
                         @if(Route::has('inventory.create')) <a href="{{ route('inventory.create') }}" class="quick-btn">+ Add Inventory</a> @endif
                         @if(Route::has('allocation.create')) <a href="{{ route('allocation.create') }}" class="quick-btn">Allocate</a> @endif
                         @if(Route::has('dispensing.create')) <a href="{{ route('dispensing.create') }}" class="quick-btn">Dispense</a> @endif
@@ -125,7 +123,7 @@
                         'Total Users' => $stats['users_count'],
                         'Total Medicines' => $stats['medicines_count'],
                         'Total Inventory Records' => $stats['inventory_count'],
-                        'Total Available Stock' => $stats['total_available_units'],
+                        'Items with usable stock (per facility)' => $stats['usable_item_facility_count'],
                     ] as $label => $count)
                         <div style="{{ $loop->first ? '' : 'border-top:1px solid rgba(66,173,138,0.15); padding-top:12px;' }} {{ $loop->last ? '' : 'margin-bottom:16px;' }}">
                             <span style="display:block; font-size:1rem; font-weight:600; color:#1a6e5c;">{{ $label }}</span>
@@ -257,9 +255,9 @@
 
                 {{-- Stock Movement Chart --}}
                 <div style="background:#f8fafc; border-radius:16px; padding:16px; border:0.5px solid #e2e8f0;">
-                    <h4 style="margin:0 0 12px 0; color:#0f172a; font-size:1rem; font-weight:600;">📊 Stock Movement (6 Months)</h4>
+                    <h4 style="margin:0 0 12px 0; color:#0f172a; font-size:1rem; font-weight:600;">Stock Movement Records (6 Months)</h4>
                     <div style="position:relative; height:300px;">
-                        <canvas id="stockMovementChart"></canvas>
+                        <canvas id="stockMovementChart" role="img" aria-label="Monthly counts of recorded stock additions and releases"></canvas>
                     </div>
                 </div>
 
@@ -534,7 +532,7 @@
 @include('dashboard._panel_pagination')
 
 {{-- Chart.js CDN --}}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{{ asset('lib/chartjs/chart.umd.js') }}"></script>
 
 {{-- Chart Initialization --}}
 <script>
@@ -574,7 +572,7 @@ document.addEventListener('DOMContentLoaded', function () {
             } else if (d.change_pct > 0) {
                 trendHtml = `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#FEF3C7;color:#92400E;border:1px solid #FAC775;font-size:1rem;font-weight:700;">▲ Up ${Number(d.change_pct)}%</span>`;
             } else if (d.change_pct < 0) {
-                trendHtml = `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#E8F7F4;color:#0f5c4b;border:1px solid #42AD8A;font-size:1rem;font-weight:700;">▼ Down ${Math.abs(d.change_pct)}%</span>`;
+                trendHtml = `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:1rem;font-weight:700;">▼ Down ${Math.abs(d.change_pct)}%</span>`;
             } else {
                 trendHtml = `<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:1rem;font-weight:700;">—</span>`;
             }
@@ -684,7 +682,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 labels: data.stockMovement.months,
                 datasets: [
                     {
-                        label: 'Additions',
+                        label: 'Addition records',
                         data: data.stockMovement.additions,
                         borderColor: '#42ad8a',
                         backgroundColor: 'rgba(66,173,138,0.1)',
@@ -692,7 +690,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         tension: 0.4,
                     },
                     {
-                        label: 'Releases',
+                        label: 'Release records',
                         data: data.stockMovement.releases,
                         borderColor: '#dc2626',
                         backgroundColor: 'rgba(220,38,38,0.1)',
@@ -705,7 +703,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: { legend: { position: 'top' } },
-                scales: { y: { beginAtZero: true } }
+                scales: { y: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: 'Records' } } }
             }
         });
     }

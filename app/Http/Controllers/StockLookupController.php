@@ -43,6 +43,7 @@ class StockLookupController extends Controller
         return view('stock_lookup.index', [
             'medicines' => $medicines,
             'categories' => self::CATEGORIES,
+            'canRequestTransfer' => session('health_unit_id') !== null,
         ]);
     }
 
@@ -79,7 +80,8 @@ class StockLookupController extends Controller
                 'health_units.municipality',
                 'health_units.latitude',
                 'health_units.longitude',
-                DB::raw('SUM(inventory.available_stock) as available_stock')
+                DB::raw('SUM(inventory.available_stock) as available_stock'),
+                DB::raw('MAX(inventory.available_stock) as largest_batch_stock')
             )
             ->groupBy(
                 'health_units.id',
@@ -93,7 +95,7 @@ class StockLookupController extends Controller
 
         $currentRhu = $fromRhuId ? HealthUnit::find($fromRhuId) : null;
 
-        $results = $rows->map(function ($r) use ($currentRhu) {
+        $results = $rows->map(function ($r) use ($currentRhu, $medicine) {
             $distance = null;
 
             if ($currentRhu
@@ -110,9 +112,14 @@ class StockLookupController extends Controller
                 'rhu_name' => $r->rhu_name,
                 'municipality' => $r->municipality,
                 'available_stock' => (int) $r->available_stock,
+                'largest_batch_stock' => (int) $r->largest_batch_stock,
                 'distance_km' => $distance,
                 'latitude' => $r->latitude ? (float) $r->latitude : null,
                 'longitude' => $r->longitude ? (float) $r->longitude : null,
+                'request_url' => $currentRhu ? route('transfers.create', [
+                    'source_rhu_id' => $r->rhu_id,
+                    'medicine_id' => $medicine->id,
+                ]) : null,
             ];
         });
 
@@ -135,8 +142,16 @@ class StockLookupController extends Controller
         if (! $this->isAuthorized()) {
             return redirect()->route('login');
         }
+        if (session('health_unit_id') === null) {
+            return redirect()->route('transfers.index')->with('error', 'Only RHU users can create transfer requests.');
+        }
 
-        return redirect()->route('transfers.create');
+        $selection = $request->validate([
+            'source_rhu_id' => 'nullable|integer|min:1',
+            'medicine_id' => 'nullable|integer|min:1',
+        ]);
+
+        return redirect()->route('transfers.create', $selection);
     }
 
     private function haversineKm(float $lat1, float $lon1, float $lat2, float $lon2): float

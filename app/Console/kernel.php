@@ -23,7 +23,7 @@ class Kernel extends ConsoleKernel
             Log::info('Notification scan completed', ['created' => $created]);
         })->hourly();
 
-        // ▼ NEW: Transfer reminders (Day 2, Day 5) + auto-complete (Day 7)
+        // Transfer receipt reminders on day 2 and day 5.
         // Runs at 2 AM so it doesn't conflict with the hourly notification scan.
         $schedule->command('transfers:process')
                  ->dailyAt('02:00')

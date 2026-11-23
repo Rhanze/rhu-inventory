@@ -9,6 +9,7 @@ use App\Models\Medicine;
 use App\Models\StockLog;
 use App\Services\InventoryHistoryService;
 use App\Support\HistoricalDateRange;
+use App\Support\SpreadsheetCsv;
 use App\Support\StockLogBatchFilter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -49,6 +50,7 @@ class StockLogController extends Controller
         $request->validate([
             'rhu_filter' => ['nullable', 'string', 'regex:/^(all|pho|[0-9]+)$/'],
             'medicine_id' => ['nullable', 'integer', 'exists:medicines,id'],
+            'inventory_id' => ['nullable', 'integer', 'min:1'],
             'batch_no' => ['nullable', 'string', 'max:100'],
             'batch_input' => ['nullable', 'string', 'max:1000'],
             'search' => ['nullable', 'string', 'max:200'],
@@ -61,7 +63,7 @@ class StockLogController extends Controller
 
     private function showsEvidence(Request $request): bool
     {
-        return $request->boolean('evidence') || $request->filled('action') || $request->filled('record_kind')
+        return $request->boolean('evidence') || $request->anyFilled(['inventory_id', 'action', 'record_kind'])
             || in_array($request->input('type'), ['reservation', 'reversal'], true)
             || ($request->filled('status') && $request->input('status') !== 'active');
     }
@@ -136,7 +138,7 @@ class StockLogController extends Controller
         $request->validate([
             'medicine_id' => 'required|exists:medicines,id',
             'quantity_added' => 'required|integer|min:1',
-            'date_added' => 'required|date',
+            'date_added' => 'required|date|before_or_equal:today',
             'expiration_date' => 'nullable|date',
             'batch_no' => 'nullable|string|max:100',
             'storage_location' => 'nullable|string|max:255',
@@ -229,19 +231,21 @@ class StockLogController extends Controller
             if ($showEvidence) {
                 array_push($headers, 'Movement', 'Status', 'Reference', 'Available change', 'Reserved change');
             }
-            fputcsv($handle, $headers);
+            SpreadsheetCsv::writeRow($handle, $headers);
 
             foreach ($stockLogs as $log) {
+                $dispensingReference = $log->dispensing_record_id !== null ? 'Dispensing #'.$log->dispensing_record_id : null;
+                $remarks = $log->report_remarks ?? $dispensingReference ?? '';
                 if ($showEvidence) {
-                    fputcsv($handle, [
+                    SpreadsheetCsv::writeRow($handle, [
                         $log->event_source.'-'.$log->event_id, $log->medicine_name ?? '', $log->batch_no ?? '',
                         $log->storage_location ?? '', $log->quantity_added, substr((string) $log->date_added, 0, 10),
-                        $log->actor_name ?? '', $log->facility_name ?? '', $log->remarks ?? '', $log->event_label,
-                        $log->status_label, $log->mechanism, $log->available_delta, $log->allocated_delta,
+                        $log->actor_name ?? '', $log->facility_name ?? '', $remarks, $log->event_label,
+                        $log->status_label, $dispensingReference ?? $log->mechanism, $log->available_delta, $log->allocated_delta,
                     ]);
                     continue;
                 }
-                fputcsv($handle, [
+                SpreadsheetCsv::writeRow($handle, [
                     $log->id,
                     $log->medicine->medicine_name ?? '',
                     $log->batch_no ?? '',
@@ -250,7 +254,7 @@ class StockLogController extends Controller
                     $log->date_added,
                     $log->addedByUser->name ?? '',
                     $log->healthUnit->name ?? '',
-                    $log->remarks ?? '',
+                    $remarks,
                 ]);
             }
 

@@ -33,9 +33,18 @@ class StockSummaryService
 
         return $groups->map(function ($rows, $key) use ($includeRecipientStock, $recipientBalances) {
             $summary = clone $rows->first();
-            $summary->shared_available_stock = (int) $rows->filter(fn ($row) => ! $row->expiration_date || $row->expiration_date->gte(today()))->sum('available_stock');
-            $summary->recipient_available_stock = $includeRecipientStock ? (int) $recipientBalances->get($key, collect())->sum('quantity') : null;
+            $sharedBatches = $rows->filter(fn ($row) => $row->available_stock > 0 && (! $row->expiration_date || $row->expiration_date->gte(today())));
+            $recipientBatches = $recipientBalances->get($key, collect());
+            $summary->shared_available_stock = (int) $sharedBatches->sum('available_stock');
+            $summary->recipient_available_stock = $includeRecipientStock ? (int) $recipientBatches->sum('quantity') : null;
             $summary->available_stock = $summary->shared_available_stock + ($summary->recipient_available_stock ?? 0);
+            if ($includeRecipientStock) {
+                $summary->forecast_batches = $sharedBatches->map(fn ($batch) => [
+                    'quantity' => (int) $batch->available_stock, 'expires' => $batch->expiration_date?->toDateString(),
+                ])->concat($recipientBatches->map(fn ($row) => [
+                    'quantity' => $row['quantity'], 'expires' => $row['batch']->expiration_date?->toDateString(),
+                ]))->values()->all();
+            }
             $summary->allocated_stock = $rows->sum('allocated_stock');
             $summary->batch_no = null;
             $summary->expiration_date = null;

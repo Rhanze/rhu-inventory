@@ -215,22 +215,29 @@ function updateRoleHint() {
 
     const cleanRhu = rhuName.split(' (')[0];
 
-    let message = '';
-    let bg = '#DCFCE7', border = '#86EFAC', color = '#166534';
+    let roleLabel, scopeLabel, description, bg, border, color;
 
     if (role === 'admin') {
-        message = `This account will be an <strong>RHU Admin</strong> for <strong>${cleanRhu}</strong>. They can manage staff, inventory, and reports for that RHU.`;
+        roleLabel = 'RHU Admin'; scopeLabel = ' for ';
+        description = '. They can manage staff, inventory, and reports for that RHU.';
         bg = '#EDE9FE'; border = '#C4B5FD'; color = '#6d28d9';
     } else if (role === 'staff') {
-        message = `This account will be <strong>Staff</strong> at <strong>${cleanRhu}</strong>. They can handle inventory, dispensing, and transfers for that RHU.`;
+        roleLabel = 'Staff'; scopeLabel = ' at ';
+        description = '. They can handle inventory, dispensing, and transfers for that RHU.';
         bg = '#DBEAFE'; border = '#93C5FD'; color = '#1e40af';
     } else if (role === 'midwife') {
-        message = `This account will be a <strong>Midwife</strong> at <strong>${cleanRhu}</strong>. They can handle dispensing, disease reports, and immunization records.`;
+        roleLabel = 'Midwife'; scopeLabel = ' at ';
+        description = '. They can handle dispensing, disease reports, and immunization records.';
         bg = '#f8fafc'; border = '#bec6cf'; color = '#0f5c4b';
     }
 
-    if (message) {
-        text.innerHTML = message;
+    if (roleLabel) {
+        const roleName = document.createElement('strong');
+        const facilityName = document.createElement('strong');
+        roleName.textContent = roleLabel;
+        facilityName.textContent = cleanRhu;
+        const opening = { admin: 'This account will be an ', staff: 'This account will be ', midwife: 'This account will be a ' }[role];
+        text.replaceChildren(opening, roleName, scopeLabel, facilityName, description);
         hint.style.background  = bg;
         hint.style.borderColor = border;
         text.style.color = color;

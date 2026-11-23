@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Support\SpreadsheetCsv;
 use App\Models\HealthUnit;
 use App\Models\Inventory;
 use App\Models\StockLog;
@@ -95,15 +96,15 @@ class ELMISExportService
         return response()->streamDownload(function () use ($data, $headers) {
             $handle = fopen('php://output', 'w');
             fwrite($handle, "\xEF\xBB\xBF");
-            fputcsv($handle, $headers);
+            SpreadsheetCsv::writeRow($handle, $headers);
             foreach ($data['rows'] as $row) {
-                fputcsv($handle, array_values($row));
+                SpreadsheetCsv::writeRow($handle, array_values($row));
             }
             if (! empty($data['summary'])) {
-                fputcsv($handle, []);
-                fputcsv($handle, ['--- SUMMARY ---']);
+                SpreadsheetCsv::writeRow($handle, []);
+                SpreadsheetCsv::writeRow($handle, ['--- SUMMARY ---']);
                 foreach ($data['summary'] as $k => $v) {
-                    fputcsv($handle, [ucwords(str_replace('_', ' ', $k)), $v]);
+                    SpreadsheetCsv::writeRow($handle, [ucwords(str_replace('_', ' ', $k)), $v]);
                 }
             }
             fclose($handle);
@@ -117,15 +118,15 @@ class ELMISExportService
         return response()->streamDownload(function () use ($data, $headers) {
             $handle = fopen('php://output', 'w');
             fwrite($handle, "\xEF\xBB\xBF");
-            fputcsv($handle, $headers);
+            SpreadsheetCsv::writeRow($handle, $headers);
             foreach ($data['rows'] as $row) {
-                fputcsv($handle, array_values($row));
+                SpreadsheetCsv::writeRow($handle, array_values($row));
             }
             if (! empty($data['summary'])) {
-                fputcsv($handle, []);
-                fputcsv($handle, ['--- SUMMARY ---']);
+                SpreadsheetCsv::writeRow($handle, []);
+                SpreadsheetCsv::writeRow($handle, ['--- SUMMARY ---']);
                 foreach ($data['summary'] as $k => $v) {
-                    fputcsv($handle, [ucwords(str_replace('_', ' ', $k)), $v]);
+                    SpreadsheetCsv::writeRow($handle, [ucwords(str_replace('_', ' ', $k)), $v]);
                 }
             }
             fclose($handle);
