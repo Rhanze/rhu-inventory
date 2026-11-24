@@ -10,9 +10,11 @@ use App\Models\Notification;
 use App\Models\StockLog;
 use App\Models\TransferReceiptResolution;
 use App\Models\TransferRequest;
+use App\Models\User;
 use App\Services\TransferService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class TransferController extends Controller
@@ -317,7 +319,7 @@ class TransferController extends Controller
         return back()->with('success', 'Transfer updated successfully.');
     }
 
-    public function distribute()
+    public function distribute(Request $request)
     {
         if ($redirect = $this->checkAccess()) {
             return $redirect;
@@ -329,8 +331,11 @@ class TransferController extends Controller
 
         $healthUnits = HealthUnit::orderBy('name')->get();
         $medicines = Medicine::orderBy('medicine_name')->get();
+        $previousToken = $request->old('submission_token');
+        $submissionToken = is_string($previousToken) && Str::isUuid($previousToken, 4)
+            ? $previousToken : (string) Str::uuid();
 
-        return view('transfers.distribute', compact('healthUnits', 'medicines'));
+        return view('transfers.distribute', compact('healthUnits', 'medicines', 'submissionToken'));
     }
 
     public function distributeStore(Request $request)
@@ -342,90 +347,127 @@ class TransferController extends Controller
             return back()->with('error', 'Unauthorized.');
         }
 
-        $request->validate([
-            'from_health_unit_id' => 'required|exists:health_units,id',
-            'to_health_unit_id' => 'required|exists:health_units,id|different:from_health_unit_id',
-            'medicine_id' => 'required|exists:medicines,id',
+        $data = $request->validate([
+            'submission_token' => 'required|uuid:4',
+            'from_health_unit_id' => 'required|integer|exists:health_units,id',
+            'to_health_unit_id' => 'required|integer|exists:health_units,id|different:from_health_unit_id',
+            'medicine_id' => 'required|integer|exists:medicines,id',
             'quantity' => 'required|integer|min:1',
             'notes' => 'nullable|string|max:500',
+        ], [
+            'submission_token.required' => 'Open a new dispatch form before submitting this directive.',
+            'submission_token.uuid' => 'Open a new dispatch form before submitting this directive.',
         ]);
 
-        $medicine = Medicine::findOrFail($request->medicine_id);
+        $actorId = (int) session('user_id');
+        $submissionToken = hash('sha256', $actorId.':'.strtolower($data['submission_token']));
+        $details = [
+            'from_health_unit_id' => (int) $data['from_health_unit_id'],
+            'to_health_unit_id' => (int) $data['to_health_unit_id'],
+            'medicine_id' => (int) $data['medicine_id'],
+            'quantity' => (int) $data['quantity'],
+            'notes' => $data['notes'] ?? null,
+        ];
 
-        $batch = Inventory::availableFefo((int) $request->from_health_unit_id, $medicine->id)
-            ->where('available_stock', '>=', $request->quantity)
-            ->first();
+        try {
+            $message = DB::transaction(function () use ($actorId, $submissionToken, $details) {
+                // Both attempts must serialize even before the first transfer exists.
+                User::whereKey($actorId)->lockForUpdate()->firstOrFail();
+                $existing = TransferRequest::where('dispatch_submission_token', $submissionToken)->lockForUpdate()->first();
+                if ($existing) {
+                    foreach ($details as $field => $value) {
+                        $saved = $existing->getAttribute($field);
+                        if ((is_int($value) ? (int) $saved : $saved) !== $value) {
+                            throw ValidationException::withMessages([
+                                'submission_token' => 'This dispatch was already processed with different details. Open a new dispatch form to send another directive.',
+                            ]);
+                        }
+                    }
 
-        if (! $batch) {
-            return back()->with('error', 'The selected source RHU does not have enough stock in a single batch.');
+                    return 'This dispatch has already been processed.';
+                }
+
+                $medicine = Medicine::findOrFail($details['medicine_id']);
+                $batch = Inventory::availableFefo($details['from_health_unit_id'], $medicine->id)
+                    ->where('available_stock', '>=', $details['quantity'])->first();
+                if (! $batch) {
+                    throw ValidationException::withMessages([
+                        'transfer' => 'The selected source RHU does not have enough stock in a single batch.',
+                    ]);
+                }
+
+                $fromRhu = HealthUnit::findOrFail($details['from_health_unit_id']);
+                $toRhu = HealthUnit::findOrFail($details['to_health_unit_id']);
+                $transfer = TransferRequest::create($details + [
+                    'dispatch_submission_token' => $submissionToken,
+                    'initiator_type' => 'pho_directive',
+                    'inventory_id' => $batch->id,
+                    'batch_no' => $batch->batch_no,
+                    'status' => 'pending',
+                    'requested_by' => $actorId,
+                    'approved_by' => $actorId,
+                    'approved_at' => now(),
+
+                    // Snapshot from the batch (pack info is per-batch now)
+                    'dosage' => $medicine->dosage,
+                    'dosage_form' => $medicine->dosage_form,
+                    'category' => $medicine->category,
+                    'unit' => $medicine->unit,
+                    'pack_type' => $batch->pack_type ?? $medicine->pack_type,
+                    'pieces_per_pack' => $batch->pieces_per_pack ?? $medicine->pieces_per_pack,
+                ]);
+
+                $transfer = app(TransferService::class)->reserve($transfer->id);
+
+                Notification::create([
+                    'health_unit_id' => $transfer->from_health_unit_id,
+                    'transfer_id' => $transfer->id,
+                    'type' => 'pho_directive',
+                    'link' => route('transfers.index'),
+                    'title' => 'PHO Distribution Directive',
+                    'message' => 'PHO directs you to transfer '.$transfer->formatQuantity().
+                                        ' of '.$medicine->medicine_name.
+                                        ' to '.$toRhu->name.'.'.
+                                        ($transfer->notes ? ' Notes: '.$transfer->notes : ''),
+                    'severity' => 'warning',
+                    'is_read' => false,
+                    'created_at' => now(),
+                ]);
+
+                Notification::create([
+                    'health_unit_id' => $transfer->to_health_unit_id,
+                    'transfer_id' => $transfer->id,
+                    'type' => 'pho_directive',
+                    'link' => route('transfers.index'),
+                    'title' => 'Incoming PHO Distribution',
+                    'message' => 'PHO directed '.$fromRhu->name.' to send you '.
+                                        $transfer->formatQuantity().' of '.$medicine->medicine_name.'. '.
+                                        'Confirm receipt once the items arrive.',
+                    'severity' => 'info',
+                    'is_read' => false,
+                    'created_at' => now(),
+                ]);
+
+                ActivityLogger::log(
+                    'Transfer', 'Distribute',
+                    'PHO directed '.$fromRhu->name.' to send '.$transfer->quantity.
+                    ' units of '.$medicine->medicine_name.' to '.$toRhu->name.'.'
+                );
+
+                return 'Directive sent to '.$fromRhu->name.'.';
+            }, 3);
+        } catch (ValidationException $e) {
+            $input = $request->input();
+            if (isset($e->errors()['submission_token'])) {
+                unset($input['submission_token']);
+            }
+
+            return back()->withInput($input)->with('error', $e->getMessage());
+        } catch (\Throwable $e) {
+            return back()->withInput()->with('error', $this->operationErrorMessage($e, 'Unable to dispatch the transfer. Please try again.'));
         }
 
-        $fromRhu = HealthUnit::find($request->from_health_unit_id);
-        $toRhu = HealthUnit::find($request->to_health_unit_id);
-
-        DB::transaction(function () use ($request, $batch, $medicine, $fromRhu, $toRhu) {
-            $transfer = TransferRequest::create([
-                'initiator_type' => 'pho_directive',
-                'from_health_unit_id' => $request->from_health_unit_id,
-                'to_health_unit_id' => $request->to_health_unit_id,
-                'medicine_id' => $medicine->id,
-                'inventory_id' => $batch->id,
-                'batch_no' => $batch->batch_no,
-                'quantity' => $request->quantity,
-                'notes' => $request->notes,
-                'status' => 'pending',
-                'requested_by' => session('user_id'),
-                'approved_by' => session('user_id'),
-                'approved_at' => now(),
-
-                // Snapshot from the batch (pack info is per-batch now)
-                'dosage' => $medicine->dosage,
-                'dosage_form' => $medicine->dosage_form,
-                'category' => $medicine->category,
-                'unit' => $medicine->unit,
-                'pack_type' => $batch->pack_type ?? $medicine->pack_type,
-                'pieces_per_pack' => $batch->pieces_per_pack ?? $medicine->pieces_per_pack,
-            ]);
-
-            app(TransferService::class)->reserve($transfer->id);
-
-            Notification::create([
-                'health_unit_id' => $request->from_health_unit_id,
-                'transfer_id' => $transfer->id,
-                'type' => 'pho_directive',
-                'link' => route('transfers.index'),
-                'title' => 'PHO Distribution Directive',
-                'message' => 'PHO directs you to transfer '.$transfer->formatQuantity($request->quantity).
-                                    ' of '.$medicine->medicine_name.
-                                    ' to '.$toRhu->name.'.'.
-                                    ($request->notes ? ' Notes: '.$request->notes : ''),
-                'severity' => 'warning',
-                'is_read' => false,
-                'created_at' => now(),
-            ]);
-
-            Notification::create([
-                'health_unit_id' => $request->to_health_unit_id,
-                'transfer_id' => $transfer->id,
-                'type' => 'pho_directive',
-                'link' => route('transfers.index'),
-                'title' => 'Incoming PHO Distribution',
-                'message' => 'PHO directed '.$fromRhu->name.' to send you '.
-                                    $transfer->formatQuantity($request->quantity).' of '.$medicine->medicine_name.'. '.
-                                    'Confirm receipt once the items arrive.',
-                'severity' => 'info',
-                'is_read' => false,
-                'created_at' => now(),
-            ]);
-        });
-
-        ActivityLogger::log(
-            'Transfer', 'Distribute',
-            'PHO directed '.$fromRhu->name.' to send '.$request->quantity.
-            ' units of '.$medicine->medicine_name.' to '.$toRhu->name.'.'
-        );
-
         return redirect()->route('transfers.index')
-            ->with('success', 'Directive sent to '.$fromRhu->name.'.');
+            ->with('success', $message);
     }
 }

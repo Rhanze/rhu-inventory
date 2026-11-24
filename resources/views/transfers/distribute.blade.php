@@ -73,6 +73,7 @@
         <form method="POST" action="{{ route('transfers.distribute.store') }}"
               style="display:flex; flex-direction:column; gap:24px;">
             @csrf
+            <input type="hidden" name="submission_token" value="{{ $submissionToken }}">
 
             {{-- ─────────── SECTION: ROUTING ─────────── --}}
             <div>

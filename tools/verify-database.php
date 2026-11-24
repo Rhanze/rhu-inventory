@@ -1,19 +1,24 @@
 <?php
 
+use App\Models\ActivityLog;
 use App\Models\DispensingRecord;
 use App\Models\DohShipment;
 use App\Models\HealthUnit;
 use App\Models\Inventory;
 use App\Models\Medicine;
+use App\Models\Notification;
 use App\Models\StockLog;
 use App\Models\TransferRequest;
 use App\Models\User;
 use App\Services\TransferService;
 use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Contracts\Http\Kernel as HttpKernel;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\View\View;
 use Symfony\Component\Process\Process;
 
-/** Verify migrations, regressions, and competing receipts without touching application data. */
+/** Verify migrations, regressions, and concurrent stock operations without touching application data. */
 require __DIR__.'/../vendor/autoload.php';
 $app = require __DIR__.'/../bootstrap/app.php';
 $app->make(Kernel::class)->bootstrap();
@@ -128,6 +133,52 @@ try {
         throw new RuntimeException('Competing DOH submissions did not produce one 50-unit receipt.');
     }
     echo "PASS: competing DOH form submissions produced one receipt, one movement, and 50 units.\n";
+
+    $dispatchMedicine = Medicine::create(['medicine_name' => 'Competing PHO dispatch fixture', 'is_dispensable' => true]);
+    $dispatchBatch = Inventory::create(['medicine_id' => $dispatchMedicine->id, 'health_unit_id' => $source->id,
+        'batch_no' => 'DISPATCH-CONCURRENT', 'expiration_date' => today()->addMonth(), 'available_stock' => 100]);
+    config(['view.compiled' => storage_path('framework/testing-views'), 'auth.require_admin_mfa' => false, 'portals.enabled' => false]);
+    session(['user_id' => $firstReceiver->id]);
+    $http = $app->make(HttpKernel::class);
+    $dispatchForm = $http->handle(Request::create(route('transfers.distribute')));
+    if ($dispatchForm->getStatusCode() !== 200 || ! $dispatchForm->getOriginalContent() instanceof View) {
+        throw new RuntimeException('The PHO dispatch form could not be opened.');
+    }
+    $dispatchToken = $dispatchForm->getOriginalContent()->getData()['submissionToken'];
+    $dispatchActor = [(string) $firstReceiver->id, (string) $source->id, (string) $destination->id, $dispatchToken];
+    $dispatchOutcomes = $competeForLockedRow('users', $firstReceiver->id, 'tests/Support/store-pho-dispatch.php',
+        $dispatchMedicine->id, [$dispatchActor, $dispatchActor]);
+    sort($dispatchOutcomes);
+
+    $dispatchTransfer = TransferRequest::where('medicine_id', $dispatchMedicine->id)->sole();
+    $dispatchBalance = $dispatchBatch->fresh();
+    $destinationInventory = Inventory::where('medicine_id', $dispatchMedicine->id)->where('health_unit_id', $destination->id);
+    if ($dispatchOutcomes !== ['created', 'replayed'] || $dispatchTransfer->status !== 'accepted' || ! $dispatchTransfer->stock_reserved
+        || $dispatchTransfer->quantity !== 40 || $dispatchTransfer->received_by !== null || $dispatchBalance->available_stock !== 60
+        || $dispatchBalance->allocated_stock !== 40 || $destinationInventory->exists()) {
+        throw new RuntimeException('Competing PHO dispatches did not produce one accepted transfer and a single 40-unit reservation.');
+    }
+    $dispatchMovement = DB::table('stock_movements')->where('owner_type', 'transfer_requests')->where('owner_id', $dispatchTransfer->id)->sole();
+    $dispatchNotices = Notification::where('transfer_id', $dispatchTransfer->id)->orderBy('type')->pluck('type')->all();
+    $dispatchActivities = ActivityLog::where('user_id', $firstReceiver->id)->where('module', 'Transfer')->where('action', 'Distribute');
+    if ((int) $dispatchMovement->inventory_id !== $dispatchBatch->id || (int) $dispatchMovement->available_delta !== -40
+        || (int) $dispatchMovement->allocated_delta !== 40 || $dispatchNotices !== ['pho_directive', 'pho_directive', 'transfer_accepted']
+        || $dispatchActivities->count() !== 1 || StockLog::where('transfer_id', $dispatchTransfer->id)->exists()) {
+        throw new RuntimeException('Competing PHO dispatches wrote incorrect ledger, notice, or activity records.');
+    }
+
+    session()->forget('user_id');
+    foreach ([[$source->id, 60], [$destination->id, 0]] as [$unitId, $expectedAvailable]) {
+        $search = $http->handle(Request::create(route('public.home.citizen', ['q' => $dispatchMedicine->medicine_name, 'health_unit_id' => $unitId])));
+        if ($search->getStatusCode() !== 200 || ! $search->getOriginalContent() instanceof View) {
+            throw new RuntimeException('Public search failed after the competing PHO dispatches.');
+        }
+        $publicStock = $search->getOriginalContent()->getData()['medicines'];
+        if ($expectedAvailable === 0 ? $publicStock->isNotEmpty() : (int) $publicStock->sole()->total_available !== $expectedAvailable) {
+            throw new RuntimeException('Public availability was incorrect after the competing PHO dispatches.');
+        }
+    }
+    echo "PASS: competing PHO dispatches reserved 40 units once, leaving 60 public units at the source and zero at the destination.\n";
 
     $dispensable = Medicine::create(['medicine_name' => 'Competing dispensing fixture', 'is_dispensable' => true]);
     $early = Inventory::create(['medicine_id' => $dispensable->id, 'health_unit_id' => $source->id,

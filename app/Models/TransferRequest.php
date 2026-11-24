@@ -21,6 +21,7 @@ class TransferRequest extends Model
     protected $fillable = [
         'stock_reserved',
         'initiator_type',
+        'dispatch_submission_token',
         'from_health_unit_id',
         'to_health_unit_id',
         'medicine_id',

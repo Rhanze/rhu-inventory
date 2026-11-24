@@ -340,9 +340,12 @@ class CsvImportService
             }
             unset($item);
             $data = array_intersect_key($data, array_flip(['shipment_no', 'reference_no', 'supplier', 'received_date', 'remarks', 'items']));
-            $data['submission_token'] = (string) Str::uuid();
         } else {
             $data = array_intersect_key($data, array_flip($definition['columns']));
+        }
+
+        if ($section === 'shipments' || $section === 'distribution') {
+            $data['submission_token'] = (string) Str::uuid();
         }
 
         return $data;
