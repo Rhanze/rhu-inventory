@@ -117,6 +117,23 @@ class DiseaseSavedGraphTest extends TestCase
         $this->assertSame(13, $payload['medicines'][0]['current_quantity']);
     }
 
+    public function test_consumption_graph_picker_shows_a_matching_form_and_unit_once(): void
+    {
+        [$unit, $user, $disease, $tablet] = $this->fixture();
+        $solution = $this->medicine($disease, 'Bottled graph medicine');
+        $solution->update(['dosage' => '10 mg/mL', 'dosage_form' => 'Oral solution', 'unit' => 'Bottle']);
+        $this->dispense($unit, $user, $tablet, '2026-11-09', 13);
+        $this->dispense($unit, $user, $solution, '2026-11-09', 3);
+
+        $page = $this->get(route('disease_reports.index'))->assertOk()
+            ->assertSee('<option value="'.$tablet->id.'">Recorded graph medicine 5 mg Tablet</option>', false)
+            ->assertSee('<option value="'.$solution->id.'">Bottled graph medicine 10 mg/mL Oral solution (Bottle)</option>', false);
+
+        $medicines = collect($this->payload($page)['medicines'])->keyBy('id');
+        $this->assertSame('tablet', $medicines[$tablet->id]['unit']);
+        $this->assertSame('Bottle', $medicines[$solution->id]['unit']);
+    }
+
     public function test_saved_graph_preserves_the_selected_assigned_area_and_disease(): void
     {
         [$unit, $user, $disease, $medicine] = $this->fixture();

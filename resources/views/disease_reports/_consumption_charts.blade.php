@@ -22,7 +22,15 @@
             <label for="consumption-chart-medicine" class="disease-form-label">Search medicine to graph</label>
             <select id="consumption-chart-medicine" class="disease-control" data-search-placeholder="Search medicine, strength, or form" style="width:100%;">
                 @foreach($chartMedicines as $medicine)
-                    <option value="{{ $medicine['id'] }}">{{ trim($medicine['name'].' '.$medicine['dosage'].' '.$medicine['dosage_form']) }} ({{ $medicine['unit'] }})</option>
+                    @php
+                        $form = trim($medicine['dosage_form'] ?? '');
+                        $unit = trim($medicine['unit'] ?? '');
+                        $label = trim($medicine['name'].' '.($medicine['dosage'] ?? '').' '.$form);
+                        if ($unit !== '' && mb_strtolower($form) !== mb_strtolower($unit)) {
+                            $label .= ' ('.$unit.')';
+                        }
+                    @endphp
+                    <option value="{{ $medicine['id'] }}">{{ $label }}</option>
                 @endforeach
             </select>
             <p id="consumption-chart-associations" class="disease-muted"></p>
