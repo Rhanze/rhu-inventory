@@ -208,7 +208,7 @@
 
                         {{-- ACTIONS — text buttons, single line --}}
                         <td style="padding:14px 16px; text-align:center; white-space:nowrap;">
-                            <div style="display:inline-flex; gap:6px; justify-content:center; align-items:center; flex-wrap:nowrap;">
+                            <div style="display:inline-flex; gap:6px; justify-content:center; align-items:center; flex-wrap:{{ $canReceive ? 'wrap' : 'nowrap' }};">
 
                                 @if($canApprove || $canAccept)
                                     <form method="POST" action="{{ route($canApprove ? 'transfers.pho_approve' : 'transfers.accept', $t->id) }}"
@@ -258,7 +258,7 @@
                                                     transition: background 0.2s;
                                                 "
                                                 onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f1f5f9'">
-                                            Cancel
+                                            {{ $canReceive ? 'Cancel transfer' : 'Cancel' }}
                                         </button>
                                     </form>
                                 @endif

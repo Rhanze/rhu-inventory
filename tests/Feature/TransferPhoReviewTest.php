@@ -175,7 +175,10 @@ class TransferPhoReviewTest extends TestCase
         $this->travel(8)->days();
         $this->artisan('transfers:process')->assertSuccessful();
         $this->get($index)->assertOk()->assertSee($overdue)->assertSee('Receipt overdue');
-        $this->get($overdue)->assertOk()->assertSee($row, false)->assertSee($receive);
+        $this->get($overdue)->assertOk()->assertSee($row, false)->assertSee($receive)
+            ->assertSee('aria-controls="transfer-receipt-'.$transfer->id.'"', false)
+            ->assertSee('aria-labelledby="transfer-receipt-'.$transfer->id.'-title"', false)
+            ->assertSee('Cancel transfer');
         $this->assertDatabaseHas('notifications', ['transfer_id' => $transfer->id, 'type' => 'transfer_reminder',
             'health_unit_id' => $requester->health_unit_id, 'link' => $overdue, 'is_read' => false]);
         $this->assertSame('accepted', $transfer->fresh()->status);
@@ -194,7 +197,10 @@ class TransferPhoReviewTest extends TestCase
             ->assertSee('name="received_quantity"', false)->assertSee('name="evidence_reference"', false);
         $this->from($notifications)->post($receive, ['receipt_for' => $transfer->id, 'received_quantity' => 6])
             ->assertSessionHasErrors('evidence_reference');
-        $this->get($notifications)->assertOk()->assertSee('Enter a receiving document or evidence reference');
+        $this->get($notifications)->assertOk()
+            ->assertSee('aria-controls="transfer-receipt-'.$transfer->id.'-notice-', false)
+            ->assertSee('<p role="alert" class="transfer-receipt-error">Enter a receiving document or evidence reference', false)
+            ->assertSee('aria-invalid="true"', false);
         $this->post($receive, ['receipt_for' => $transfer->id, 'received_quantity' => 7])->assertSessionHas('success');
         $this->post($receive, ['received_quantity' => 7])->assertSessionHas('success');
         $this->assertSame('received', $transfer->fresh()->status);

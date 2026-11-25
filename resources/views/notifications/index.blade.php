@@ -316,7 +316,7 @@
                                 @endif
 
                                 @if($showReceive)
-                                    @include('transfers._receive_form', ['transfer' => $t, 'showReceiptErrors' => true])
+                                    @include('transfers._receive_form', ['transfer' => $t, 'receiptContext' => '-notice-'.$notification->id])
                                 @endif
                             </div>
                         @endif
