@@ -66,6 +66,9 @@ function page(options = {}) {
                 return this.anchor || null;
             },
             hasAttribute(name) { return name === 'download' && Boolean(this.download); },
+            getAttribute(name) {
+                return this.attributes?.[name] ?? (typeof this[name] === 'string' ? this[name] : null);
+            },
             getBoundingClientRect() { return {top: this.top || 0}; },
             querySelectorAll() { return this.cells; }
         };
@@ -196,6 +199,27 @@ JS);
         $this->assertTrue($result['savedDetailsOpen']);
         $this->assertNull($result['pendingConsumed']);
         $this->assertSame([['left' => 5, 'top' => 755, 'behavior' => 'instant']], $result['fallback']);
+    }
+
+    public function test_family_planning_save_and_filter_remember_scroll_with_a_control_named_method(): void
+    {
+        $result = $this->evaluate(<<<'JS'
+const restores = [];
+for (const method of ['post', 'get']) {
+    const url = 'https://management.test/family-planning';
+    const original = page({url, y: 648});
+    const form = original.element('FORM', {method: {tagName: 'SELECT'}, attributes: {method, action: url}});
+    original.documentEvent('submit', {target: form});
+    original.flushMicrotasks();
+    const destination = page({url: url + '?method=Pills', storage: original.storage});
+    destination.windowEvent('load');
+    destination.flushFrames();
+    restores.push(destination.scrolls);
+}
+process.stdout.write(JSON.stringify(restores));
+JS);
+        $expected = [['left' => 0, 'top' => 648, 'behavior' => 'instant']];
+        $this->assertSame([$expected, $expected], $result);
     }
 
     public function test_explicit_record_hash_wins_over_saved_position_and_opens_containing_details(): void

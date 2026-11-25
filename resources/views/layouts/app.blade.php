@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('images/web-icon.png') }}">
     <title>@yield('title', 'Staff Portal') | PHO Supply Portal</title>
+    <script>
+        document.documentElement.classList.add('sidebar-scroll-pending');
+        document.addEventListener('DOMContentLoaded', () => document.documentElement.classList.remove('sidebar-scroll-pending'), {once: true});
+    </script>
     @vite('resources/css/app.css')
 
     <style>
@@ -37,6 +41,8 @@
             overflow-y: auto;
             z-index: 10;
         }
+
+        .sidebar-scroll-pending .sidebar > * { visibility: hidden; }
 
         .sidebar-brand {
             padding: 0 20px 20px;
@@ -780,6 +786,35 @@
                 </div>
             </div>
         </aside>
+        <script>
+            (() => {
+                const sidebar = document.getElementById('app-sidebar');
+                const storageKey = 'rhu:sidebar-scroll:' + {{ Illuminate\Support\Js::from((string) session('user_id')) }};
+
+                // Restore before the new page can paint the sidebar at its default position.
+                try {
+                    const savedTop = Number(sessionStorage.getItem(storageKey));
+                    if (Number.isFinite(savedTop) && savedTop > 0) sidebar.scrollTop = savedTop;
+                } catch {}
+
+                const active = sidebar.querySelector('.nav-links a.active');
+                if (active && sidebar.scrollHeight > sidebar.clientHeight) {
+                    const viewport = sidebar.getBoundingClientRect();
+                    const link = active.getBoundingClientRect();
+                    if (link.top < viewport.top) sidebar.scrollTop += link.top - viewport.top;
+                    else if (link.bottom > viewport.bottom) sidebar.scrollTop += link.bottom - viewport.bottom;
+                }
+                document.documentElement.classList.remove('sidebar-scroll-pending');
+
+                function rememberScroll() {
+                    if (sidebar.scrollHeight <= sidebar.clientHeight) return;
+                    try { sessionStorage.setItem(storageKey, String(sidebar.scrollTop)); } catch {}
+                }
+
+                sidebar.addEventListener('click', rememberScroll);
+                window.addEventListener('pagehide', rememberScroll);
+            })();
+        </script>
 
         <div style="flex:1; min-width:0; display:flex; flex-direction:column; min-height:100vh;">
             <header class="public-header">
@@ -909,7 +944,9 @@
     </dialog>
 
     @include('layouts._empty_alert')
-    <script src="{{ asset('js/scroll-navigation.js') }}" defer></script>
+    @if(is_file(public_path('js/scroll-navigation.js')))
+        <script src="{{ asset('js/scroll-navigation.js') }}?v={{ filemtime(public_path('js/scroll-navigation.js')) }}" defer></script>
+    @endif
     <script src="{{ asset('js/empty-feedback.js') }}" defer></script>
     @if(request()->routeIs('disease_reports.index'))
         <script src="{{ asset('js/disease-navigation.js') }}" defer></script>

@@ -28,9 +28,11 @@
 
     function rememberForm(form) {
         if (!form.closest('#main-content')) return;
-        const destination = new URL(form.action || location.href, location.href);
-        if (destination.origin !== location.origin || form.target || form.method === 'dialog') return;
-        if (form.method.toLowerCase() !== 'get' || destination.pathname === location.pathname) remember(form);
+        // Named controls can shadow HTMLFormElement properties, including method.
+        const method = form.getAttribute('method')?.toLowerCase();
+        const destination = new URL(form.getAttribute('action') || location.href, document.baseURI || location.href);
+        if (destination.origin !== location.origin || form.getAttribute('target') || method === 'dialog') return;
+        if (method === 'post' || destination.pathname === location.pathname) remember(form);
     }
 
     document.addEventListener('submit', event => {
