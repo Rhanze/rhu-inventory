@@ -99,10 +99,19 @@ class StockTrendForecastTest extends TestCase
     public function test_the_forecast_page_exposes_the_model_and_weekly_chart(): void
     {
         [$unit, $medicine] = $this->fixture();
+        $medicine->update(['dosage' => '250 mg', 'category' => 'family_health_nutrition']);
         $this->release($unit, $medicine, 14, today()->subWeek());
         $user = User::factory()->create(['health_unit_id' => $unit->id, 'role' => 'admin']);
-        $this->withSession(['user_id' => $user->id, 'role' => 'admin', 'health_unit_id' => $unit->id])
-            ->get(route('forecast.index'))->assertOk()->assertSee('Weekly release trend')->assertSee('stockTrendChart', false)->assertSee('Limited history');
+        $page = $this->withSession(['user_id' => $user->id, 'role' => 'admin', 'health_unit_id' => $unit->id])
+            ->get(route('forecast.index'))->assertOk()->assertSee('Weekly release trend')->assertSee('stockTrendChart', false)
+            ->assertSee('Limited history')->assertSee('Medicine, strength, and category')
+            ->assertSee('data-search-placeholder="Search medicine, strength, or category"', false)
+            ->assertSee('<option value="0">Trend medicine 250 mg — Family Health &amp; Nutrition</option>', false);
+
+        $item = $page->viewData('forecast')['all_items'][0];
+        $this->assertSame($medicine->id, (int) $item['inventory']->medicine_id);
+        $this->assertSame($unit->id, (int) $item['inventory']->health_unit_id);
+        $this->assertSame([14], array_column($item['weekly_history'], 'quantity'));
     }
 
     public function test_absent_history_does_not_claim_infinite_stock_coverage(): void
